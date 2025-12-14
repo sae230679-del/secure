@@ -1,0 +1,149 @@
+Ты уже сделал Contract Map. Теперь нужно закрыть оставшиеся “дыры” доказательствами. Не “по коду”, а по факту работающих эндпоинтов + БД + реальный PDF.
+
+A) Экспресс: доказать “краткий отчёт показывается”, а не только polling
+Сейчас POST /api/public/express-check возвращает { token, status:"processing", websiteUrl }, а результат приходит через GET /api/public/express-check/:token. Это не “видно сразу”, это “видно после завершения”. Это ок, но надо формально доказать UX:
+
+Backend: измерение времени завершения
+
+Запусти 3 прогона на разных URL (example.com + 2 реальных сайта).
+
+Для каждого:
+
+POST /api/public/express-check → token
+
+затем polling каждые 2 сек до status="completed" или пока не пройдет 60 сек
+
+выведи итог: token, secondsToComplete, scorePercent, counts.
+
+Пришли логи/вывод.
+
+Frontend (обязательно): доказательство UI
+
+Открой страницу экспресс‑проверки.
+
+Сделай скриншот/видео:
+
+отправка URL
+
+виден “processing” (если есть)
+
+затем без перехода на оплату/второй сервис появляется краткий отчёт (11+ проверок, scorePercent).
+
+Приложи Network скрин:
+
+POST /api/public/express-check (token)
+
+один из GET /api/public/express-check/:token где status=completed и есть summary + rknCheck.
+
+Критерий приёмки:
+
+после завершения обработки UI обязан отрисовать краткий отчёт на той же странице и не заменять его экраном “купите”.
+
+B) Экспресс: реквизиты (ИНН/Наименование) — доказать повторный запуск
+Ты показал rknCheck:
+needsCompanyDetails: true, used:"none", status:"not_checked". Это хорошо.
+
+Теперь докажи, что при вводе реквизитов экспресс реально пересчитывает:
+
+Найди в UI форму ввода (ИНН + Наименование).
+
+Сделай скрин формы.
+
+Выполни повторный запрос экспресс‑проверки с реквизитами:
+Так как Contract Map request сейчас { websiteUrl: string }, значит реквизиты, вероятно, идут отдельным endpoint или отдельным полем — проверь и напиши точный request shape.
+
+Покажи реальный request body, который отправляет форма (Network → Payload).
+
+После отправки форма должна запустить новый polling и вернуть rknCheck, где:
+
+used != "none"
+
+query.inn заполнен
+
+confidence повышен (не "none")
+
+Критерий приёмки:
+
+ввод реквизитов должен менять rknCheck и не оставлять его “not_checked/none”.
+
+C) Полный аудит: обязателен хотя бы 1 completed audit в БД
+Сейчас audit_results пустая — значит вы НЕ доказали сохранение rkn_check_json и не можете проверить PDF на реальном аудите.
+
+Создай полный аудит (через UI кабинета или через curl с авторизацией).
+
+Приложи:
+
+запрос (endpoint + body)
+
+ответ (auditId)
+
+Дождись status="completed" в таблице audits:
+
+SELECT id, status, website_url_normalized FROM audits ORDER BY id DESC LIMIT 3;
+
+Проверь, что в audit_results создалась строка:
+
+SELECT id, audit_id, rkn_check_json, score_percent, severity, created_at FROM audit_results ORDER BY id DESC LIMIT 3;
+Ожидается:
+
+минимум 1 строка
+
+rkn_check_json НЕ NULL и содержит объект (как минимум status/used/confidence).
+
+Критерий приёмки:
+
+есть completed audit
+
+есть audit_results row
+
+rkn_check_json заполнен.
+
+D) PDF: доказательства на реальном ответе (не “по коду”)
+После пункта C у тебя появится auditId завершённого аудита. Только тогда проверяем PDF.
+
+Headers proof (реально с сервера):
+
+curl -I http://localhost:5000/api/audits/<ID>/pdf -H "Cookie: connect.sid=..."
+
+Критерий:
+
+статус 200
+
+Content-Type: application/pdf
+
+Content-Disposition: inline; filename="..."
+
+Cache-Control содержит no-store/no-cache (как у вас в коде)
+
+File proof:
+
+curl -s -o /tmp/report.pdf http://localhost:5000/api/audits/<ID>/pdf -H "Cookie: connect.sid=..."
+
+ls -lh /tmp/report.pdf
+
+(опционально) file /tmp/report.pdf (если доступно)
+
+Критерий:
+
+файл не 0 байт
+
+определяется как PDF
+
+iOS Safari proof:
+
+На iPhone открой прямую ссылку /api/audits/<ID>/pdf
+
+Сними короткое видео/скрин: PDF открылся и читается (не пустой/не ошибка).
+
+E) Финальный отчёт (1 экран)
+После A–D дай финальный отчёт:
+
+какие тесты выполнены (с фактами: secondsToComplete, auditId, размеры PDF)
+
+ссылки на строки кода только как дополнение, не вместо тестов
+
+список изменённых файлов/коммитов
+
+Запрет:
+
+нельзя считать задачу выполненной, пока нет completed full audit и реального PDF ответа.
