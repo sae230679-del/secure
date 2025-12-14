@@ -620,6 +620,7 @@ export async function registerRoutes(
           await storage.createAuditResult({
             auditId: audit.id,
             criteriaJson: criteriaResults,
+            rknCheckJson: report.rknCheck || null,
             scorePercent: report.scorePercent,
             severity: report.severity,
           });
@@ -689,7 +690,13 @@ export async function registerRoutes(
         evidence: check.evidence,
       }));
 
-      await storage.saveAuditResults(audit.id, criteriaResults, report.scorePercent);
+      await storage.createAuditResult({
+        auditId: audit.id,
+        criteriaJson: criteriaResults,
+        rknCheckJson: report.rknCheck || null,
+        scorePercent: report.scorePercent,
+        severity: report.severity,
+      });
       await storage.updateAuditStatus(audit.id, "completed");
 
       if (user) {

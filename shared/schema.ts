@@ -72,6 +72,7 @@ export const auditResults = pgTable("audit_results", {
   id: serial("id").primaryKey(),
   auditId: integer("audit_id").references(() => audits.id).notNull(),
   criteriaJson: jsonb("criteria_json").notNull(),
+  rknCheckJson: jsonb("rkn_check_json"),
   scorePercent: integer("score_percent"),
   severity: varchar("severity", { length: 10 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
