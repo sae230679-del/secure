@@ -3,10 +3,19 @@ import { PassThrough } from "stream";
 import path from "path";
 import fs from "fs";
 
-// TODO: Для использования Roboto добавить файлы:
-// - server/fonts/Roboto-Regular.ttf
-// - server/fonts/Roboto-Bold.ttf
 const FONT_PATH = path.join(process.cwd(), "server/fonts/DejaVuSans.ttf");
+
+function getFontPath(): string {
+  if (fs.existsSync(FONT_PATH)) {
+    return FONT_PATH;
+  }
+  const altPath = path.join(__dirname, "fonts/DejaVuSans.ttf");
+  if (fs.existsSync(altPath)) {
+    return altPath;
+  }
+  console.error(`[PDF-GEN] Font not found: ${FONT_PATH} or ${altPath}`);
+  return FONT_PATH;
+}
 const ROBOTO_REGULAR = path.join(process.cwd(), "server/fonts/Roboto-Regular.ttf");
 const ROBOTO_BOLD = path.join(process.cwd(), "server/fonts/Roboto-Bold.ttf");
 
@@ -324,7 +333,9 @@ export async function generatePdfReport(data: AuditReportData): Promise<Buffer> 
 
     doc.pipe(stream);
 
-    doc.registerFont("DejaVu", FONT_PATH);
+    const fontPath = getFontPath();
+    console.log(`[PDF-GEN] Using font: ${fontPath}`);
+    doc.registerFont("DejaVu", fontPath);
     doc.font("DejaVu");
 
     const primaryColor = "#1a56db";
