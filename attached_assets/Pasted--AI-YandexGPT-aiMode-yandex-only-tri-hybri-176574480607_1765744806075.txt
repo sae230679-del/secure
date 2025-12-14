@@ -1,0 +1,129 @@
+Нужно расширить AI-движок аудита: добавить провайдер YandexGPT, новые aiMode yandex_only и tri_hybrid, и сделать “LLM‑проверку качества политики по evidence” (не галлюцинации).
+
+A) Расширить aiMode по всему проекту
+В server/audit-engine.ts расширь export type AuditAiMode:
+
+add: yandex_only, tri_hybrid (и оставь existing: gigachat_only, openai_only, hybrid, none — названия как в текущем коде/enum).
+
+В server/storage.ts / settings:
+
+обнови get/set aiMode чтобы принимали новые значения.
+
+В server/routes.ts (superadmin settings API):
+
+расширь z.enum() в PUT/GET, чтобы новые режимы работали в UI.
+
+В фронтенде (superadmin settings):
+
+добавь варианты в селект (yandex_only, tri_hybrid).
+
+B) Добавить YandexGPT провайдер (без новых npm пакетов)
+Создай server/yandexgpt.ts или блок в audit-engine.ts:
+
+auth через IAM token:
+
+поддержи env: YANDEX_IAM_TOKEN (простое)
+
+плюс TODO: получение IAM по OAuth/service account (не обязательно сейчас)
+Yandex Cloud пишет, что IAM token передаётся как Authorization: Bearer <IAM_token>.​
+
+Реализуй callYandexGpt(systemPrompt, userPayloadJson):
+
+POST в Yandex AI Studio/YandexGPT endpoint (сделай конфиг через env YANDEX_GPT_ENDPOINT + YANDEX_GPT_MODEL_URI).
+
+Верни строго JSON (см. schema ниже), иначе null.
+
+C) Ввести “LLM reviewer” по evidence (quality gate)
+Расширь AuditCheckResult (если ещё не сделано полностью):
+
+evidence?: { urls?: string[], snippets?: string[], markers?: string[], meta?: Record<string, any> }
+
+Добавь функцию buildEvidenceBundle(report):
+
+Включай только релевантные checks (privacy/consent/cookies/contacts) и только evidence (не весь html).
+
+Ограничь размер: max 20 urls, max 20 snippets, max 8k символов total.
+
+Сделай единый JSON schema (строго):
+{
+"policyQuality": {
+"status": "passed|warning|failed",
+"score": 0-100,
+"missingSections": string[],
+"evidenceRefs": string[] // ссылки на urls/snippets ids из bundle
+},
+"keyRisks": [
+{"title": string, "priority": "critical|medium|low", "evidenceRefs": string[]}
+],
+"recommendations": string[] // короткие пункты
+}
+
+Если модель не вернула валидный JSON → отклонить ответ.
+
+D) Логика aiMode в runAudit()
+Добавь:
+
+yandex_only: только YandexGPT reviewer.
+
+tri_hybrid:
+
+вызвать 3 провайдера параллельно: GigaChat, OpenAI, YandexGPT
+
+каждый возвращает JSON по schema
+
+выбрать лучший:
+a) валидный JSON
+b) max coverage: больше evidenceRefs
+c) меньше конфликтов с базовыми status’ами (если policy check FAILED, reviewer не может говорить “всё ок”)
+
+fallback: если tri_hybrid не дал валидного → использовать base.summary/base.recommendations
+
+Сохрани в AuditReport:
+
+summary: короткое резюме (можно из reviewer.keyRisks + policyQuality)
+
+recommendations: массив строк (3-7 пунктов)
+
+additional поле: aiProviderUsed: "gigachat|openai|yandex|tri_hybrid|none" (если у вас есть куда добавить).
+
+E) Промпты LLM (важно)
+System prompt: “Ты юрист-аудитор. Нельзя выдумывать. Используй ТОЛЬКО EvidenceBundle. Если данных не хватает — ставь warning и перечисляй чего не хватает.”
+
+User prompt: JSON EvidenceBundle.
+
+F) Проверка РКН (ИНН/название) — интерфейс, без “хаков”
+Добавь rknCheck в отчёт:
+
+{ status, confidence, used: "inn|name|manual|none", query: {inn?, name?}, details, evidence }
+
+Реализуй пока только “подготовку поиска”:
+
+если inn найден/введён → сформируй ссылку на реестр и пометь used=inn, confidence=high
+
+если inn не найден → needsCompanyDetails=true, used=name, confidence=low
+Реестр операторов РКН — официальный источник, но у него могут быть ограничения на автоматизацию, поэтому пока без парсинга HTML результатов.​
+
+G) Коммиты
+"Add YandexGPT provider and aiMode yandex_only"
+
+"Add tri_hybrid ensemble with evidence-based JSON validation"
+
+"Add LLM policy quality reviewer based on evidence bundle"
+
+"Add RKN check scaffolding (INN/name/manual) and UI prompt integration"
+
+В конце дай:
+
+список изменённых файлов
+
+env variables list (OPENAI_API_KEY, GIGACHAT_API_KEY, YANDEX_IAM_TOKEN, YANDEX_GPT_ENDPOINT, YANDEX_GPT_MODEL_URI)
+
+краткий manual test plan
+
+Ограничения:
+
+Не добавляй новые npm пакеты.
+
+Не передавай в LLM сырой HTML целиком.
+
+Никаких моков.
