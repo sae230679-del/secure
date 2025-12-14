@@ -17,6 +17,12 @@ import crypto from "crypto";
 import { runExpressAudit, runAudit, checkWebsiteExists, runDebugAudit } from "./audit-engine";
 import { generatePdfReport } from "./pdf-generator";
 
+// GUARD: Mock mode forbidden in production
+if (process.env.AUDIT_MOCK_MODE === "true" && process.env.NODE_ENV === "production") {
+  console.error("[FATAL] MOCK MODE FORBIDDEN in production. Exiting.");
+  process.exit(1);
+}
+
 declare module "express-session" {
   interface SessionData {
     userId?: number;
@@ -2030,52 +2036,22 @@ export async function registerRoutes(
         } catch (err: any) {
           console.error(`[EXPRESS] Real audit failed:`, err?.message || err);
           console.error(`[EXPRESS] Stack:`, err?.stack);
-          console.log(`[EXPRESS] Using fallback for token=${token}`);
           
-          for (let i = 0; i < totalStages; i++) {
-            await new Promise(resolve => setTimeout(resolve, stageInterval));
-            currentStage = i + 1;
-            
-            const passed = Math.floor(Math.random() * 2) + (i > 3 ? 1 : 0);
-            const warning = Math.random() < 0.3 ? 1 : 0;
-            const failed = Math.random() < 0.15 ? 1 : 0;
-            
-            const currentAudit = await storage.getPublicAuditByToken(token);
-            if (currentAudit) {
-              await storage.updatePublicAuditProgress(token, {
-                stageIndex: currentStage,
-                passedCount: (currentAudit.passedCount || 0) + passed,
-                warningCount: (currentAudit.warningCount || 0) + warning,
-                failedCount: (currentAudit.failedCount || 0) + failed,
-                totalCount: currentStage,
-              });
-            }
-          }
-
-          const finalAudit = await storage.getPublicAuditByToken(token);
-          if (finalAudit) {
-            const total = (finalAudit.passedCount || 0) + (finalAudit.warningCount || 0) + (finalAudit.failedCount || 0);
-            const score = total > 0 ? Math.round(((finalAudit.passedCount || 0) / total) * 100) : 50;
-            
-            let severity = "low";
-            if ((finalAudit.failedCount || 0) >= 3) severity = "high";
-            else if ((finalAudit.failedCount || 0) >= 1 || (finalAudit.warningCount || 0) >= 3) severity = "medium";
-
-            const summaryResults = expressCheckCriteria.map((c, idx) => ({
-              ...c,
-              status: idx < (finalAudit.passedCount || 0) ? "passed" as const : 
-                      idx < (finalAudit.passedCount || 0) + (finalAudit.warningCount || 0) ? "warning" as const : 
-                      idx < total ? "failed" as const : "passed" as const
-            }));
-
-            await storage.updatePublicAuditProgress(token, {
-              status: "completed",
-              scorePercent: score,
-              severity,
-              summaryJson: summaryResults,
-              completedAt: new Date(),
-            });
-          }
+          await storage.updatePublicAuditProgress(token, {
+            status: "failed",
+            stageIndex: 0,
+            passedCount: 0,
+            warningCount: 0,
+            failedCount: 0,
+            totalCount: 0,
+            summaryJson: [{
+              name: "Ошибка проверки",
+              description: "Не удалось выполнить проверку сайта",
+              status: "failed",
+              details: err?.message || "Неизвестная ошибка",
+            }],
+            completedAt: new Date(),
+          });
         }
       };
 

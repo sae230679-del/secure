@@ -1,0 +1,180 @@
+У нас ДВА РАЗНЫХ СЕРВИСА, и ты обязан чинить оба отдельно:
+
+Сервис №1: Экспресс‑проверка (публичная) → результат должен ПОКАЗЫВАТЬСЯ СРАЗУ НА ЭКРАНЕ (не только “купите”).
+API: POST /api/public/express-check → runExpressAudit().​
+
+Сервис №2: Полный аудит (кабинет) → создаёт аудит, сохраняет в БД, даёт PDF.
+API: POST /api/audits + GET /api/audits/:id/pdf → runAudit() + generatePdfReport.​
+
+0) СУПЕР-ЗАПРЕТ НА МОКАПЫ (обязательное)
+Найди и удали/заблокируй любые mock/random генераторы результатов (даже если “dead code”):
+
+Любые getRandomStatus, simulateAuditResults и т.п. должны быть УДАЛЕНЫ.​
+
+Добавь guard:
+
+Если env AUDIT_MOCK_MODE=true → сервер должен падать в production (process.exit(1)) и логировать “MOCK MODE FORBIDDEN”.
+
+По умолчанию AUDIT_MOCK_MODE отсутствует/false.
+Никаких “симуляций” вообще.
+
+1) ПОЧИНИ СЕРВИС №1: Экспресс‑проверка НЕ показывает результат
+Цель: после отправки URL пользователь видит краткий отчёт на странице.
+
+Шаги:
+
+Проверь POST /api/public/express-check:
+
+Убедись что endpoint возвращает JSON с полями результата (score, checks, passed/warn/failed, summaryText).
+
+Если сейчас возвращается только “ок/redirect/предложение купить” — это баг.
+
+В клиенте (страница экспресс‑проверки):
+
+Найди компонент, который вызывает /api/public/express-check.
+
+Почини state: на success должен сохраняться результат и рендериться блок “Краткий отчёт”.
+
+Добавь обработку ошибок и отображение: “не удалось проверить (403/timeout)”.
+
+Manual test:
+
+Открой экспресс‑проверку → введи любой URL → убедись, что краткий отчёт появляется без покупки.
+
+Сделай commit: "Fix express check UI: show results immediately"
+
+2) ДОБАВЬ КРИТЕРИЙ РКН В СЕРВИС №1 (экспресс)
+Цель: в экспрессе должен быть пункт “Реестр РКН (операторы ПДн)”:
+
+Если на сайте нашли ИНН → status=INFO/PASSED (не факт что в реестре, но “готово к проверке”) или WARNING “проверка требует сверки”.
+
+Если ИНН не нашли → запросить ИНН и Наименование юрлица у пользователя.
+
+Шаги:
+
+В runExpressAudit() / в наборе express checks:
+
+Добавь check rkn_registry (category fz152 или legal).
+
+В details/evidence: innFound/nameFound/urlsWhereSearched.
+
+Если innFound == null:
+
+endpoint /api/public/express-check должен вернуть:
+
+needsCompanyDetails: true
+
+companyDetailsRequest: { fields: ["companyName","inn"] }
+
+message: "ИНН не найден, для точной проверки РКН введите реквизиты".
+
+UI:
+
+Если needsCompanyDetails=true, показать форму (адаптивно):
+
+Desktop: Dialog
+
+Mobile/iPhone: Bottom Sheet
+
+Поля минимум: Company Name + INN (10/12).
+
+Две кнопки:
+
+“Продолжить без ввода” → показать warning “точность будет снижена”.
+
+“Отправить” → повторно дернуть /api/public/express-check, передав companyDetails.
+
+Сохраняй эти данные в ответе экспресса, чтобы их можно было использовать в апселле на полный аудит.
+
+Commit: "Add RKN criterion + manual INN/company name prompt in express check"
+
+3) ПОЧИНИ PDF (всегда ошибка) + чтобы читалось на iPhone
+Цель: GET /api/audits/:id/pdf всегда отдаёт валидный PDF и открывается в Safari iOS.
+
+Шаги:
+
+На backend:
+
+Найди GET /api/audits/:id/pdf в server/routes.ts и путь к generatePdfReport.​
+
+Оберни генерацию в try/catch и логируй err.stack.
+
+Убедись, что response headers корректные:
+
+Content-Type: application/pdf
+
+Content-Disposition: inline; filename="audit-report.pdf"
+
+(желательно) Cache-Control: no-store
+
+Генерируй PDF как Buffer/stream и корректно заверши response (важно для iOS).
+
+В server/pdf-generator.ts:
+
+Сделай генератор tolerant: любые новые поля optional, отсутствие aiSummary/aiRecommendations не должно ломать PDF.​
+
+Убери любые символы/шрифты, которые могут ломать рендер на iOS, либо включи шрифты с кириллицей (DejaVuSans ок).
+
+На frontend:
+
+Если сейчас PDF скачивается через fetch и blob — проверь, что на iOS это открывается.
+
+Добавь fallback: открывать PDF через прямую ссылку window.open("/api/audits/{id}/pdf", "_blank") (Safari лучше так).
+
+Manual test iPhone:
+
+Открой аудит → нажми “Скачать PDF” → файл должен открываться, не быть пустым и не давать ошибку.
+
+Commit: "Fix PDF generation + iOS Safari compatibility"
+
+4) ПОЧИНИ СЕРВИС №2: Полный аудит + РКН
+Цель: полный аудит сохраняется, показывает результат, и включает структуру rknCheck.
+
+Шаги:
+
+В runAudit() добавь rknCheck в AuditReport:
+
+used: inn|name|manual|none
+
+confidence: high|medium|low
+
+needsCompanyDetails boolean
+
+В кабинете:
+
+если needsCompanyDetails=true, показать ту же форму (companyName + INN), но уже в контексте полного аудита (после первичного скана).
+
+данные сохранять вместе с аудитом (в БД или в payload повторного запуска).
+
+Валидация:
+
+ИНН строго 10 или 12 цифр.
+
+Commit: "Add RKN structure + manual requisites flow in full audit"
+
+5) ОБЯЗАТЕЛЬНЫЕ ПРОВЕРКИ ПОСЛЕ ФИКСА (без этого не принимать)
+Дай мне результаты этих команд:
+
+A) Экспресс:
+
+curl -X POST http://localhost:5000/api/public/express-check -H "Content-Type: application/json" -d '{"websiteUrl":"https://example.com"}'
+Должен вернуть результат с checks + score, а не “купите”.
+
+B) Полный аудит (после логина):
+
+curl -X POST http://localhost:5000/api/audits -H "Cookie: connect.sid=..." -H "Content-Type: application/json" -d '{"websiteUrl":"https://example.com","packageId":12}'
+Должен создать аудит.
+
+C) PDF:
+
+curl -I http://localhost:5000/api/audits/{id}/pdf -H "Cookie: connect.sid=..."
+Должен показать Content-Type: application/pdf и не 500.
+
+6) В конце — отчёт
+Список изменённых файлов.
+
+Что конкретно было причиной: почему экспресс не показывал результат; почему PDF падал; почему iPhone не открывал.
+
+Подтверждение: мокапы удалены + есть guard, запрещающий AUDIT_MOCK_MODE в production.
+
+НЕ переходи к “улучшениям” пока не будут зелёными шаги 1–3.
