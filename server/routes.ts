@@ -1157,6 +1157,23 @@ export async function registerRoutes(
         openaiKey = process.env.OPENAI_API_KEY;
         openaiSource = "env";
       }
+
+      const yandexDbSetting = await storage.getSecureSetting("yandex_iam_token");
+      let yandexKey = "";
+      let yandexSource = "none";
+      
+      if (yandexDbSetting) {
+        try {
+          yandexKey = decrypt(yandexDbSetting.encryptedValue);
+          yandexSource = "database";
+        } catch (e) {
+          console.error("Failed to decrypt yandex key");
+        }
+      }
+      if (!yandexKey && process.env.YANDEX_IAM_TOKEN) {
+        yandexKey = process.env.YANDEX_IAM_TOKEN;
+        yandexSource = "env";
+      }
       
       const modeSetting = await storage.getSystemSetting("ai_mode");
       const currentMode = modeSetting?.value || "gigachat_only";
@@ -1168,6 +1185,9 @@ export async function registerRoutes(
         openai: !!openaiKey && openaiKey.length > 0,
         openaiMasked: openaiKey ? maskApiKey(openaiKey) : null,
         openaiSource,
+        yandex: !!yandexKey && yandexKey.length > 0,
+        yandexMasked: yandexKey ? maskApiKey(yandexKey) : null,
+        yandexSource,
         currentMode,
       });
     } catch (error) {
@@ -1181,7 +1201,7 @@ export async function registerRoutes(
       const { provider } = req.params;
       const { apiKey } = req.body;
       
-      if (!["gigachat", "openai"].includes(provider)) {
+      if (!["gigachat", "openai", "yandex"].includes(provider)) {
         return res.status(400).json({ error: "Invalid provider" });
       }
       
@@ -1190,7 +1210,12 @@ export async function registerRoutes(
       }
       
       const { encrypt, maskApiKey } = await import("./crypto");
-      const keyName = provider === "gigachat" ? "gigachat_api_key" : "openai_api_key";
+      const keyNames: Record<string, string> = {
+        gigachat: "gigachat_api_key",
+        openai: "openai_api_key",
+        yandex: "yandex_iam_token",
+      };
+      const keyName = keyNames[provider];
       const encryptedValue = encrypt(apiKey.trim());
       
       await storage.upsertSecureSetting(keyName, encryptedValue, req.session.userId);
@@ -1202,9 +1227,14 @@ export async function registerRoutes(
         details: `Updated ${provider} API key`,
       });
       
+      const providerNames: Record<string, string> = {
+        gigachat: "GigaChat",
+        openai: "OpenAI",
+        yandex: "YandexGPT",
+      };
       res.json({ 
         success: true, 
-        message: `${provider === "gigachat" ? "GigaChat" : "OpenAI"} ключ сохранён`,
+        message: `${providerNames[provider]} ключ сохранён`,
         masked: maskApiKey(apiKey.trim()),
       });
     } catch (error) {
@@ -1217,11 +1247,16 @@ export async function registerRoutes(
     try {
       const { provider } = req.params;
       
-      if (!["gigachat", "openai"].includes(provider)) {
+      if (!["gigachat", "openai", "yandex"].includes(provider)) {
         return res.status(400).json({ error: "Invalid provider" });
       }
       
-      const keyName = provider === "gigachat" ? "gigachat_api_key" : "openai_api_key";
+      const keyNames: Record<string, string> = {
+        gigachat: "gigachat_api_key",
+        openai: "openai_api_key",
+        yandex: "yandex_iam_token",
+      };
+      const keyName = keyNames[provider];
       await storage.deleteSecureSetting(keyName);
       
       await storage.createAuditLog({
@@ -1231,9 +1266,14 @@ export async function registerRoutes(
         details: `Deleted ${provider} API key`,
       });
       
+      const providerNames: Record<string, string> = {
+        gigachat: "GigaChat",
+        openai: "OpenAI",
+        yandex: "YandexGPT",
+      };
       res.json({ 
         success: true, 
-        message: `${provider === "gigachat" ? "GigaChat" : "OpenAI"} ключ удалён. Будет использоваться ключ из переменных среды, если он есть.`,
+        message: `${providerNames[provider]} ключ удалён. Будет использоваться ключ из переменных среды, если он есть.`,
       });
     } catch (error) {
       console.error("Failed to delete API key:", error);

@@ -52,10 +52,13 @@ export default function SuperAdminSettingsPage() {
   const { data: aiStatus, refetch: refetchAiStatus } = useQuery<{ 
     gigachat: boolean; 
     openai: boolean; 
+    yandex: boolean;
     gigachatMasked: string | null;
     openaiMasked: string | null;
+    yandexMasked: string | null;
     gigachatSource: string;
     openaiSource: string;
+    yandexSource: string;
     currentMode: string;
   }>({
     queryKey: ["/api/superadmin/ai-status"],
@@ -63,8 +66,10 @@ export default function SuperAdminSettingsPage() {
 
   const [gigachatKey, setGigachatKey] = useState("");
   const [openaiKey, setOpenaiKey] = useState("");
+  const [yandexKey, setYandexKey] = useState("");
   const [showGigachatKey, setShowGigachatKey] = useState(false);
   const [showOpenaiKey, setShowOpenaiKey] = useState(false);
+  const [showYandexKey, setShowYandexKey] = useState(false);
 
   const saveApiKeyMutation = useMutation({
     mutationFn: async ({ provider, apiKey }: { provider: string; apiKey: string }) => {
@@ -75,6 +80,7 @@ export default function SuperAdminSettingsPage() {
       refetchAiStatus();
       setGigachatKey("");
       setOpenaiKey("");
+      setYandexKey("");
       toast({
         title: "Ключ сохранён",
         description: data.message,
@@ -669,6 +675,71 @@ export default function SuperAdminSettingsPage() {
                         onClick={() => deleteApiKeyMutation.mutate("openai")}
                         disabled={deleteApiKeyMutation.isPending}
                         data-testid="button-delete-openai-key"
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-md bg-muted/50 space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-3">
+                      <span className="font-medium">YandexGPT API (IAM Token)</span>
+                      {aiStatus?.yandex ? (
+                        <Badge variant="default" className="bg-green-600">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Настроен
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary">
+                          <XCircle className="h-3 w-3 mr-1" />
+                          Не настроен
+                        </Badge>
+                      )}
+                      {aiStatus?.yandexSource === "database" && (
+                        <Badge variant="outline" className="text-xs">БД</Badge>
+                      )}
+                      {aiStatus?.yandexSource === "env" && (
+                        <Badge variant="outline" className="text-xs">ENV</Badge>
+                      )}
+                    </div>
+                    {aiStatus?.yandexMasked && (
+                      <span className="text-sm text-muted-foreground font-mono">{aiStatus.yandexMasked}</span>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Input
+                        type={showYandexKey ? "text" : "password"}
+                        value={yandexKey}
+                        onChange={(e) => setYandexKey(e.target.value)}
+                        placeholder="Введите YandexGPT IAM токен"
+                        data-testid="input-yandex-key"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1 top-1/2 -translate-y-1/2"
+                        onClick={() => setShowYandexKey(!showYandexKey)}
+                      >
+                        {showYandexKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    <Button
+                      onClick={() => saveApiKeyMutation.mutate({ provider: "yandex", apiKey: yandexKey })}
+                      disabled={!yandexKey || saveApiKeyMutation.isPending}
+                      data-testid="button-save-yandex-key"
+                    >
+                      <Save className="h-4 w-4" />
+                    </Button>
+                    {aiStatus?.yandexSource === "database" && (
+                      <Button
+                        variant="outline"
+                        onClick={() => deleteApiKeyMutation.mutate("yandex")}
+                        disabled={deleteApiKeyMutation.isPending}
+                        data-testid="button-delete-yandex-key"
                       >
                         <XCircle className="h-4 w-4" />
                       </Button>
