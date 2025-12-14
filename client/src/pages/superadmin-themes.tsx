@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Palette, Check, Plus, Edit, Moon, Sun } from "lucide-react";
+import { Palette, Check, Plus, Edit, Moon, Sun, PanelLeft, LayoutTemplate } from "lucide-react";
 import type { ThemeColors, ThemePreset } from "@shared/schema";
 
 type DesignTheme = {
@@ -275,7 +275,7 @@ export default function SuperAdminThemesPage() {
   };
 
   const getLayoutIcon = (type: string) => {
-    return type === "sidebar" ? <Sidebar className="h-4 w-4" /> : <Layout className="h-4 w-4" />;
+    return type === "sidebar" ? <PanelLeft className="h-4 w-4" /> : <LayoutTemplate className="h-4 w-4" />;
   };
 
   return (
