@@ -460,11 +460,15 @@ export async function registerRoutes(
   app.get("/api/audits/:id/pdf", requireAuth, async (req, res) => {
     try {
       const auditId = parseInt(req.params.id);
+      console.log(`[PDF] Request for auditId=${auditId}`);
+      
       const audit = await storage.getAuditById(auditId);
       
       if (!audit) {
+        console.log(`[PDF] Audit not found: ${auditId}`);
         return res.status(404).json({ error: "Audit not found" });
       }
+      console.log(`[PDF] Audit found: status=${audit.status}, userId=${audit.userId}`);
 
       if (audit.userId !== req.session.userId) {
         const user = await storage.getUserById(req.session.userId!);
@@ -474,41 +478,48 @@ export async function registerRoutes(
       }
 
       if (audit.status !== "completed") {
+        console.log(`[PDF] Audit not completed: status=${audit.status}`);
         return res.status(400).json({ error: "Audit is not completed yet" });
       }
 
       if (!audit.results || audit.results.length === 0) {
+        console.log(`[PDF] No results for audit ${auditId}`);
         return res.status(404).json({ error: "Audit results not found" });
       }
 
       const result = audit.results[0];
       const pkg = audit.package;
       const user = await storage.getUserById(audit.userId);
+      console.log(`[PDF] Result found: scorePercent=${result.scorePercent}, severity=${result.severity}`);
 
-      const criteria = (result.criteriaJson as any[]).map((c: any) => ({
-        name: c.name,
-        description: c.description,
-        status: c.status as "passed" | "warning" | "failed",
-        details: c.details || "",
-        category: c.category,
-        law: c.law,
+      const criteriaJson = result.criteriaJson as any[];
+      console.log(`[PDF] criteriaJson has ${criteriaJson?.length || 0} items`);
+      
+      const criteria = (criteriaJson || []).map((c: any) => ({
+        name: c?.name || "Без названия",
+        description: c?.description || "",
+        status: (c?.status as "passed" | "warning" | "failed") || "warning",
+        details: c?.details || "",
+        category: c?.category || "",
+        law: c?.law || "",
       }));
 
       const passedCount = criteria.filter((c: any) => c.status === "passed").length;
       const warningCount = criteria.filter((c: any) => c.status === "warning").length;
       const failedCount = criteria.filter((c: any) => c.status === "failed").length;
+      console.log(`[PDF] Counts: passed=${passedCount}, warning=${warningCount}, failed=${failedCount}`);
 
-      // Get AI mode for PDF
       const aiModeSetting = await storage.getSystemSetting("ai_mode");
       const aiMode = (aiModeSetting?.value as "gigachat_only" | "openai_only" | "hybrid" | "none") || "gigachat_only";
       
-      // Extract AI summary and recommendations from result if available
       const aiSummary = (result as any).aiSummary || (result as any).summary || undefined;
       const aiRecommendations = (result as any).aiRecommendations || (result as any).recommendations || [];
+      console.log(`[PDF] AI: mode=${aiMode}, hasSummary=${!!aiSummary}, recommendations=${aiRecommendations?.length || 0}`);
 
+      console.log(`[PDF] Calling generatePdfReport for auditId=${auditId}...`);
       const pdfBuffer = await generatePdfReport({
         auditId: audit.id,
-        websiteUrl: audit.websiteUrlNormalized,
+        websiteUrl: audit.websiteUrlNormalized || "unknown",
         companyName: user?.companyName || undefined,
         scorePercent: result.scorePercent || 0,
         severity: result.severity || "red",
@@ -517,12 +528,13 @@ export async function registerRoutes(
         failedCount,
         totalCount: criteria.length,
         criteria,
-        createdAt: audit.createdAt,
+        createdAt: audit.createdAt || new Date(),
         packageName: pkg?.name || "Аудит",
         aiSummary,
-        aiRecommendations,
+        aiRecommendations: aiRecommendations || [],
         aiMode,
       });
+      console.log(`[PDF] PDF generated: ${pdfBuffer.length} bytes`);
 
       const filename = `securelex-audit-${auditId}-${Date.now()}.pdf`;
       
@@ -530,8 +542,9 @@ export async function registerRoutes(
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
       res.setHeader("Content-Length", pdfBuffer.length);
       res.send(pdfBuffer);
-    } catch (error) {
-      console.error("Failed to generate PDF:", error);
+    } catch (error: any) {
+      console.error(`[PDF] Failed to generate PDF:`, error?.message || error);
+      console.error(`[PDF] Stack:`, error?.stack);
       res.status(500).json({ error: "Failed to generate PDF report" });
     }
   });
@@ -578,10 +591,14 @@ export async function registerRoutes(
 
       (async () => {
         try {
+          console.log(`[AUDIT] Starting audit processing for auditId=${audit.id}, url=${normalizedUrl}`);
           const aiModeSetting = await storage.getSystemSetting("ai_mode");
           const aiMode = (aiModeSetting?.value as "gigachat_only" | "openai_only" | "hybrid" | "none") || "gigachat_only";
+          console.log(`[AUDIT] AI mode: ${aiMode}`);
           
+          console.log(`[AUDIT] Calling runAudit for ${normalizedUrl}...`);
           const report = await runAudit(normalizedUrl, { level2: true, aiMode });
+          console.log(`[AUDIT] runAudit completed: scorePercent=${report.scorePercent}, checks.length=${report.checks?.length || 0}, severity=${report.severity}`);
           
           const criteriaResults: CriteriaResult[] = report.checks.map(check => ({
             name: check.name,
@@ -590,15 +607,19 @@ export async function registerRoutes(
             details: check.details,
             evidence: check.evidence,
           }));
+          console.log(`[AUDIT] Mapped ${criteriaResults.length} criteria results`);
 
+          console.log(`[AUDIT] Saving audit result to DB for auditId=${audit.id}...`);
           await storage.createAuditResult({
             auditId: audit.id,
             criteriaJson: criteriaResults,
             scorePercent: report.scorePercent,
             severity: report.severity,
           });
+          console.log(`[AUDIT] Audit result saved successfully`);
 
           await storage.updateAuditStatus(audit.id, "completed", new Date());
+          console.log(`[AUDIT] Audit status updated to completed for auditId=${audit.id}`);
 
           const user = await storage.getUserById(audit.userId);
           if (user) {
@@ -614,8 +635,9 @@ export async function registerRoutes(
               totalCount: report.totalCount,
             }).catch(err => console.error("Failed to send audit email:", err));
           }
-        } catch (error) {
-          console.error("Failed to complete audit:", error);
+        } catch (error: any) {
+          console.error(`[AUDIT] Failed to complete audit auditId=${audit.id}:`, error?.message || error);
+          console.error(`[AUDIT] Stack:`, error?.stack);
           await storage.updateAuditStatus(audit.id, "failed");
         }
       })();
@@ -1960,6 +1982,7 @@ export async function registerRoutes(
             });
           }
 
+          console.log(`[EXPRESS] Calling runExpressAudit for ${normalizedUrl}...`);
           const report = await runExpressAudit(normalizedUrl, async (stage, passed, warnings, failed) => {
             const adjustedStage = Math.min(3 + stage, 6);
             await storage.updatePublicAuditProgress(token, {
@@ -1970,6 +1993,7 @@ export async function registerRoutes(
               totalCount: passed + warnings + failed,
             });
           });
+          console.log(`[EXPRESS] runExpressAudit completed: scorePercent=${report.scorePercent}, checks.length=${report.checks?.length || 0}`);
 
           for (let i = 4; i <= 6; i++) {
             await new Promise(resolve => setTimeout(resolve, 1500));
@@ -2003,8 +2027,10 @@ export async function registerRoutes(
             summaryJson: summaryResults,
             completedAt: new Date(),
           });
-        } catch (err) {
-          console.error("Real audit failed, using fallback:", err);
+        } catch (err: any) {
+          console.error(`[EXPRESS] Real audit failed:`, err?.message || err);
+          console.error(`[EXPRESS] Stack:`, err?.stack);
+          console.log(`[EXPRESS] Using fallback for token=${token}`);
           
           for (let i = 0; i < totalStages; i++) {
             await new Promise(resolve => setTimeout(resolve, stageInterval));

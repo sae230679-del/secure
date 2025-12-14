@@ -271,18 +271,49 @@ function getLawFromCategory(category: string): string {
 }
 
 export async function generatePdfReport(data: AuditReportData): Promise<Buffer> {
+  console.log(`[PDF-GEN] Starting PDF generation for audit ${data.auditId}`);
+  
+  const safeData: AuditReportData = {
+    auditId: data.auditId || 0,
+    websiteUrl: data.websiteUrl || "unknown",
+    companyName: data.companyName,
+    scorePercent: data.scorePercent ?? 0,
+    severity: data.severity || "red",
+    passedCount: data.passedCount ?? 0,
+    warningCount: data.warningCount ?? 0,
+    failedCount: data.failedCount ?? 0,
+    totalCount: data.totalCount ?? 0,
+    criteria: (data.criteria || []).map(c => ({
+      name: c?.name || "Без названия",
+      description: c?.description || "",
+      status: c?.status || "warning",
+      details: c?.details || "",
+      category: c?.category,
+      law: c?.law,
+    })),
+    createdAt: data.createdAt || new Date(),
+    packageName: data.packageName || "Аудит",
+    aiSummary: data.aiSummary,
+    aiRecommendations: data.aiRecommendations || [],
+    aiMode: data.aiMode,
+  };
+  
+  console.log(`[PDF-GEN] SafeData: criteria=${safeData.criteria.length}, score=${safeData.scorePercent}`);
+  
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: "A4",
       margins: { top: 50, bottom: 50, left: 50, right: 50 },
       bufferPages: true,
       info: {
-        Title: `Отчёт аудита сайта ${data.websiteUrl}`,
+        Title: `Отчёт аудита сайта ${safeData.websiteUrl}`,
         Author: "SecureLex.ru",
         Subject: "Аудит соответствия законодательству",
         Keywords: "ФЗ-152, ФЗ-149, аудит, персональные данные",
       },
     });
+    
+    const data = safeData;
 
     const chunks: Buffer[] = [];
     const stream = new PassThrough();
