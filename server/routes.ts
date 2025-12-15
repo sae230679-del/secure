@@ -1343,6 +1343,43 @@ export async function registerRoutes(
     }
   });
 
+  // AI keys diagnostics endpoint (SuperAdmin only) - returns boolean flags, no actual values
+  app.get("/api/admin/diagnostics/ai-keys", requireSuperAdmin, async (req, res) => {
+    try {
+      const { hasApiKey } = await import("./api-keys");
+      
+      const hasGigaChatKey = await hasApiKey("gigachat");
+      const hasOpenAiKey = await hasApiKey("openai");
+      
+      const modeSetting = await storage.getSystemSetting("ai_mode");
+      const aiModeConfigured = modeSetting?.value || "gigachat_only";
+      
+      // Determine effective mode based on available keys
+      let effectiveAiMode = aiModeConfigured;
+      if (aiModeConfigured === "gigachat_only" && !hasGigaChatKey) {
+        effectiveAiMode = "none (no GIGACHATAPIKEY)";
+      } else if (aiModeConfigured === "openai_only" && !hasOpenAiKey) {
+        effectiveAiMode = "none (no OPENAIAPIKEY)";
+      } else if (aiModeConfigured === "hybrid" && !hasGigaChatKey && !hasOpenAiKey) {
+        effectiveAiMode = "none (no keys)";
+      } else if (aiModeConfigured === "hybrid" && !hasOpenAiKey) {
+        effectiveAiMode = "gigachat_only (fallback)";
+      } else if (aiModeConfigured === "hybrid" && !hasGigaChatKey) {
+        effectiveAiMode = "openai_only (fallback)";
+      }
+      
+      res.json({
+        hasGigaChatKey,
+        hasOpenAiKey,
+        aiModeConfigured,
+        effectiveAiMode,
+      });
+    } catch (error) {
+      console.error("AI keys diagnostics error:", error);
+      res.status(500).json({ error: "Failed to fetch AI diagnostics" });
+    }
+  });
+
   // API key management endpoints
   app.post("/api/superadmin/api-keys/:provider", requireSuperAdmin, async (req, res) => {
     try {
