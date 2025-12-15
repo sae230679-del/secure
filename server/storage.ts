@@ -1281,6 +1281,43 @@ export class DatabaseStorage implements IStorage {
       .where(eq(schema.pdnDestructionTasks.id, taskId));
   }
 
+  async releasePdnTaskLegalHold(taskId: number): Promise<void> {
+    await db
+      .update(schema.pdnDestructionTasks)
+      .set({ status: "SCHEDULED", legalHoldReason: null, updatedAt: new Date() })
+      .where(eq(schema.pdnDestructionTasks.id, taskId));
+  }
+
+  async getPdnConsentsWithUsers(limit: number): Promise<Array<{
+    id: number;
+    userId: number;
+    eventType: string;
+    documentVersion: string;
+    eventAt: Date;
+    source: string;
+    userEmail: string;
+  }>> {
+    const results = await db
+      .select({
+        id: schema.pdnConsentEvents.id,
+        userId: schema.pdnConsentEvents.userId,
+        eventType: schema.pdnConsentEvents.eventType,
+        documentVersion: schema.pdnConsentEvents.documentVersion,
+        eventAt: schema.pdnConsentEvents.eventAt,
+        source: schema.pdnConsentEvents.source,
+        userEmail: schema.users.email,
+      })
+      .from(schema.pdnConsentEvents)
+      .leftJoin(schema.users, eq(schema.pdnConsentEvents.userId, schema.users.id))
+      .orderBy(desc(schema.pdnConsentEvents.eventAt))
+      .limit(limit);
+    
+    return results.map(r => ({
+      ...r,
+      userEmail: r.userEmail || "deleted@anonymized.local",
+    }));
+  }
+
   async executePdnDestruction(taskId: number, operatorUserId: number): Promise<{ success: boolean; actId?: number }> {
     const [task] = await db.select().from(schema.pdnDestructionTasks).where(eq(schema.pdnDestructionTasks.id, taskId));
     if (!task || task.status === "DONE" || task.status === "LEGAL_HOLD") {

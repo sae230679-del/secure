@@ -2944,6 +2944,16 @@ export async function registerRoutes(
   // =====================================================
   // PDN Admin Endpoints (requireSuperAdmin)
   // =====================================================
+  app.get("/api/admin/pdn/consents", requireSuperAdmin, async (req, res) => {
+    try {
+      const consents = await storage.getPdnConsentsWithUsers(500);
+      res.json(consents);
+    } catch (error: any) {
+      console.error("[PDN Consents] Error:", error?.message || error);
+      res.status(500).json({ error: "Failed to fetch consents" });
+    }
+  });
+
   app.get("/api/admin/pdn/withdrawals", requireSuperAdmin, async (req, res) => {
     try {
       const events = await storage.getPdnWithdrawals(200);
@@ -2979,6 +2989,17 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("[PDN Legal Hold] Error:", error?.message || error);
       res.status(500).json({ error: "Failed to set legal hold" });
+    }
+  });
+
+  app.post("/api/admin/pdn/destruction-tasks/:id/release-hold", requireSuperAdmin, async (req, res) => {
+    try {
+      const taskId = parseInt(req.params.id);
+      await storage.releasePdnTaskLegalHold(taskId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("[PDN Release Hold] Error:", error?.message || error);
+      res.status(500).json({ error: "Failed to release legal hold" });
     }
   });
 

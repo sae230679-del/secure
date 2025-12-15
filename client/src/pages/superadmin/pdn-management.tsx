@@ -49,6 +49,16 @@ type PdnConsentEvent = {
   source: string;
 };
 
+type PdnConsentWithUser = {
+  id: number;
+  userId: number;
+  eventType: "GIVEN" | "WITHDRAWN";
+  documentVersion: string;
+  eventAt: string;
+  source: string;
+  userEmail: string;
+};
+
 type PdnDestructionTask = {
   id: number;
   userId: number;
@@ -65,6 +75,10 @@ export default function PdnManagementPage() {
   const [legalHoldDialogOpen, setLegalHoldDialogOpen] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [legalHoldReason, setLegalHoldReason] = useState("");
+
+  const { data: consents, isLoading: consentsLoading, refetch: refetchConsents } = useQuery<PdnConsentWithUser[]>({
+    queryKey: ["/api/admin/pdn/consents"],
+  });
 
   const { data: withdrawals, isLoading: withdrawalsLoading, refetch: refetchWithdrawals } = useQuery<PdnConsentEvent[]>({
     queryKey: ["/api/admin/pdn/withdrawals"],
@@ -97,6 +111,20 @@ export default function PdnManagementPage() {
     },
     onSuccess: (data) => {
       toast({ title: "Удаление выполнено", description: `Акт ID: ${data.actId}` });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/pdn/destruction-tasks"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Ошибка", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const releaseHoldMutation = useMutation({
+    mutationFn: async (taskId: number) => {
+      const response = await apiRequest("POST", `/api/admin/pdn/destruction-tasks/${taskId}/release-hold`, {});
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Legal hold снят" });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/pdn/destruction-tasks"] });
     },
     onError: (error: Error) => {
@@ -143,15 +171,97 @@ export default function PdnManagementPage() {
 
       <Tabs defaultValue="tasks" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="tasks" className="gap-2">
+          <TabsTrigger value="consents" className="gap-2" data-testid="tab-consents">
+            <CheckCircle2 className="h-4 w-4" />
+            Согласия
+          </TabsTrigger>
+          <TabsTrigger value="tasks" className="gap-2" data-testid="tab-tasks">
             <Trash2 className="h-4 w-4" />
             Задачи уничтожения
           </TabsTrigger>
-          <TabsTrigger value="withdrawals" className="gap-2">
+          <TabsTrigger value="withdrawals" className="gap-2" data-testid="tab-withdrawals">
             <AlertTriangle className="h-4 w-4" />
             Отзывы согласий
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="consents" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <CardTitle>Все согласия на обработку ПДн</CardTitle>
+                  <CardDescription>
+                    История согласий пользователей с версией документа
+                  </CardDescription>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => refetchConsents()} data-testid="button-refresh-consents">
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Обновить
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {consentsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : !consents || consents.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  Нет записей о согласиях
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ID</TableHead>
+                      <TableHead>Пользователь</TableHead>
+                      <TableHead>Тип события</TableHead>
+                      <TableHead>Версия документа</TableHead>
+                      <TableHead>Источник</TableHead>
+                      <TableHead>Дата</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {consents.map((consent) => (
+                      <TableRow key={consent.id} data-testid={`row-consent-${consent.id}`}>
+                        <TableCell>{consent.id}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            {consent.userEmail === "deleted@anonymized.local" ? (
+                              <span className="text-muted-foreground italic">Анонимизирован</span>
+                            ) : (
+                              <span className="font-medium">{consent.userEmail || "Неизвестно"}</span>
+                            )}
+                            <span className="text-xs text-muted-foreground">ID: {consent.userId}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {consent.eventType === "GIVEN" ? (
+                            <Badge variant="default" className="gap-1 bg-green-600">
+                              <CheckCircle2 className="h-3 w-3" />
+                              Дано
+                            </Badge>
+                          ) : (
+                            <Badge variant="destructive" className="gap-1">
+                              <AlertTriangle className="h-3 w-3" />
+                              Отозвано
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{consent.documentVersion}</Badge>
+                        </TableCell>
+                        <TableCell>{consent.source}</TableCell>
+                        <TableCell>{formatDate(consent.eventAt)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="tasks" className="space-y-4">
           <Card>
@@ -234,10 +344,24 @@ export default function PdnManagementPage() {
                               </Button>
                             </div>
                           )}
-                          {task.status === "LEGAL_HOLD" && task.legalHoldReason && (
-                            <span className="text-xs text-muted-foreground">
-                              {task.legalHoldReason}
-                            </span>
+                          {task.status === "LEGAL_HOLD" && (
+                            <div className="flex flex-col gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => releaseHoldMutation.mutate(task.id)}
+                                disabled={releaseHoldMutation.isPending}
+                                data-testid={`button-release-hold-${task.id}`}
+                              >
+                                <Play className="h-3 w-3 mr-1" />
+                                Снять hold
+                              </Button>
+                              {task.legalHoldReason && (
+                                <span className="text-xs text-muted-foreground">
+                                  {task.legalHoldReason}
+                                </span>
+                              )}
+                            </div>
                           )}
                         </TableCell>
                       </TableRow>

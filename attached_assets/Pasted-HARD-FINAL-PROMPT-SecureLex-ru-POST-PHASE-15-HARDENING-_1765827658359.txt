@@ -1,0 +1,270 @@
+HARD FINAL PROMPT — SecureLex.ru (POST‑PHASE 15 HARDENING + AUDITABLE COMPLETION)
+ROLE: You are Replit Agent / Staff full‑stack engineer.
+PROJECT: SecureLex.ru — Express + React/Vite + Drizzle + PostgreSQL.
+STATUS ALREADY DONE (DO NOT REVERT):
+
+Public SEO page renderer: /seo/:slug route, backend endpoint /api/public/seo/:slug, markdown parsing, meta tags via react-helmet-async.​
+
+Cookie consent banner: granular prefs (necessary/analytics/marketing), localStorage persistence with version, iOS safe wrapper.
+
+Legal pages: /offer (version 1.0) and /privacy pages with meta tags; footer links.
+
+Session security (PG sessions) already in place.​
+
+Documentation updated (replit.md) describing 152‑ФЗ compliance, new tables, PDN tracking, jobs, SEO.
+
+SuperAdmin pages exist: /superadmin/pdn and /superadmin/seo-pages with no LSP errors; PDN destruction job scheduled every 6 hours.
+
+NOW YOUR TASK: Verify, harden, and complete everything end‑to‑end so it is production‑ready, auditable, and consistent across UI/API/DB/migrations/tests.
+
+0) NON‑NEGOTIABLE RULES
+DO NOT MODIFY server/audit-engine.ts or any audit scoring/AI logic/outputs. Keep behavior identical.​
+
+Do NOT break existing endpoints: POST /api/public/express-check, POST /api/audits.​
+
+All DB changes must be via Drizzle schema + migrations (drizzle-kit). No “manual DB only”.​
+
+No fake data in production. Mocks only inside tests.​
+
+1) HARD REQUIREMENTS TO FINISH (MUST COMPLETE ALL)
+1.1 PDN: enforce 2 independent checkboxes on every paid checkout
+On ALL paid checkouts (PDF 900, RKN 10, full audit):
+
+Checkbox A: accept offer (link to /offer)
+
+Checkbox B: PDN consent (link to a separate consent doc OR /privacy if consent text is separated; ensure not merged with offer)
+
+Payment button must be disabled until both are checked.
+
+When B is checked and user initiates checkout, write pdn_consent_events with:
+
+event_type = GIVEN
+
+document_version = settings.pdn_consent_document_version
+
+ip, user_agent
+
+source = "checkout"
+
+Legal: consent must be separate and provable (152‑ФЗ ст.9).​
+
+1.2 PDN withdrawal (user) + 30 days scheduling (law)
+User endpoints (requireAuth):
+
+GET /api/me/pdn-status
+
+POST /api/me/withdraw-pdn-consent
+
+Withdraw must:
+
+create pdn_consent_events WITHDRAWN with document_version, ip, user_agent, source="lk"
+
+create/ensure pdn_destruction_tasks scheduled at now + 30 days, status=SCHEDULED
+
+destroy session (logout)
+Law: destroy within 30 days after withdrawal (152‑ФЗ ст.21).​
+
+1.3 PDN destruction job: correctness + idempotency + legal hold
+Job runs every 6 hours (already scheduled) BUT must be verified and hardened:
+
+Selection:
+
+tasks where status='SCHEDULED' and scheduled_at <= now()
+
+Processing:
+
+if LEGAL_HOLD → never execute
+
+call storage.deleteUserOrAnonymize(userId) (implement if missing)​
+
+create pdn_destruction_acts record
+
+mark task DONE with done_at and link destruction_act_id
+
+Idempotency:
+
+repeated runs must not duplicate acts or crash
+
+run each task inside transaction; check status again before commit
+
+1.4 SuperAdmin PDN page must be wired to REAL admin API
+Your UI /superadmin/pdn MUST call real endpoints and reflect DB state changes.
+
+Required admin endpoints (requireSuperAdmin):
+
+GET /api/admin/pdn/consents
+
+list with user email + document version + consent and withdrawal timestamps
+
+GET /api/admin/pdn/destruction-tasks
+
+list tasks with status badges
+
+POST /api/admin/pdn/destruction-tasks/:id/legal-hold { reason }
+
+POST /api/admin/pdn/destruction-tasks/:id/release-hold
+
+POST /api/admin/pdn/destruction-tasks/:id/run-now
+
+If your UI uses different paths: implement these as compatibility wrappers (do NOT refactor UI to break).
+
+1.5 SuperAdmin SEO pages must be fully end-to-end (DB + public render)
+Admin CRUD endpoints (requireSuperAdmin):
+
+GET/POST/PUT/DELETE /api/admin/seo-pages (DELETE = soft delete is_active=false)
+
+Public endpoints:
+
+GET /api/public/seo/:slug exists (already) and must:
+
+return only active pages
+
+include title/description/og image defaults
+
+Sitemap + robots:
+
+GET /sitemap.xml includes active seo pages
+
+GET /robots.txt contains a Sitemap line
+
+1.6 Cookie banner: ensure backend doesn’t violate it
+Cookie consent is implemented client-side; now ensure:
+
+Analytics/marketing scripts only load after consent flags true.
+
+Necessary cookies only are used by default.
+
+Versioned consent is stored (already stated) and displayed in settings modal.
+
+1.7 DB schema + migrations must exist and be applied cleanly
+Must have Drizzle schema + migrations for:
+
+enums: pdn_consent_event_type, pdn_destruction_status, pdn_destruction_method
+
+tables: pdn_consent_events, pdn_destruction_tasks, pdn_destruction_acts, seo_pages
+
+indexes as required for performance
+
+If drizzle-kit enum migration is buggy, add a safe manual SQL migration (CREATE TYPE guarded) but keep it in migrations.​
+
+1.8 Admin settings API must exist and mask secrets
+GET /api/admin/settings: returns typed values; masks robokassa_password1/2 as "***"
+
+PUT /api/admin/settings: upserts values
+Must include:
+
+pdn_consent_document_version (string)
+
+all SEO keys
+
+robokassa keys
+
+1.9 Robokassa correctness (only if enabled)
+If robokassa_enabled is used in UI:
+
+Payment signature formula must follow docs: MD5(MerchantLogin:OutSum:InvId:Password#1).​
+
+Result verification uses Password#2 per Robokassa interface docs.​
+
+Do not hardcode amounts; always use DB package price.
+
+1.10 Tests are mandatory (minimal but real)
+Add Vitest + Supertest tests that run reliably:
+
+PDN withdraw:
+
+creates WITHDRAWN event
+
+creates SCHEDULED task at +30 days
+
+destroys session
+
+PDN job:
+
+SCHEDULED task in past → creates act and marks DONE
+
+LEGAL_HOLD task → unchanged
+
+SEO CRUD:
+
+create/update/soft-delete works
+
+public /api/public/seo/:slug hides inactive pages
+
+Admin settings masking:
+
+GET masks secrets
+
+PUT upserts and GET returns updated non-secret fields
+
+No flaky tests. Clean DB state in beforeEach.
+
+1.11 Final docs: INSTALL.md + .env.example + .replit
+Ensure these exist and are correct:
+
+.env.example
+
+.replit
+
+INSTALL.md with Replit Deployments + VPS Docker instructions in ONE file.
+
+2) FILE TEMPLATES (WRITE EXACTLY)
+2.1 .env.example
+bash
+DATABASE_URL=postgresql://securelex:YOUR_PASSWORD@localhost:5432/securelex
+SESSION_SECRET=your-32-char-random-secret-here
+
+OPENAI_API_KEY=sk-your-openai-key
+GIGACHAT_API_KEY=your-gigachat-key
+
+SUPERADMIN_EMAIL=admin@securelex.ru
+SUPERADMIN_PASSWORD=YourSecurePassword123!
+SUPERADMIN_NAME=Admin
+
+NODE_ENV=production
+PORT=5000
+REPLIT_URL=https://your-repl-name.your-user.repl.co
+2.2 .replit
+text
+run = "npm run dev"
+
+[deployment]
+run = "npm run build && npm run db:migrate && npm run start"
+2.3 INSTALL.md (single doc, include both Replit and VPS Docker)
+Must include:
+
+Replit: secrets, db:migrate, deploy command, custom domain note
+
+VPS: docker install, .env, docker compose up, nginx reverse proxy to 127.0.0.1:5000, certbot ssl, troubleshooting, backup/restore
+
+3) FINAL OUTPUT (MANDATORY)
+When finished, print a short report:
+
+New/confirmed endpoints list
+
+DB tables/enums list
+
+Migrations commands
+
+Tests command
+
+Where job is implemented and how to verify it (logs / DB state)
+
+4) DEFINITION OF DONE (NO NEGOTIATION)
+Feature is DONE only if:
+
+Consent is separate from offer, stored with document version, and enforced on payments.​
+
+Withdrawal schedules +30 days and logs out; job moves tasks to DONE and creates acts; LEGAL_HOLD blocks.​
+
+SuperAdmin pages reflect real DB and actions persist.
+
+SEO pages CRUD works and public pages + sitemap/robots are correct.
+
+Migrations exist and run cleanly.
+
+Tests pass.
+
+Docs are updated.
+
+END.
