@@ -51,6 +51,7 @@ expertMode = true
 [userenv.shared]
 SUPERADMIN_EMAIL = "sae230679@yandex.ru"
 SUPERADMIN_NAME = "Сергей"
+GATE_ID = "512303"
 
 [userenv.development]
 ALLOW_INSECURE_LOCALHOST_COOKIES = "true"
