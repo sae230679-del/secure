@@ -14,6 +14,7 @@ import {
   isEmailConfigured
 } from "./email";
 import crypto from "crypto";
+import fs from "fs";
 import { runExpressAudit, runAudit, checkWebsiteExists, runDebugAudit } from "./audit-engine";
 import { generatePdfReport } from "./pdf-generator";
 
@@ -808,6 +809,14 @@ export async function registerRoutes(
           yookassaPayload.payment_method_data = paymentMethodToYookassa[data.paymentMethod];
         }
 
+        // DEBUG: Write payload to file (no secrets)
+        try {
+          fs.writeFileSync("debug/yookassa-last-payload.json", JSON.stringify(yookassaPayload, null, 2));
+          console.log("[DEBUG] YooKassa payload written to debug/yookassa-last-payload.json");
+        } catch (fsErr) {
+          console.error("[DEBUG] Failed to write payload:", fsErr);
+        }
+
         try {
           const response = await fetch("https://api.yookassa.ru/v3/payments", {
             method: "POST",
@@ -820,6 +829,17 @@ export async function registerRoutes(
           });
 
           const responseData = await response.json();
+
+          // DEBUG: Write response to file
+          try {
+            fs.writeFileSync("debug/yookassa-last-response.json", JSON.stringify({
+              statusCode: response.status,
+              body: responseData
+            }, null, 2));
+            console.log("[DEBUG] YooKassa response written to debug/yookassa-last-response.json");
+          } catch (fsErr) {
+            console.error("[DEBUG] Failed to write response:", fsErr);
+          }
 
           if (!response.ok) {
             console.error("Yookassa payment error:", responseData);
