@@ -92,7 +92,7 @@ function getPriorityColor(priority: "critical" | "medium" | "low"): string {
   }
 }
 
-// Render express (brief) AI block - for express_report package
+// Render express (brief) AI block - for expressreport package
 function renderExpressAIBlock(doc: PDFKit.PDFDocument, data: AuditReportData): void {
   const startY = doc.y;
   
@@ -428,8 +428,8 @@ export async function generatePdfReport(data: AuditReportData): Promise<Buffer> 
     if (data.aiSummary && data.aiRecommendations && data.aiRecommendations.length > 0) {
       doc.moveDown(1);
       
-      // Use express (brief) block for express_report, full block for others
-      if (data.packageName === "Экспресс-отчёт" || data.packageName === "express_report") {
+      // Use express (brief) block for expressreport package, full block for others
+      if (data.packageName === "Экспресс-отчёт" || data.packageName?.includes("Экспресс") || data.packageName === "expressreport") {
         renderExpressAIBlock(doc, data);
       } else {
         renderFullAIBlock(doc, data);

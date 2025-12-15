@@ -808,7 +808,7 @@ export async function registerRoutes(
           mir: { type: "bank_card" },
         };
         
-        const paymentDescription = pkg.type === "express_report"
+        const paymentDescription = pkg.type === "expressreport"
           ? "Оплата за полный отчет (экспресс-проверка)"
           : `Оплата за полный аудит сайта: ${pkg.name}`;
         
@@ -897,7 +897,7 @@ export async function registerRoutes(
 
       await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
 
-      const mockPaymentDescription = pkg.type === "express_report"
+      const mockPaymentDescription = pkg.type === "expressreport"
         ? "Оплата за полный отчет (экспресс-проверка)"
         : `Оплата за полный аудит сайта: ${pkg.name}`;
         
@@ -2308,7 +2308,7 @@ export async function registerRoutes(
                 }).catch(err => console.error("Failed to send payment email:", err));
               }
               
-              if (pkg.type === "express_report") {
+              if (pkg.type === "expressreport") {
                 await storage.updateAuditStatus(auditId, "completed", new Date());
                 console.log(`[Yookassa] Express report ${auditId} marked as completed (already has results)`);
               } else {
@@ -2360,7 +2360,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Экспресс-проверка еще не завершена" });
       }
 
-      const expressReportPackage = await storage.getPackageByType("express_report");
+      const expressReportPackage = await storage.getPackageByType("expressreport");
       console.log(`[EXPRESS-REPORT] Package found:`, expressReportPackage ? `id=${expressReportPackage.id}, price=${expressReportPackage.price}` : 'null');
       if (!expressReportPackage) {
         return res.status(500).json({ error: "Пакет отчета не найден" });

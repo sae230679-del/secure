@@ -1,6 +1,6 @@
 export const EXPRESS_PACKAGE = {
   name: "Полный отчёт экспресс-проверки",
-  type: "express_report",
+  type: "expressreport",
   price: 900,
   criteriaCount: 63,
   durationMin: 5,

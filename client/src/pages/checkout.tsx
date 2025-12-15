@@ -71,7 +71,7 @@ export default function CheckoutPage() {
   
   const getServiceName = () => {
     if (!auditPackage) return "Аудит сайта";
-    if (auditPackage.category === "express" || auditPackage.type === "express_report") {
+    if (auditPackage.category === "express_pdf" || auditPackage.type === "expressreport") {
       return "Экспресс-проверка сайта";
     }
     return "Полный аудит сайта";
