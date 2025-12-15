@@ -1,0 +1,59 @@
+Скопируй и отправь ему:
+
+1) Покажи, что артефакты НЕ фейковые
+
+Выполни команды и вставь вывод в чат:
+
+ls -la debug/artifacts/
+
+sed -n '1,120p' debug/artifacts/curl-examples.sh
+
+cat debug/artifacts/sample-yookassa-payload.json
+
+cat debug/artifacts/sample-yookassa-response.json
+
+cat debug/artifacts/sample-rkn-response.json
+
+2) Докажи, что цены берутся из БД
+
+Выполни и вставь вывод:
+psql $DATABASE_URL -c "SELECT type,name,price,is_active FROM audit_packages ORDER BY type;"
+
+3) Докажи, что full audit реально создаётся (не Invalid package type)
+
+Запусти curl из artifacts или руками:
+curl -i -X POST http://localhost:5000/api/audits -H 'Content-Type: application/json' -d '{"websiteUrl":"https://example.com","packageType":"other"}'
+и вставь статус + body.
+
+4) Докажи, что YooKassa сумма не 0 и описание правильное
+
+Создай auditId (как в п.3), затем:
+curl -i -X POST http://localhost:5000/api/payments/create -H 'Content-Type: application/json' -d '{"auditId":<ID>,"paymentMethod":"sbp"}'
+
+После этого приложи содержимое:
+
+debug/yookassa-last-payload.json
+
+debug/yookassa-last-response.json
+Там должно быть amount.value="15900.00" (или текущая цена из БД) и description “Оплата за полный аудит сайта: …”, а для экспресса “Оплата за полный отчет (экспресс-проверка)”.​
+
+5) Test connection: только superadmin
+
+Покажи точный route + middleware: где объявлен POST /api/superadmin/test-yookassa (или /api/admin/...) и что на нём стоит requireSuperAdmin.​
+
+Проверь двумя запросами:
+
+без сессии → 401
+
+под non-superadmin → 403
+
+под superadmin → 200
+
+6) RKN/ИНН в 4 местах
+
+Дай 2 скрина UI: экспресс краткий результат + полный аудит результат, где виден блок RKN.
+
+Дай 2 PDF (или ссылки/эндпоинты): экспресс PDF + полный аудит PDF, где виден RKN блок.
+
+Почему именно так
+Сейчас он ссылается на “sample-*” файлы, а это может быть просто заглушка; нам нужны last-payload/last-response после реального запроса и реальные curl/SQL, иначе нельзя подтвердить, что 0₽ и ошибки ушли.​
