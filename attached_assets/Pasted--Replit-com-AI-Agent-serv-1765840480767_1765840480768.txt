@@ -1,0 +1,335 @@
+Ниже — то, что можно сразу скопировать и дать Replit.com AI Agent как разработчику:
+
+“скелет” server/penalties-map.ts (формат + 10 примерных чеков),
+
+шаблон PDF‑карточки ошибки (как рисовать в pdfkit),
+
+отдельный мини‑блок в том же промте: обязательный тест ключей ИИ во всех режимах и чёткий вывод.
+Важно: в проекте уже есть признаки симуляции (рандомные статусы/веса) — их нужно удалить/изолировать от платного отчёта, иначе нарушается требование “никаких предположений”. Также структура AuditCheckResult уже содержит evidence? — это удобно, просто надо сделать evidence обязательным при warning/failed и использовать его в PDF.​
+
+1) Скелет server/penalties-map.ts
+Опираемся на то, что базовая ответственность по нарушениям ПДн идёт по КоАП РФ ст. 13.11, где штрафы дифференцированы по субъектам (граждане/должностные/ИП/ЮЛ). Самозанятый — в отчёте считаем как “гражданин”, если он не ИП (это пишем как правило/легенду).​
+
+ts
+// server/penalties-map.ts
+// ВАЖНО: цифры штрафов должны быть заполнены разработчиком по актуальной редакции КоАП
+// (источник: КоАП РФ ст. 13.11 и другие применимые статьи). [web:375]
+
+export type SubjectType = "citizen" | "selfEmployed" | "official" | "ip" | "legalEntity";
+
+export type Confidence = "high" | "medium" | "low";
+
+export interface KoapPenalty {
+  koapArticle: string;         // "13.11"
+  koapPart?: string;           // "ч.1" и т.п. (если используете)
+  subject: SubjectType;        // citizen/selfEmployed/official/ip/legalEntity
+  minRub: number;              // min штраф
+  maxRub: number;              // max штраф
+  confidence: Confidence;      // насколько уверенно привязано
+  note?: string;               // пояснение (когда привязка не 100%)
+  sourceUrl?: string;          // ссылка на норму (например consultant/garant)
+}
+
+export interface LawBasis {
+  law: "152" | "149";
+  article: string;             // "ст. 18.1", "ст. 19", "ст. 10.1" и т.п.
+  note?: string;               // коротко: что требует норма
+}
+
+export interface PenaltyMappingItem {
+  checkId: string;             // стабильный ID проверки (не UI name)
+  title: string;               // человекочитаемое название
+  lawBasis: LawBasis[];        // 152/149 привязка
+  penalties: KoapPenalty[];    // штрафы по субъектам
+  aggregationKey?: string;     // чтобы не суммировать дубли (например по нескольким страницам)
+}
+
+/**
+ * Правило для самозанятого:
+ * - Если пользователь НЕ ИП: selfEmployed считать как citizen (НПД — физлицо).
+ * - Если пользователь ИП на НПД: считать как ip.
+ */
+export const SELF_EMPLOYED_RULE =
+  "Самозанятый (НПД) учитывается как физлицо, если не зарегистрирован как ИП; если зарегистрирован как ИП — учитывается как ИП.";
+
+export const PENALTY_MAP: Record<string, PenaltyMappingItem> = {
+  // 1) Нет политики ПДн/конфиденциальности (пример)
+  LEGAL_PRIVACY_POLICY_MISSING: {
+    checkId: "LEGAL_PRIVACY_POLICY_MISSING",
+    title: "Отсутствует политика обработки персональных данных / конфиденциальности",
+    lawBasis: [
+      { law: "152", article: "ст. 18.1", note: "Обязанности оператора и меры по обеспечению выполнения требований." },
+    ],
+    penalties: [
+      // TODO: заполнить точные диапазоны по актуальной редакции КоАП РФ
+      { koapArticle: "13.11", subject: "citizen", minRub: 0, maxRub: 0, confidence: "medium", sourceUrl: "https://www.consultant.ru/document/cons_doc_LAW_34661/1f421640c6775ff67079ebde06a7d2f6d17b96db/" },
+      { koapArticle: "13.11", subject: "selfEmployed", minRub: 0, maxRub: 0, confidence: "medium" },
+      { koapArticle: "13.11", subject: "official", minRub: 0, maxRub: 0, confidence: "medium" },
+      { koapArticle: "13.11", subject: "ip", minRub: 0, maxRub: 0, confidence: "medium" },
+      { koapArticle: "13.11", subject: "legalEntity", minRub: 0, maxRub: 0, confidence: "medium" },
+    ],
+    aggregationKey: "LEGAL_PRIVACY_POLICY",
+  },
+
+  // 2) Нет cookie-banner / согласия на cookie (пример)
+  COOKIES_BANNER_MISSING: {
+    checkId: "COOKIES_BANNER_MISSING",
+    title: "Нет cookie-баннера/механизма согласия (consent) на cookies/аналитику",
+    lawBasis: [
+      { law: "152", article: "ст. 9", note: "Согласие субъекта ПДн (когда требуется)." },
+      { law: "149", article: "ст. 10.1", note: "Обязанности владельца сайта (информирование/порядок использования, применимость зависит от сценария)." },
+    ],
+    penalties: [
+      { koapArticle: "13.11", subject: "citizen", minRub: 0, maxRub: 0, confidence: "low", note: "Точная квалификация зависит от того, какие данные собираются и на каком основании." },
+      { koapArticle: "13.11", subject: "selfEmployed", minRub: 0, maxRub: 0, confidence: "low" },
+      { koapArticle: "13.11", subject: "official", minRub: 0, maxRub: 0, confidence: "low" },
+      { koapArticle: "13.11", subject: "ip", minRub: 0, maxRub: 0, confidence: "low" },
+      { koapArticle: "13.11", subject: "legalEntity", minRub: 0, maxRub: 0, confidence: "low" },
+    ],
+    aggregationKey: "COOKIES_CONSENT",
+  },
+
+  // 3) Нет чекбокса согласия на обработку ПДн в формах
+  PDN_CONSENT_CHECKBOX_MISSING: {
+    checkId: "PDN_CONSENT_CHECKBOX_MISSING",
+    title: "В формах нет явного согласия на обработку персональных данных",
+    lawBasis: [
+      { law: "152", article: "ст. 9", note: "Согласие субъекта ПДн." },
+      { law: "152", article: "ст. 18", note: "Обязанности оператора при сборе ПДн." },
+    ],
+    penalties: [
+      { koapArticle: "13.11", subject: "citizen", minRub: 0, maxRub: 0, confidence: "high", sourceUrl: "https://www.consultant.ru/document/cons_doc_LAW_34661/1f421640c6775ff67079ebde06a7d2f6d17b96db/" },
+      { koapArticle: "13.11", subject: "selfEmployed", minRub: 0, maxRub: 0, confidence: "high" },
+      { koapArticle: "13.11", subject: "official", minRub: 0, maxRub: 0, confidence: "high" },
+      { koapArticle: "13.11", subject: "ip", minRub: 0, maxRub: 0, confidence: "high" },
+      { koapArticle: "13.11", subject: "legalEntity", minRub: 0, maxRub: 0, confidence: "high" },
+    ],
+    aggregationKey: "PDN_CONSENT_FORMS",
+  },
+
+  // 4) Нет HTTPS редиректа / сайт доступен по HTTP
+  SEC_HTTPS_NOT_ENFORCED: {
+    checkId: "SEC_HTTPS_NOT_ENFORCED",
+    title: "HTTPS не принудителен (доступ по HTTP без редиректа)",
+    lawBasis: [
+      { law: "152", article: "ст. 19", note: "Меры по обеспечению безопасности ПДн (организационные/технические)." },
+    ],
+    penalties: [
+      { koapArticle: "13.11", subject: "citizen", minRub: 0, maxRub: 0, confidence: "medium" },
+      { koapArticle: "13.11", subject: "selfEmployed", minRub: 0, maxRub: 0, confidence: "medium" },
+      { koapArticle: "13.11", subject: "official", minRub: 0, maxRub: 0, confidence: "medium" },
+      { koapArticle: "13.11", subject: "ip", minRub: 0, maxRub: 0, confidence: "medium" },
+      { koapArticle: "13.11", subject: "legalEntity", minRub: 0, maxRub: 0, confidence: "medium" },
+    ],
+    aggregationKey: "HTTPS_ENFORCEMENT",
+  },
+
+  // 5–10) Security headers (пример: HSTS/CSP/XFO/XCTO/Referrer/Permissions)
+  SEC_HEADERS_HSTS_MISSING: {
+    checkId: "SEC_HEADERS_HSTS_MISSING",
+    title: "Отсутствует заголовок HSTS",
+    lawBasis: [{ law: "152", article: "ст. 19", note: "Технические меры безопасности при передаче/доступе." }],
+    penalties: [
+      { koapArticle: "13.11", subject: "citizen", minRub: 0, maxRub: 0, confidence: "low" },
+      { koapArticle: "13.11", subject: "selfEmployed", minRub: 0, maxRub: 0, confidence: "low" },
+      { koapArticle: "13.11", subject: "official", minRub: 0, maxRub: 0, confidence: "low" },
+      { koapArticle: "13.11", subject: "ip", minRub: 0, maxRub: 0, confidence: "low" },
+      { koapArticle: "13.11", subject: "legalEntity", minRub: 0, maxRub: 0, confidence: "low" },
+    ],
+    aggregationKey: "SEC_HEADERS",
+  },
+
+  SEC_HEADERS_CSP_MISSING: {
+    checkId: "SEC_HEADERS_CSP_MISSING",
+    title: "Отсутствует Content-Security-Policy (CSP)",
+    lawBasis: [{ law: "152", article: "ст. 19", note: "Технические меры защиты (в т.ч. от XSS/инъекций)." }],
+    penalties: [
+      { koapArticle: "13.11", subject: "citizen", minRub: 0, maxRub: 0, confidence: "low" },
+      { koapArticle: "13.11", subject: "selfEmployed", minRub: 0, maxRub: 0, confidence: "low" },
+      { koapArticle: "13.11", subject: "official", minRub: 0, maxRub: 0, confidence: "low" },
+      { koapArticle: "13.11", subject: "ip", minRub: 0, maxRub: 0, confidence: "low" },
+      { koapArticle: "13.11", subject: "legalEntity", minRub: 0, maxRub: 0, confidence: "low" },
+    ],
+    aggregationKey: "SEC_HEADERS",
+  },
+
+  SEC_HEADERS_XFO_MISSING: {
+    checkId: "SEC_HEADERS_XFO_MISSING",
+    title: "Отсутствует X-Frame-Options",
+    lawBasis: [{ law: "152", article: "ст. 19", note: "Снижение рисков clickjacking." }],
+    penalties: [
+      { koapArticle: "13.11", subject: "citizen", minRub: 0, maxRub: 0, confidence: "low" },
+      { koapArticle: "13.11", subject: "selfEmployed", minRub: 0, maxRub: 0, confidence: "low" },
+      { koapArticle: "13.11", subject: "official", minRub: 0, maxRub: 0, confidence: "low" },
+      { koapArticle: "13.11", subject: "ip", minRub: 0, maxRub: 0, confidence: "low" },
+      { koapArticle: "13.11", subject: "legalEntity", minRub: 0, maxRub: 0, confidence: "low" },
+    ],
+    aggregationKey: "SEC_HEADERS",
+  },
+
+  SEC_HEADERS_XCTO_MISSING: {
+    checkId: "SEC_HEADERS_XCTO_MISSING",
+    title: "Отсутствует X-Content-Type-Options",
+    lawBasis: [{ law: "152", article: "ст. 19", note: "Снижение рисков MIME-sniffing." }],
+    penalties: [
+      { koapArticle: "13.11", subject: "citizen", minRub: 0, maxRub: 0, confidence: "low" },
+      { koapArticle: "13.11", subject: "selfEmployed", minRub: 0, maxRub: 0, confidence: "low" },
+      { koapArticle: "13.11", subject: "official", minRub: 0, maxRub: 0, confidence: "low" },
+      { koapArticle: "13.11", subject: "ip", minRub: 0, maxRub: 0, confidence: "low" },
+      { koapArticle: "13.11", subject: "legalEntity", minRub: 0, maxRub: 0, confidence: "low" },
+    ],
+    aggregationKey: "SEC_HEADERS",
+  },
+
+  LEGAL_CONTACTS_MISSING: {
+    checkId: "LEGAL_CONTACTS_MISSING",
+    title: "Не найдены контакты оператора/владельца сайта (email/адрес/реквизиты в нужном виде)",
+    lawBasis: [
+      { law: "152", article: "ст. 18.1", note: "Публичная политика и сведения об операторе." },
+      { law: "149", article: "ст. 10.1", note: "Обязанности владельца сайта (применимость зависит от типа ресурса)." },
+    ],
+    penalties: [
+      { koapArticle: "13.11", subject: "citizen", minRub: 0, maxRub: 0, confidence: "low" },
+      { koapArticle: "13.11", subject: "selfEmployed", minRub: 0, maxRub: 0, confidence: "low" },
+      { koapArticle: "13.11", subject: "official", minRub: 0, maxRub: 0, confidence: "low" },
+      { koapArticle: "13.11", subject: "ip", minRub: 0, maxRub: 0, confidence: "low" },
+      { koapArticle: "13.11", subject: "legalEntity", minRub: 0, maxRub: 0, confidence: "low" },
+    ],
+    aggregationKey: "LEGAL_CONTACTS",
+  },
+};
+Важно для Replit Agent: пусть он заполнит реальные числа штрафов строго по КоАП (например, через 1–2 “источника‑эталона” и заморозит их в коде), а ссылку на статью КоАП для обоснования оставит в sourceUrl (минимум — Consultant/Гарант по ст. 13.11).​
+
+2) Шаблон PDF‑карточки ошибки (pdfkit)
+Требование: “подробно и дорого выглядит”, но без пустот. Ваша модель уже имеет evidence? — надо сделать так, чтобы для warning/failed evidence реально заполнялся и красиво выводился.​
+
+Карточка (единый формат):
+
+Заголовок: ❌ [CHECK_ID] Название
+
+Блок “Найдено” (1–2 строки + evidence bullets)
+
+Блок “Почему важно” (1 строка)
+
+Блок “Как исправить” (3–7 шагов)
+
+Блок “Нормативная база 152/149”
+
+Блок “Штрафные риски” — таблица по субъектам + confidence
+
+Мини‑скелет функций (псевдо‑код, но уже прямой для кодинга):
+
+ts
+// server/pdf/render-error-card.ts
+import type PDFDocument from "pdfkit";
+
+export function renderErrorCard(doc: PDFDocument, params: {
+  x: number;
+  y: number;
+  w: number;
+  checkId: string;
+  title: string;
+  status: "failed" | "warning";
+  description: string;
+  evidence: string[];
+  fixSteps: string[];
+  lawBasis: { law: "152" | "149"; article: string; note?: string }[];
+  penalties: { subject: string; minRub: number; maxRub: number; confidence: string; koapArticle: string; koapPart?: string }[];
+}): number {
+  const { x, y, w } = params;
+  let cy = y;
+
+  // рамка карточки
+  doc.roundedRect(x, cy, w, 10, 6).strokeColor("#E5E7EB").lineWidth(1).stroke();
+
+  cy += 10;
+
+  // заголовок
+  doc.font("Roboto-Bold").fontSize(12).fillColor(params.status === "failed" ? "#DC2626" : "#F59E0B")
+    .text(`${params.status === "failed" ? "❌" : "⚠️"} [${params.checkId}] ${params.title}`, x + 10, cy, { width: w - 20 });
+
+  cy += 18;
+
+  // найдено + evidence
+  doc.font("Roboto-Medium").fontSize(9).fillColor("#111827")
+    .text("Найдено:", x + 10, cy);
+  cy += 12;
+
+  doc.font("Roboto-Regular").fontSize(9).fillColor("#111827")
+    .text(params.description, x + 20, cy, { width: w - 30 });
+  cy += doc.heightOfString(params.description, { width: w - 30 }) + 4;
+
+  if (params.evidence?.length) {
+    doc.font("Roboto-Regular").fontSize(8).fillColor("#374151")
+      .text("Доказательства:", x + 20, cy);
+    cy += 10;
+
+    params.evidence.slice(0, 6).forEach((ev) => {
+      doc.text(`• ${ev}`, x + 30, cy, { width: w - 40 });
+      cy += 10;
+    });
+  }
+
+  // как исправить
+  cy += 4;
+  doc.font("Roboto-Medium").fontSize(9).fillColor("#111827")
+    .text("Как исправить:", x + 10, cy);
+  cy += 12;
+
+  params.fixSteps.slice(0, 10).forEach((step, i) => {
+    doc.font("Roboto-Regular").fontSize(9).fillColor("#111827")
+      .text(`${i + 1}. ${step}`, x + 20, cy, { width: w - 30 });
+    cy += 12;
+  });
+
+  // нормативная база
+  cy += 2;
+  doc.font("Roboto-Medium").fontSize(9).fillColor("#111827")
+    .text("Нормативная база:", x + 10, cy);
+  cy += 12;
+
+  params.lawBasis.forEach((lb) => {
+    doc.font("Roboto-Regular").fontSize(8).fillColor("#374151")
+      .text(`• ${lb.law}-ФЗ, ${lb.article}${lb.note ? ` — ${lb.note}` : ""}`, x + 20, cy, { width: w - 30 });
+    cy += 10;
+  });
+
+  // штрафы по субъектам
+  if (params.penalties?.length) {
+    cy += 2;
+    doc.font("Roboto-Medium").fontSize(9).fillColor("#111827")
+      .text("Штрафные риски (КоАП):", x + 10, cy);
+    cy += 12;
+
+    // Таблично, 2 колонки
+    const rows = params.penalties;
+    rows.forEach((p) => {
+      doc.font("Roboto-Regular").fontSize(8).fillColor("#111827")
+        .text(`${p.subject}: ${formatRub(p.minRub)} – ${formatRub(p.maxRub)} (КоАП ${p.koapArticle}${p.koapPart ? " " + p.koapPart : ""}, conf: ${p.confidence})`, x + 20, cy, { width: w - 30 });
+      cy += 10;
+    });
+  }
+
+  cy += 8;
+  return cy;
+}
+
+function formatRub(v: number) {
+  return `${v.toLocaleString("ru-RU")} ₽`;
+}
+3) Мини‑промт именно для Replit Agent (вставить как задачу)
+Скопируй и дай агенту:
+
+PROMPT (коротко, но жёстко):
+
+Реализуй server/penalties-map.ts по шаблону выше.
+
+Заполни штрафы по субъектам строго по КоАП РФ ст. 13.11 (и другим, если реально применимо), с ссылкой на источник в sourceUrl (например Consultant/Гарант).​
+
+Введи итоговые суммы MIN/MAX отдельно: citizen/selfEmployed/official/ip/legalEntity.
+
+В PDF у каждой ошибки печатай штрафы по всем субъектам + confidence.
+
+Удали/запрети симуляции в платном аудите (getRandomStatus, simulateAuditResults).​
+
+Протестируй AI‑ключи после переустановки: gigachatonly, openaionly, hybrid, none, в двух режимах “ключей нет” и “ключи есть”, и выдай чёткий отчёт “что работает/что нет”.​
