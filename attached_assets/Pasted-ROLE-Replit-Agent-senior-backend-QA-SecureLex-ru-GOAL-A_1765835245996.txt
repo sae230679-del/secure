@@ -1,0 +1,163 @@
+ROLE: Replit Agent, senior backend+QA для проекта SecureLex.ru.
+GOAL: Убедиться, что AI‑проверка (runAudit) корректно работает во всех режимах AuditAiMode: gigachatonly, openaionly, hybrid, none. Проверить:
+
+как выбирается режим (systemsettings + AUDITAIMODE env),
+
+какие summary/recommendations приходят,
+
+не падает ли GigaChat/OpenAI,
+
+как это отражается в PDF.
+
+1. Найти и зафиксировать реализацию AI‑режимов
+Открой файл server/audit-engine.ts и найди:
+
+export type AuditAiMode = "gigachatonly" | "openaionly" | "hybrid" | "none";
+
+функцию runAudit(url, options) и как она использует aiMode:
+
+когда вызывается generateGigaChat152Report
+
+когда вызывается generateOpenAiEnhancement
+
+как формируется итоговый summary и recommendations.​
+
+Открой server/storage.ts и server/routes.ts:
+
+как systemsettings хранит aiMode (ключ aimode),
+
+API админки:
+
+GET /api/admin/settings/ai-mode
+
+PUT /api/admin/settings/ai-mode (только SuperAdmin).​
+
+Открой клиентскую страницу админки client/src/pages/admin/settings.tsx:
+
+UI‑селектор режимов (GigaChat / OpenAI / Hybrid / Off),
+
+убедись, что названия в UI соответствуют значениям gigachatonly, openaionly, hybrid, none.​
+
+2. Проверить выбор режима через systemsettings и AUDITAIMODE
+Найди функцию, которая определяет текущий режим для API аудита:
+
+getAiMode() в storage,
+
+вызов runAudit в server/routes.ts / server/serverroutes.ts, и логику, где приоритет:
+
+systemsettings.aimode
+
+process.env.AUDITAIMODE (если используется fallback).​
+
+Убедись и задокументируй:
+
+Что будет, если в systemsettings нет aimode (дефолт = hybrid).
+
+Что будет, если AUDITAIMODE выставлен, а aimode не задан.
+
+Что происходит, если aiMode = "none" (AI не вызывается, summary/recommendations остаются базовыми).​
+
+3. Прогнать все режимы через SuperAdmin UI
+Предположим, что есть SuperAdmin (создаётся storage.ensureSuperAdmin).​
+
+Для каждого режима:
+
+Залогиниться как SuperAdmin.
+
+Открыть страницу /admin/settings:
+
+считать текущий aiMode через GET /api/admin/settings/ai-mode,
+
+сменить режим через PUT /api/admin/settings/ai-mode на:
+
+gigachatonly
+
+openaionly
+
+hybrid
+
+none
+
+После смены режима выполнить аудит тестового сайта (например, https://example.com):
+
+POST /api/audits с { websiteUrl: "https://example.com", package: "expressreport" }
+
+зафиксировать:
+
+статус ответа,
+
+поля summary и recommendations в AuditReport,
+
+какие AI‑провайдеры реально вызывались (по логам GigaChat/OpenAI).​
+
+Для каждого режима сделать таблицу:
+
+aiMode	GigaChat вызван?	OpenAI вызван?	summary источник	recommendations источник
+Ожидаемое поведение:
+
+gigachatonly: только GigaChat, OpenAI не вызывается.
+
+openaionly: только OpenAI.
+
+hybrid: оба, итог берётся с приоритетом OpenAI, затем GigaChat, затем base.
+
+none: вообще без AI (оба не вызываются, summary/recommendations = base).​
+
+4. Проверка ENV‑режима AUDITAIMODE (если используется)
+Найти в коде использование process.env.AUDITAIMODE (например, getCurrentAiMode).​
+
+Сымитировать разные значения AUDITAIMODE в среде (dev):
+
+AUDITAIMODE=gigachatonly, AUDITAIMODE=openaionly, AUDITAIMODE=hybrid, AUDITAIMODE=none
+
+Для каждого значения:
+
+перезапустить сервер,
+
+вызвать POST /api/audits,
+
+проверить, что фактический aiMode в AuditReport соответствует ожиданию, если нет переопределения через systemsettings.​
+
+5. Проверка интеграции с PDF
+Найти в server/pdf-generator.ts логику, где в PDF выводятся:
+
+data.aiSummary, data.aiRecommendations, data.aiMode, провайдер (GigaChat/OpenAI).​
+
+Для каждого режима:
+
+создать аудит (как в п.3),
+
+вызвать GET /api/audits/:id/pdf,
+
+убедиться, что в PDF:
+
+при gigachatonly подпись “AI‑провайдер: GigaChat 3.5 …”
+
+при openaionly подпись про OpenAI,
+
+при hybrid отражён факт использования обоих (если есть),
+
+при none AI‑блок либо скрыт, либо явно помечен как отключён.​
+
+6. Автотесты по режимам
+Добавить/обновить тесты (Vitest или Jest):
+
+Юнит‑тесты для runAudit(url, { aiMode }):
+
+для каждого aiMode замокать generateGigaChat152Report и generateOpenAiEnhancement, проверить, какие вызываются и как формируется итоговый summary/recommendations.​
+
+Интеграционный тест уровня маршрута:
+
+замокать провайдеры, сделать POST /api/audits для каждого aiMode и проверить, что в JSON ответа есть поле aiMode + правильное содержание.​
+
+7. Итоговый отчёт
+В конце выдай краткий отчёт (в Markdown) с:
+
+какой режим сейчас стоит по умолчанию в prod/dev,
+
+что будет, если отключить OpenAI ключ или GigaChat ключ (как ведёт себя runAudit),
+
+какие ошибки и edge cases обнаружены и как их исправлять (например, если GigaChat недоступен, но выбран gigachatonly).​
+
+END PROMPT.
+
