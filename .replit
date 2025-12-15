@@ -52,6 +52,7 @@ expertMode = true
 SUPERADMIN_EMAIL = "sae230679@yandex.ru"
 SUPERADMIN_NAME = "Сергей"
 GATE_ID = "512303"
+SECRET_KEY = "test_*gHhII93USAsaxWFDRKIHhfr81EzRX196Nn8Lr-PFugdQ"
 
 [userenv.development]
 ALLOW_INSECURE_LOCALHOST_COOKIES = "true"
