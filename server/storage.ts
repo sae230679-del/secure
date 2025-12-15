@@ -45,6 +45,7 @@ export interface IStorage {
   saveAuditResults(auditId: number, criteriaResults: CriteriaResult[], score: number): Promise<AuditResult>;
 
   getPaymentsByUserId(userId: number): Promise<Payment[]>;
+  getPaymentsByAuditId(auditId: number): Promise<Payment[]>;
   getPaymentByExternalId(externalId: string): Promise<Payment | undefined>;
   createPayment(data: InsertPayment): Promise<Payment>;
   updatePaymentStatus(id: number, status: string, yandexPaymentId?: string): Promise<Payment | undefined>;
@@ -280,6 +281,14 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(schema.payments)
       .where(eq(schema.payments.userId, userId))
+      .orderBy(desc(schema.payments.createdAt));
+  }
+
+  async getPaymentsByAuditId(auditId: number): Promise<Payment[]> {
+    return db
+      .select()
+      .from(schema.payments)
+      .where(eq(schema.payments.auditId, auditId))
       .orderBy(desc(schema.payments.createdAt));
   }
 

@@ -2521,5 +2521,302 @@ export async function registerRoutes(
     }
   });
 
+  // =============================================
+  // ROBOKASSA PAYMENT ENDPOINTS
+  // =============================================
+
+  // Create Robokassa payment URL
+  app.post("/api/payments/create-robokassa", requireAuth, async (req, res) => {
+    try {
+      const { auditId } = req.body;
+
+      if (!auditId) {
+        return res.status(400).json({ error: "auditId обязателен" });
+      }
+
+      const audit = await storage.getAuditById(auditId);
+      if (!audit) {
+        return res.status(404).json({ error: "Аудит не найден" });
+      }
+
+      if (audit.userId !== req.session.userId) {
+        return res.status(403).json({ error: "Доступ запрещён" });
+      }
+
+      const pkg = await storage.getPackageById(audit.packageId);
+      if (!pkg) {
+        return res.status(404).json({ error: "Пакет не найден" });
+      }
+
+      // Get Robokassa settings
+      const robokassaEnabled = await storage.getSystemSetting("robokassa_enabled");
+      const merchantLogin = await storage.getSystemSetting("robokassa_merchant_login");
+      const password1 = await storage.getSystemSetting("robokassa_password1");
+      const testMode = await storage.getSystemSetting("robokassa_test_mode");
+
+      if (robokassaEnabled?.value !== "true") {
+        return res.status(400).json({ error: "Robokassa не активирована" });
+      }
+
+      if (!merchantLogin?.value || !password1?.value) {
+        return res.status(400).json({ error: "Robokassa не настроена" });
+      }
+
+      const amount = pkg.price;
+      const invId = audit.id;
+      const description = `Аудит: ${pkg.name} - ${audit.websiteUrlNormalized}`;
+      const isTest = testMode?.value === "true";
+
+      // Generate signature: MD5(MerchantLogin:OutSum:InvId:Password1)
+      const signatureString = `${merchantLogin.value}:${amount.toFixed(2)}:${invId}:${password1.value}`;
+      const signature = crypto.createHash("md5").update(signatureString).digest("hex");
+
+      // Build Robokassa URL
+      const params = new URLSearchParams({
+        MerchantLogin: merchantLogin.value,
+        OutSum: amount.toFixed(2),
+        InvId: invId.toString(),
+        Description: description,
+        SignatureValue: signature,
+        Culture: "ru",
+        Encoding: "utf-8",
+      });
+
+      if (isTest) {
+        params.append("IsTest", "1");
+      }
+
+      const robokassaUrl = `https://auth.robokassa.ru/Merchant/Index.aspx?${params.toString()}`;
+
+      console.log(`[Robokassa] Created payment URL for audit ${invId}, amount: ${amount}, testMode: ${isTest}`);
+
+      res.json({
+        paymentUrl: robokassaUrl,
+        invId,
+        amount,
+      });
+    } catch (error: any) {
+      console.error("[Robokassa] Create payment error:", error?.message || error);
+      res.status(500).json({ error: "Ошибка создания платежа Robokassa" });
+    }
+  });
+
+  // Robokassa Result URL (server callback)
+  app.post("/api/robokassa/result", async (req, res) => {
+    try {
+      const { OutSum, InvId, SignatureValue } = req.body;
+
+      console.log(`[Robokassa Result] Received: OutSum=${OutSum}, InvId=${InvId}, Sig=${SignatureValue}`);
+
+      if (!OutSum || !InvId || !SignatureValue) {
+        console.error("[Robokassa Result] Missing required params");
+        return res.status(400).send("bad sign");
+      }
+
+      // Get Robokassa password2 for verification
+      const password2 = await storage.getSystemSetting("robokassa_password2");
+      if (!password2?.value) {
+        console.error("[Robokassa Result] password2 not configured");
+        return res.status(500).send("configuration error");
+      }
+
+      // Verify signature: MD5(OutSum:InvId:Password2)
+      const expectedSignature = crypto
+        .createHash("md5")
+        .update(`${OutSum}:${InvId}:${password2.value}`)
+        .digest("hex")
+        .toUpperCase();
+
+      if (SignatureValue.toUpperCase() !== expectedSignature) {
+        console.error(`[Robokassa Result] Invalid signature: expected ${expectedSignature}, got ${SignatureValue}`);
+        return res.status(400).send("bad sign");
+      }
+
+      const auditId = parseInt(InvId);
+      const audit = await storage.getAuditById(auditId);
+
+      if (!audit) {
+        console.error(`[Robokassa Result] Audit not found: ${auditId}`);
+        return res.status(404).send("audit not found");
+      }
+
+      // Check for duplicate callback (idempotency)
+      const existingPayments = await storage.getPaymentsByAuditId(auditId);
+      const hasCompletedPayment = existingPayments.some(p => p.status === "completed" && p.yandexPaymentId === `robokassa-${InvId}`);
+      
+      if (hasCompletedPayment) {
+        console.log(`[Robokassa Result] Duplicate callback ignored for audit ${auditId}`);
+        return res.send(`OK${InvId}`);
+      }
+
+      // Create payment record
+      const payment = await storage.createPayment({
+        userId: audit.userId,
+        auditId: audit.id,
+        amount: parseFloat(OutSum),
+        description: `Robokassa payment #${InvId}`,
+        status: "completed",
+        yandexPaymentId: `robokassa-${InvId}`,
+      });
+
+      console.log(`[Robokassa Result] Payment created: ${payment.id} for audit ${auditId}`);
+
+      // Update audit status and start processing
+      if (audit.status === "pending_payment") {
+        await storage.updateAuditStatus(audit.id, "processing");
+
+        const pkg = await storage.getPackageById(audit.packageId);
+        const user = await storage.getUserById(audit.userId);
+
+        // Start audit processing in background
+        (async () => {
+          try {
+            console.log(`[Robokassa] Starting audit processing for auditId=${audit.id}`);
+            const aiModeSetting = await storage.getSystemSetting("ai_mode");
+            const aiMode = (aiModeSetting?.value as "gigachat_only" | "openai_only" | "hybrid" | "none") || "gigachat_only";
+
+            const report = await runAudit(audit.websiteUrlNormalized!, { level2: true, aiMode });
+
+            await storage.createAuditResult({
+              auditId: audit.id,
+              criteriaJson: report.criteria || [],
+              rknCheckJson: report.rknCheck || null,
+              scorePercent: report.scorePercent || 0,
+              severity: report.severity || "yellow",
+              aiSummary: report.aiSummary || null,
+              aiRecommendations: report.aiRecommendations || [],
+            });
+
+            await storage.updateAuditStatus(audit.id, "completed");
+            console.log(`[Robokassa] Audit ${audit.id} completed`);
+
+            if (user) {
+              sendAuditCompletedEmail(user.email, {
+                userName: user.name,
+                websiteUrl: audit.websiteUrlNormalized!,
+                auditId: audit.id,
+                severity: report.severity || "yellow",
+                scorePercent: report.scorePercent || 0,
+              }).catch(err => console.error("[Robokassa] Failed to send email:", err));
+            }
+          } catch (auditError: any) {
+            console.error(`[Robokassa] Audit processing failed:`, auditError?.message || auditError);
+            await storage.updateAuditStatus(audit.id, "failed");
+          }
+        })();
+      }
+
+      // Robokassa expects "OK" + InvId response
+      res.send(`OK${InvId}`);
+    } catch (error: any) {
+      console.error("[Robokassa Result] Error:", error?.message || error);
+      res.status(500).send("error");
+    }
+  });
+
+  // GET version for Result URL (some Robokassa configurations use GET)
+  app.get("/api/robokassa/result", async (req, res) => {
+    try {
+      const OutSum = req.query.OutSum as string;
+      const InvId = req.query.InvId as string;
+      const SignatureValue = req.query.SignatureValue as string;
+
+      console.log(`[Robokassa Result GET] Received: OutSum=${OutSum}, InvId=${InvId}`);
+
+      if (!OutSum || !InvId || !SignatureValue) {
+        return res.status(400).send("bad sign");
+      }
+
+      const password2 = await storage.getSystemSetting("robokassa_password2");
+      if (!password2?.value) {
+        return res.status(500).send("configuration error");
+      }
+
+      const expectedSignature = crypto
+        .createHash("md5")
+        .update(`${OutSum}:${InvId}:${password2.value}`)
+        .digest("hex")
+        .toUpperCase();
+
+      if (SignatureValue.toUpperCase() !== expectedSignature) {
+        return res.status(400).send("bad sign");
+      }
+
+      const auditId = parseInt(InvId);
+      const audit = await storage.getAuditById(auditId);
+
+      if (!audit) {
+        return res.status(404).send("audit not found");
+      }
+
+      // Check if payment already exists
+      const existingPayments = await storage.getPaymentsByAuditId(auditId);
+      const hasCompletedPayment = existingPayments.some(p => p.status === "completed");
+
+      if (!hasCompletedPayment) {
+        await storage.createPayment({
+          userId: audit.userId,
+          auditId: audit.id,
+          amount: parseFloat(OutSum),
+          description: `Robokassa payment #${InvId}`,
+          status: "completed",
+          yandexPaymentId: `robokassa-${InvId}`,
+        });
+
+        if (audit.status === "pending_payment") {
+          await storage.updateAuditStatus(audit.id, "processing");
+          // Audit processing would be triggered by POST version
+        }
+      }
+
+      res.send(`OK${InvId}`);
+    } catch (error: any) {
+      console.error("[Robokassa Result GET] Error:", error?.message || error);
+      res.status(500).send("error");
+    }
+  });
+
+  // Robokassa Success URL (user redirect after successful payment)
+  app.get("/api/robokassa/success", async (req, res) => {
+    try {
+      const InvId = req.query.InvId as string;
+      const OutSum = req.query.OutSum as string;
+
+      console.log(`[Robokassa Success] InvId=${InvId}, OutSum=${OutSum}`);
+
+      if (!InvId) {
+        return res.redirect("/dashboard?error=missing_inv_id");
+      }
+
+      const auditId = parseInt(InvId);
+      
+      // Redirect to audit details page
+      res.redirect(`/dashboard/audits/${auditId}?payment=success`);
+    } catch (error: any) {
+      console.error("[Robokassa Success] Error:", error?.message || error);
+      res.redirect("/dashboard?error=payment_error");
+    }
+  });
+
+  // Robokassa Fail URL (user redirect after failed/cancelled payment)
+  app.get("/api/robokassa/fail", async (req, res) => {
+    try {
+      const InvId = req.query.InvId as string;
+      const OutSum = req.query.OutSum as string;
+
+      console.log(`[Robokassa Fail] InvId=${InvId}, OutSum=${OutSum}`);
+
+      if (InvId) {
+        const auditId = parseInt(InvId);
+        return res.redirect(`/checkout/${auditId}?payment=failed`);
+      }
+
+      res.redirect("/dashboard?error=payment_cancelled");
+    } catch (error: any) {
+      console.error("[Robokassa Fail] Error:", error?.message || error);
+      res.redirect("/dashboard?error=payment_error");
+    }
+  });
+
   return httpServer;
 }

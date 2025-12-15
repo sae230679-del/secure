@@ -7,10 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Save, CreditCard, CheckCircle, XCircle, Eye, EyeOff, TestTube, AlertTriangle, Bug, ChevronDown, RefreshCw } from "lucide-react";
+import { Save, CreditCard, CheckCircle, XCircle, Eye, EyeOff, TestTube, AlertTriangle, Bug, ChevronDown, RefreshCw, Wallet } from "lucide-react";
 
 type SystemSetting = {
   id: number;
@@ -42,11 +43,19 @@ export default function SuperAdminPaymentSettingsPage() {
     enabled: diagnosticsOpen,
   });
 
+  const [showRobokassaPass1, setShowRobokassaPass1] = useState(false);
+  const [showRobokassaPass2, setShowRobokassaPass2] = useState(false);
+
   const [formData, setFormData] = useState({
     yookassa_shop_id: "",
     yookassa_secret_key: "",
     yookassa_enabled: "false",
     yookassa_test_mode: "true",
+    robokassa_merchant_login: "",
+    robokassa_password1: "",
+    robokassa_password2: "",
+    robokassa_enabled: "false",
+    robokassa_test_mode: "true",
   });
 
   const [isHydrated, setIsHydrated] = useState(false);
@@ -126,9 +135,21 @@ export default function SuperAdminPaymentSettingsPage() {
     setFormData(prev => ({ ...prev, yookassa_test_mode: checked ? "true" : "false" }));
   };
 
-  const isConfigured = formData.yookassa_shop_id && formData.yookassa_secret_key;
-  const isEnabled = formData.yookassa_enabled === "true";
-  const isTestMode = formData.yookassa_test_mode === "true";
+  const isYookassaConfigured = formData.yookassa_shop_id && formData.yookassa_secret_key;
+  const isYookassaEnabled = formData.yookassa_enabled === "true";
+  const isYookassaTestMode = formData.yookassa_test_mode === "true";
+
+  const isRobokassaConfigured = formData.robokassa_merchant_login && formData.robokassa_password1 && formData.robokassa_password2;
+  const isRobokassaEnabled = formData.robokassa_enabled === "true";
+  const isRobokassaTestMode = formData.robokassa_test_mode === "true";
+
+  const handleToggleRobokassaEnabled = (checked: boolean) => {
+    setFormData(prev => ({ ...prev, robokassa_enabled: checked ? "true" : "false" }));
+  };
+
+  const handleToggleRobokassaTestMode = (checked: boolean) => {
+    setFormData(prev => ({ ...prev, robokassa_test_mode: checked ? "true" : "false" }));
+  };
 
   if (isLoading) {
     return (
@@ -145,7 +166,7 @@ export default function SuperAdminPaymentSettingsPage() {
         <div>
           <h1 className="text-3xl font-bold" data-testid="text-page-title">Настройки платежей</h1>
           <p className="text-muted-foreground mt-1">
-            Интеграция с ЮKassa для приема платежей
+            Интеграция с платежными системами
           </p>
         </div>
         <Button 
@@ -158,44 +179,56 @@ export default function SuperAdminPaymentSettingsPage() {
         </Button>
       </div>
 
-      <div className="grid gap-6">
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2 flex-wrap">
-              <CreditCard className="h-5 w-5 text-primary" />
-              <CardTitle>Статус ЮKassa</CardTitle>
-              {isConfigured && isEnabled ? (
-                <Badge variant="default" className="bg-green-600">
-                  <CheckCircle className="h-3 w-3 mr-1" />
-                  Активна
-                </Badge>
-              ) : isConfigured ? (
-                <Badge variant="secondary">
-                  <XCircle className="h-3 w-3 mr-1" />
-                  Отключена
-                </Badge>
-              ) : (
-                <Badge variant="outline">
-                  <AlertTriangle className="h-3 w-3 mr-1" />
-                  Не настроена
-                </Badge>
-              )}
-              {isTestMode && isConfigured && (
-                <Badge variant="outline" className="border-yellow-500 text-yellow-600">
-                  <TestTube className="h-3 w-3 mr-1" />
-                  Тестовый режим
-                </Badge>
-              )}
-            </div>
-            <CardDescription>
-              {isConfigured && isEnabled
-                ? "Платежная система подключена и готова к приему платежей."
-                : isConfigured
-                  ? "API ключи настроены, но прием платежей отключен."
-                  : "Введите Shop ID и секретный ключ из личного кабинета ЮKassa."}
-            </CardDescription>
-          </CardHeader>
-        </Card>
+      <Tabs defaultValue="yookassa" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="yookassa" data-testid="tab-yookassa">
+            <CreditCard className="h-4 w-4 mr-2" />
+            ЮKassa
+          </TabsTrigger>
+          <TabsTrigger value="robokassa" data-testid="tab-robokassa">
+            <Wallet className="h-4 w-4 mr-2" />
+            Robokassa
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="yookassa" className="space-y-6 mt-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2 flex-wrap">
+                <CreditCard className="h-5 w-5 text-primary" />
+                <CardTitle>Статус ЮKassa</CardTitle>
+                {isYookassaConfigured && isYookassaEnabled ? (
+                  <Badge variant="default" className="bg-green-600">
+                    <CheckCircle className="h-3 w-3 mr-1" />
+                    Активна
+                  </Badge>
+                ) : isYookassaConfigured ? (
+                  <Badge variant="secondary">
+                    <XCircle className="h-3 w-3 mr-1" />
+                    Отключена
+                  </Badge>
+                ) : (
+                  <Badge variant="outline">
+                    <AlertTriangle className="h-3 w-3 mr-1" />
+                    Не настроена
+                  </Badge>
+                )}
+                {isYookassaTestMode && isYookassaConfigured && (
+                  <Badge variant="outline" className="border-yellow-500 text-yellow-600">
+                    <TestTube className="h-3 w-3 mr-1" />
+                    Тестовый режим
+                  </Badge>
+                )}
+              </div>
+              <CardDescription>
+                {isYookassaConfigured && isYookassaEnabled
+                  ? "Платежная система подключена и готова к приему платежей."
+                  : isYookassaConfigured
+                    ? "API ключи настроены, но прием платежей отключен."
+                    : "Введите Shop ID и секретный ключ из личного кабинета ЮKassa."}
+              </CardDescription>
+            </CardHeader>
+          </Card>
 
         <Card>
           <CardHeader>
@@ -250,7 +283,7 @@ export default function SuperAdminPaymentSettingsPage() {
               <Button
                 variant="outline"
                 onClick={() => testConnectionMutation.mutate()}
-                disabled={!isConfigured || testConnectionMutation.isPending}
+                disabled={!isYookassaConfigured || testConnectionMutation.isPending}
                 data-testid="button-test-connection"
               >
                 <TestTube className="h-4 w-4 mr-2" />
@@ -276,9 +309,9 @@ export default function SuperAdminPaymentSettingsPage() {
                 </p>
               </div>
               <Switch
-                checked={isEnabled}
+                checked={isYookassaEnabled}
                 onCheckedChange={handleToggleEnabled}
-                disabled={!isConfigured}
+                disabled={!isYookassaConfigured}
                 data-testid="switch-enabled"
               />
             </div>
@@ -291,7 +324,7 @@ export default function SuperAdminPaymentSettingsPage() {
                 </p>
               </div>
               <Switch
-                checked={isTestMode}
+                checked={isYookassaTestMode}
                 onCheckedChange={handleToggleTestMode}
                 data-testid="switch-test-mode"
               />
@@ -469,7 +502,219 @@ export default function SuperAdminPaymentSettingsPage() {
             </Collapsible>
           </CardContent>
         </Card>
-      </div>
+        </TabsContent>
+
+        <TabsContent value="robokassa" className="space-y-6 mt-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Wallet className="h-5 w-5 text-primary" />
+                <CardTitle>Статус Robokassa</CardTitle>
+                {isRobokassaConfigured && isRobokassaEnabled ? (
+                  <Badge variant="default" className="bg-green-600">
+                    <CheckCircle className="h-3 w-3 mr-1" />
+                    Активна
+                  </Badge>
+                ) : isRobokassaConfigured ? (
+                  <Badge variant="secondary">
+                    <XCircle className="h-3 w-3 mr-1" />
+                    Отключена
+                  </Badge>
+                ) : (
+                  <Badge variant="outline">
+                    <AlertTriangle className="h-3 w-3 mr-1" />
+                    Не настроена
+                  </Badge>
+                )}
+                {isRobokassaTestMode && isRobokassaConfigured && (
+                  <Badge variant="outline" className="border-yellow-500 text-yellow-600">
+                    <TestTube className="h-3 w-3 mr-1" />
+                    Тестовый режим
+                  </Badge>
+                )}
+              </div>
+              <CardDescription>
+                {isRobokassaConfigured && isRobokassaEnabled
+                  ? "Платежная система подключена и готова к приему платежей."
+                  : isRobokassaConfigured
+                    ? "Данные настроены, но прием платежей отключен."
+                    : "Введите логин и пароли из личного кабинета Robokassa."}
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>API ключи Robokassa</CardTitle>
+              <CardDescription>
+                Данные для подключения к платежной системе
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="robokassa_merchant_login">Логин магазина (MerchantLogin)</Label>
+                <Input
+                  id="robokassa_merchant_login"
+                  value={formData.robokassa_merchant_login}
+                  onChange={(e) => setFormData(prev => ({ ...prev, robokassa_merchant_login: e.target.value }))}
+                  placeholder="myshop"
+                  data-testid="input-robokassa-login"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Идентификатор магазина из личного кабинета Robokassa
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="robokassa_password1">Пароль 1 (Password #1)</Label>
+                <div className="relative">
+                  <Input
+                    id="robokassa_password1"
+                    type={showRobokassaPass1 ? "text" : "password"}
+                    value={formData.robokassa_password1}
+                    onChange={(e) => setFormData(prev => ({ ...prev, robokassa_password1: e.target.value }))}
+                    placeholder="xxxxxxxxxxxxxxxx"
+                    data-testid="input-robokassa-pass1"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0"
+                    onClick={() => setShowRobokassaPass1(!showRobokassaPass1)}
+                    data-testid="button-toggle-robokassa-pass1"
+                  >
+                    {showRobokassaPass1 ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Пароль для формирования подписи при отправке запросов
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="robokassa_password2">Пароль 2 (Password #2)</Label>
+                <div className="relative">
+                  <Input
+                    id="robokassa_password2"
+                    type={showRobokassaPass2 ? "text" : "password"}
+                    value={formData.robokassa_password2}
+                    onChange={(e) => setFormData(prev => ({ ...prev, robokassa_password2: e.target.value }))}
+                    placeholder="xxxxxxxxxxxxxxxx"
+                    data-testid="input-robokassa-pass2"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0"
+                    onClick={() => setShowRobokassaPass2(!showRobokassaPass2)}
+                    data-testid="button-toggle-robokassa-pass2"
+                  >
+                    {showRobokassaPass2 ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Пароль для проверки подписи в уведомлениях от Robokassa
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Режим работы</CardTitle>
+              <CardDescription>
+                Управление приемом платежей через Robokassa
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Прием платежей</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Включить или отключить прием платежей через Robokassa
+                  </p>
+                </div>
+                <Switch
+                  checked={isRobokassaEnabled}
+                  onCheckedChange={handleToggleRobokassaEnabled}
+                  disabled={!isRobokassaConfigured}
+                  data-testid="switch-robokassa-enabled"
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Тестовый режим</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Использовать тестовый сервер Robokassa
+                  </p>
+                </div>
+                <Switch
+                  checked={isRobokassaTestMode}
+                  onCheckedChange={handleToggleRobokassaTestMode}
+                  data-testid="switch-robokassa-test-mode"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Result URL и Callback URL</CardTitle>
+              <CardDescription>
+                URL для получения уведомлений о платежах
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Result URL (серверный callback)</Label>
+                <div className="bg-muted p-4 rounded-md">
+                  <code className="text-sm break-all" data-testid="text-robokassa-result-url">
+                    {typeof window !== 'undefined' ? `${window.location.origin}/api/robokassa/result` : '/api/robokassa/result'}
+                  </code>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Success URL (успешная оплата)</Label>
+                <div className="bg-muted p-4 rounded-md">
+                  <code className="text-sm break-all" data-testid="text-robokassa-success-url">
+                    {typeof window !== 'undefined' ? `${window.location.origin}/api/robokassa/success` : '/api/robokassa/success'}
+                  </code>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Fail URL (ошибка оплаты)</Label>
+                <div className="bg-muted p-4 rounded-md">
+                  <code className="text-sm break-all" data-testid="text-robokassa-fail-url">
+                    {typeof window !== 'undefined' ? `${window.location.origin}/api/robokassa/fail` : '/api/robokassa/fail'}
+                  </code>
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Добавьте эти URL в настройках магазина в личном кабинете Robokassa.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Инструкция по подключению</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
+                <li>Зарегистрируйтесь в <a href="https://robokassa.ru" target="_blank" rel="noopener noreferrer" className="text-primary underline">Robokassa</a> и создайте магазин</li>
+                <li>В личном кабинете Robokassa перейдите в раздел "Технические настройки"</li>
+                <li>Скопируйте логин магазина, Пароль 1 и Пароль 2</li>
+                <li>Вставьте данные в форму выше и сохраните</li>
+                <li>Добавьте Result URL и Success/Fail URL в настройках магазина</li>
+                <li>Включите прием платежей</li>
+              </ol>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
