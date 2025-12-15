@@ -49,10 +49,11 @@ expertMode = true
 [userenv]
 
 [userenv.shared]
-SUPERADMIN_EMAIL = "sae230679@yandex.ru"
+SUPERADMIN_EMAIL = "admin@securelex.ru"
 SUPERADMIN_NAME = "Сергей"
 GATE_ID = "512303"
 SECRET_KEY = "test_*gHhII93USAsaxWFDRKIHhfr81EzRX196Nn8Lr-PFugdQ"
+SUPERADMIN_PASSWORD = "Admin123!"
 
 [userenv.development]
 ALLOW_INSECURE_LOCALHOST_COOKIES = "true"
