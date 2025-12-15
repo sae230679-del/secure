@@ -25,8 +25,9 @@ Preferred communication style: Simple, everyday language.
     - **PDN Consent Tracking**: Full lifecycle management including versioning, IP/user-agent logging, pre-payment consent, and withdrawal with a 30-day destruction schedule. Background jobs process destruction tasks, with SuperAdmin legal hold capability.
     - **Cookie Consent**: GDPR/152-ФЗ compliant banner with granular preferences.
     - **Legal Pages**: Versioned /offer and /privacy pages.
-- **Audit Engine**: Expanded to 60+ criteria for premium packages, covering FZ-152, FZ-149, GDPR, cookies, technical aspects, legal, content, and security.
-- **PDF Report Generation**: Branded multi-page PDF reports with detailed criteria results, risk assessments, recommendations, and calls to action.
+- **Audit Engine**: Expanded to 60+ criteria for premium packages, covering FZ-152, FZ-149, GDPR, cookies, technical aspects, legal, content, and security. Enhanced with structured evidence arrays and law basis references (AuditCheckResult interface).
+- **Penalty System**: Real КоАП РФ ст. 13.11 penalties in `server/penalties-map.ts` with 10+ check types, calculated totals by subject type (физлица, должностные лица, ИП, юрлица), and automatic deduplication by aggregation keys.
+- **PDF Report Generation**: Branded multi-page PDF reports with detailed criteria results, calculated penalty risk tables by subject type, law references, recommendations, and calls to action.
 - **SEO Management**: SuperAdmin controlled CRUD for SEO pages, dynamic public routes, and sitemap generation.
 
 ### Database

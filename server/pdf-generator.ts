@@ -293,22 +293,67 @@ function getLawFromCategory(category: string): string {
   return "";
 }
 
+// Map criterion names to PENALTY_MAP checkIds
+function mapCriterionNameToCheckId(name: string): string | null {
+  const nameLower = name.toLowerCase();
+  
+  // Privacy policy
+  if (nameLower.includes("политик") && (nameLower.includes("конфиденциальн") || nameLower.includes("пдн"))) {
+    return "LEGAL_PRIVACY_POLICY_MISSING";
+  }
+  if (nameLower.includes("privacy policy")) return "LEGAL_PRIVACY_POLICY_MISSING";
+  
+  // Consent checkbox  
+  if (nameLower.includes("согласи") && (nameLower.includes("форм") || nameLower.includes("чекбокс") || nameLower.includes("checkbox"))) {
+    return "PDN_CONSENT_CHECKBOX_MISSING";
+  }
+  if (nameLower.includes("согласие на обработку")) return "PDN_CONSENT_CHECKBOX_MISSING";
+  
+  // Cookie banner
+  if (nameLower.includes("cookie") && (nameLower.includes("баннер") || nameLower.includes("banner") || nameLower.includes("согласи"))) {
+    return "COOKIES_BANNER_MISSING";
+  }
+  
+  // Contacts
+  if (nameLower.includes("контакт") || nameLower.includes("реквизит")) {
+    return "LEGAL_CONTACTS_MISSING";
+  }
+  
+  // HTTPS/SSL
+  if (nameLower.includes("https") || nameLower.includes("ssl") || nameLower.includes("сертификат")) {
+    return "TECH_NO_HTTPS";
+  }
+  
+  // Security headers
+  if (nameLower.includes("hsts")) return "TECH_NO_HSTS";
+  if (nameLower.includes("csp") || nameLower.includes("content-security-policy")) return "TECH_NO_CSP";
+  if (nameLower.includes("x-frame") || nameLower.includes("frame-options")) return "TECH_NO_XFRAME";
+  if (nameLower.includes("x-content-type") || nameLower.includes("content-type-options")) return "TECH_NO_CONTENT_TYPE_OPTIONS";
+  
+  // Data processing agreement
+  if (nameLower.includes("поручени") && nameLower.includes("обработк")) return "LEGAL_NO_DPA";
+  
+  // Operator notification
+  if (nameLower.includes("реестр") || nameLower.includes("уведомлени")) return "LEGAL_RKN_NO_NOTIFICATION";
+  
+  // Data localization
+  if (nameLower.includes("локализац") || nameLower.includes("россий")) return "LEGAL_DATA_NOT_LOCALIZED";
+  
+  return null;
+}
+
 // Calculate penalty totals from criteria results
 function calculatePenaltyTotalsFromCriteria(criteria: CriteriaResult[]): PenaltyTotals {
-  const checkResults = criteria.map(c => {
-    let checkId = c.name;
-    if (c.name.includes("HTTPS") || c.name.includes("SSL")) checkId = "SEC-001";
-    else if (c.name.includes("HSTS")) checkId = "SEC-002";
-    else if (c.name.includes("CSP") || c.name.includes("Content Security")) checkId = "SEC-003";
-    else if (c.name.includes("X-Frame")) checkId = "SEC-004";
-    else if (c.name.includes("X-Content-Type")) checkId = "SEC-005";
-    else if (c.name.includes("Политика") || c.name.includes("конфиденциальности")) checkId = "LEGAL_PRIVACY_POLICY_MISSING";
-    else if (c.name.includes("Согласие") || c.name.includes("ПДн")) checkId = "PDN_CONSENT_CHECKBOX_MISSING";
-    else if (c.name.includes("Cookie")) checkId = "COOKIES_BANNER_MISSING";
-    else if (c.name.includes("Контакт")) checkId = "LEGAL_CONTACTS_MISSING";
+  const checkResults: { checkId: string; status: string }[] = [];
+  
+  for (const c of criteria) {
+    if (c.status === "passed") continue; // Skip passed checks
     
-    return { checkId, status: c.status };
-  });
+    const checkId = mapCriterionNameToCheckId(c.name);
+    if (checkId && PENALTY_MAP[checkId]) {
+      checkResults.push({ checkId, status: c.status });
+    }
+  }
   
   return calcPenaltyTotals(checkResults);
 }
