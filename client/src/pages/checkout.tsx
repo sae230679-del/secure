@@ -7,6 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { 
   PAYMENT_METHODS, 
   type PaymentMethodType, 
@@ -28,7 +35,17 @@ import {
   Building2,
   Tag,
   X,
+  Percent,
+  CreditCard,
+  Wallet,
 } from "lucide-react";
+
+type InstallmentsSettings = {
+  yookassaEnabled: boolean;
+  robokassaEnabled: boolean;
+  bannerTitle: string;
+  bannerText: string;
+};
 
 type PaymentStatus = "idle" | "processing" | "success" | "error";
 
@@ -52,6 +69,13 @@ export default function CheckoutPage() {
     discountAmount: number | null;
   } | null>(null);
   const [promoError, setPromoError] = useState<string | null>(null);
+  const [installmentsModalOpen, setInstallmentsModalOpen] = useState(false);
+
+  const { data: installmentsSettings } = useQuery<InstallmentsSettings>({
+    queryKey: ["/api/public/installments-settings"],
+  });
+
+  const hasInstallmentsEnabled = installmentsSettings?.yookassaEnabled || installmentsSettings?.robokassaEnabled;
 
   const { data: audit, isLoading: auditLoading } = useQuery<Audit>({
     queryKey: ["/api/audits", auditId],
@@ -336,6 +360,36 @@ export default function CheckoutPage() {
                 </p>
               </CardContent>
             </Card>
+
+            {hasInstallmentsEnabled && (
+              <Card className="border-primary/30 bg-gradient-to-r from-primary/5 to-accent/5">
+                <CardContent className="pt-6">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-primary/10 rounded-full shrink-0">
+                      <Percent className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm">
+                        {installmentsSettings?.bannerTitle || "Оплата в рассрочку"}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {installmentsSettings?.bannerText || "Разделите платёж на несколько частей без переплат"}
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-3"
+                        onClick={() => setInstallmentsModalOpen(true)}
+                        data-testid="button-installments"
+                      >
+                        <Percent className="h-3 w-3 mr-1" />
+                        Оформить рассрочку
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           <div className="lg:col-span-1">
@@ -478,6 +532,71 @@ export default function CheckoutPage() {
           </div>
         </div>
       </div>
+
+      <Dialog open={installmentsModalOpen} onOpenChange={setInstallmentsModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Percent className="h-5 w-5" />
+              Оплата в рассрочку
+            </DialogTitle>
+            <DialogDescription>
+              Выберите платежную систему для оформления рассрочки
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 pt-4">
+            {installmentsSettings?.yookassaEnabled && (
+              <div
+                className="p-4 border rounded-lg cursor-pointer hover-elevate"
+                onClick={() => {
+                  toast({
+                    title: "Рассрочка ЮKassa",
+                    description: "Переход на страницу оформления рассрочки...",
+                  });
+                  setInstallmentsModalOpen(false);
+                }}
+                data-testid="installments-yookassa"
+              >
+                <div className="flex items-center gap-3">
+                  <CreditCard className="h-8 w-8 text-primary shrink-0" />
+                  <div>
+                    <p className="font-medium">ЮKassa — Оплата частями</p>
+                    <p className="text-sm text-muted-foreground">
+                      Рассрочка через банки-партнёры ЮKassa
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+            {installmentsSettings?.robokassaEnabled && (
+              <div
+                className="p-4 border rounded-lg cursor-pointer hover-elevate"
+                onClick={() => {
+                  toast({
+                    title: "Рассрочка Robokassa",
+                    description: "Переход на страницу оформления рассрочки...",
+                  });
+                  setInstallmentsModalOpen(false);
+                }}
+                data-testid="installments-robokassa"
+              >
+                <div className="flex items-center gap-3">
+                  <Wallet className="h-8 w-8 text-primary shrink-0" />
+                  <div>
+                    <p className="font-medium">Robokassa — Кредит</p>
+                    <p className="text-sm text-muted-foreground">
+                      Кредитование через Тинькофф, Почта Банк
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mt-4">
+            После выбора вы будете перенаправлены на страницу оформления рассрочки.
+          </p>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

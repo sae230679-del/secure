@@ -2047,6 +2047,26 @@ export async function registerRoutes(
     }
   });
 
+  // Public API: Get installments settings for checkout page
+  app.get("/api/public/installments-settings", async (req, res) => {
+    try {
+      const yookassaEnabled = await storage.getSystemSetting("installments_yookassa_enabled");
+      const robokassaEnabled = await storage.getSystemSetting("installments_robokassa_enabled");
+      const bannerTitle = await storage.getSystemSetting("installments_banner_title");
+      const bannerText = await storage.getSystemSetting("installments_banner_text");
+      
+      res.json({
+        yookassaEnabled: yookassaEnabled?.value === "true",
+        robokassaEnabled: robokassaEnabled?.value === "true",
+        bannerTitle: bannerTitle?.value || "Оплата в рассрочку",
+        bannerText: bannerText?.value || "Разделите платёж на несколько частей без переплат",
+      });
+    } catch (error) {
+      console.error("Failed to fetch installments settings:", error);
+      res.status(500).json({ error: "Failed to fetch settings" });
+    }
+  });
+
   app.post("/api/public/express-check", async (req, res) => {
     try {
       const data = expressCheckSchema.parse(req.body);

@@ -11,7 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Save, CreditCard, CheckCircle, XCircle, Eye, EyeOff, TestTube, AlertTriangle, Bug, ChevronDown, RefreshCw, Wallet } from "lucide-react";
+import { Save, CreditCard, CheckCircle, XCircle, Eye, EyeOff, TestTube, AlertTriangle, Bug, ChevronDown, RefreshCw, Wallet, Percent } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 
 type SystemSetting = {
   id: number;
@@ -56,6 +57,10 @@ export default function SuperAdminPaymentSettingsPage() {
     robokassa_password2: "",
     robokassa_enabled: "false",
     robokassa_test_mode: "true",
+    installments_yookassa_enabled: "false",
+    installments_robokassa_enabled: "false",
+    installments_banner_title: "Оплата в рассрочку",
+    installments_banner_text: "Разделите платёж на несколько частей без переплат",
   });
 
   const [isHydrated, setIsHydrated] = useState(false);
@@ -151,6 +156,18 @@ export default function SuperAdminPaymentSettingsPage() {
     setFormData(prev => ({ ...prev, robokassa_test_mode: checked ? "true" : "false" }));
   };
 
+  const isInstallmentsYookassaEnabled = formData.installments_yookassa_enabled === "true";
+  const isInstallmentsRobokassaEnabled = formData.installments_robokassa_enabled === "true";
+  const hasAnyInstallmentsEnabled = isInstallmentsYookassaEnabled || isInstallmentsRobokassaEnabled;
+
+  const handleToggleInstallmentsYookassa = (checked: boolean) => {
+    setFormData(prev => ({ ...prev, installments_yookassa_enabled: checked ? "true" : "false" }));
+  };
+
+  const handleToggleInstallmentsRobokassa = (checked: boolean) => {
+    setFormData(prev => ({ ...prev, installments_robokassa_enabled: checked ? "true" : "false" }));
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -180,7 +197,7 @@ export default function SuperAdminPaymentSettingsPage() {
       </div>
 
       <Tabs defaultValue="yookassa" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="yookassa" data-testid="tab-yookassa">
             <CreditCard className="h-4 w-4 mr-2" />
             ЮKassa
@@ -188,6 +205,10 @@ export default function SuperAdminPaymentSettingsPage() {
           <TabsTrigger value="robokassa" data-testid="tab-robokassa">
             <Wallet className="h-4 w-4 mr-2" />
             Robokassa
+          </TabsTrigger>
+          <TabsTrigger value="installments" data-testid="tab-installments">
+            <Percent className="h-4 w-4 mr-2" />
+            Рассрочка
           </TabsTrigger>
         </TabsList>
 
@@ -711,6 +732,137 @@ export default function SuperAdminPaymentSettingsPage() {
                 <li>Добавьте Result URL и Success/Fail URL в настройках магазина</li>
                 <li>Включите прием платежей</li>
               </ol>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="installments" className="space-y-6 mt-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Percent className="h-5 w-5 text-primary" />
+                <CardTitle>Рассрочка</CardTitle>
+                {hasAnyInstallmentsEnabled ? (
+                  <Badge variant="default" className="bg-green-600">
+                    <CheckCircle className="h-3 w-3 mr-1" />
+                    Активна
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary">
+                    <XCircle className="h-3 w-3 mr-1" />
+                    Отключена
+                  </Badge>
+                )}
+              </div>
+              <CardDescription>
+                {hasAnyInstallmentsEnabled
+                  ? "Рассрочка включена. Пользователи увидят баннер на странице оплаты."
+                  : "Включите рассрочку для одного или нескольких провайдеров."}
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Провайдеры рассрочки</CardTitle>
+              <CardDescription>
+                Выберите, через какие платежные системы доступна рассрочка
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Рассрочка через ЮKassa</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Оплата частями через ЮKassa (требуется подключение в ЛК ЮKassa)
+                  </p>
+                </div>
+                <Switch
+                  checked={isInstallmentsYookassaEnabled}
+                  onCheckedChange={handleToggleInstallmentsYookassa}
+                  disabled={!isYookassaConfigured || !isYookassaEnabled}
+                  data-testid="switch-installments-yookassa"
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Рассрочка через Robokassa</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Кредитование через партнёров Robokassa
+                  </p>
+                </div>
+                <Switch
+                  checked={isInstallmentsRobokassaEnabled}
+                  onCheckedChange={handleToggleInstallmentsRobokassa}
+                  disabled={!isRobokassaConfigured || !isRobokassaEnabled}
+                  data-testid="switch-installments-robokassa"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Баннер рассрочки</CardTitle>
+              <CardDescription>
+                Настройте текст баннера, который отображается на странице оплаты
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="installments_banner_title">Заголовок баннера</Label>
+                <Input
+                  id="installments_banner_title"
+                  value={formData.installments_banner_title}
+                  onChange={(e) => setFormData(prev => ({ ...prev, installments_banner_title: e.target.value }))}
+                  placeholder="Оплата в рассрочку"
+                  data-testid="input-installments-title"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="installments_banner_text">Текст баннера</Label>
+                <Textarea
+                  id="installments_banner_text"
+                  value={formData.installments_banner_text}
+                  onChange={(e) => setFormData(prev => ({ ...prev, installments_banner_text: e.target.value }))}
+                  placeholder="Разделите платёж на несколько частей без переплат"
+                  rows={3}
+                  data-testid="input-installments-text"
+                />
+              </div>
+
+              {hasAnyInstallmentsEnabled && (
+                <div className="p-4 border rounded-md bg-gradient-to-r from-primary/5 to-accent/5">
+                  <p className="text-xs text-muted-foreground mb-2">Предпросмотр баннера:</p>
+                  <div className="p-3 bg-background rounded border">
+                    <p className="font-semibold text-sm">{formData.installments_banner_title || "Оплата в рассрочку"}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{formData.installments_banner_text || "Разделите платёж на несколько частей"}</p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Информация о рассрочке</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4 text-sm text-muted-foreground">
+                <p>
+                  Рассрочка позволяет клиентам оплачивать услуги частями через партнёрские 
+                  банки и сервисы платежных систем.
+                </p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li><strong>ЮKassa:</strong> Сервис "Оплата частями" — клиент оплачивает покупку в рассрочку через банк-партнёр</li>
+                  <li><strong>Robokassa:</strong> Кредитование через Тинькофф, Почта Банк и других партнёров</li>
+                </ul>
+                <p>
+                  Для подключения рассрочки обратитесь в поддержку соответствующей платежной системы.
+                </p>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
