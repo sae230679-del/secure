@@ -3252,40 +3252,6 @@ export async function registerRoutes(
   });
 
   // =====================================================
-  // Secure One-Time Password Reset (for production deployment)
-  // =====================================================
-  app.post("/api/emergency-password-reset", async (req, res) => {
-    try {
-      const { email, newPassword, secretKey } = req.body;
-      
-      const expectedSecret = process.env.SECRET_KEY;
-      if (!expectedSecret || secretKey !== expectedSecret) {
-        return res.status(403).json({ error: "Forbidden" });
-      }
-      
-      if (!email || !newPassword || newPassword.length < 8) {
-        return res.status(400).json({ error: "Invalid email or password (min 8 chars)" });
-      }
-      
-      const user = await storage.getUserByEmail(email);
-      if (!user) {
-        return res.status(404).json({ error: "User not found" });
-      }
-      
-      const bcrypt = await import("bcryptjs");
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
-      
-      await storage.updateUser(user.id, { password: hashedPassword });
-      
-      console.log(`[EMERGENCY] Password reset for ${email} by admin`);
-      res.json({ success: true, message: "Password updated successfully" });
-    } catch (error: any) {
-      console.error("[EMERGENCY] Password reset error:", error?.message || error);
-      res.status(500).json({ error: "Failed to reset password" });
-    }
-  });
-
-  // =====================================================
   // PDN Consent Recording for Checkout (called from frontend)
   // =====================================================
   app.post("/api/pdn-consent", requireAuth, async (req, res) => {
