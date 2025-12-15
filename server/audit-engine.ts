@@ -226,14 +226,24 @@ async function callYandexGpt(systemPrompt: string, userPrompt: string): Promise<
   });
 }
 
+export interface LawBasisRef {
+  law: "152" | "149";
+  article: string;
+  note?: string;
+}
+
 export interface AuditCheckResult {
   id: string;
+  checkId?: string;
   name: string;
   category: string;
   status: "passed" | "warning" | "failed";
   description: string;
   details?: string;
-  evidence?: string;
+  evidence?: string | string[];
+  lawBasis?: LawBasisRef[];
+  aggregationKey?: string;
+  fixSteps?: string[];
 }
 
 export interface WebsiteData {
@@ -556,8 +566,21 @@ async function fetchWebsite(urlString: string, timeout = 15000): Promise<Website
 
 function checkHttps(data: WebsiteData): AuditCheckResult {
   const isHttps = data.url.startsWith("https://");
+  const evidence: string[] = [];
+  
+  if (isHttps) {
+    evidence.push(`URL использует HTTPS: ${data.url}`);
+    if (data.sslInfo?.protocol) evidence.push(`Протокол: ${data.sslInfo.protocol}`);
+    if (data.sslInfo?.expiresAt) evidence.push(`Сертификат действителен до: ${data.sslInfo.expiresAt}`);
+    if (data.sslInfo?.issuer) evidence.push(`Издатель: ${data.sslInfo.issuer}`);
+  } else {
+    evidence.push(`URL использует небезопасный HTTP: ${data.url}`);
+    evidence.push("Данные передаются без шифрования");
+  }
+
   return {
     id: "SEC-001",
+    checkId: "SEC_HTTPS_NOT_ENFORCED",
     name: "HTTPS/SSL сертификат",
     category: "security",
     status: isHttps && data.statusCode > 0 ? "passed" : "failed",
@@ -565,16 +588,25 @@ function checkHttps(data: WebsiteData): AuditCheckResult {
     details: isHttps 
       ? `Сайт использует HTTPS${data.sslInfo?.protocol ? ` (${data.sslInfo.protocol})` : ""}`
       : "Сайт не использует HTTPS - данные передаются без шифрования",
-    evidence: data.sslInfo?.expiresAt ? `Сертификат действителен до ${data.sslInfo.expiresAt}` : undefined,
+    evidence,
+    lawBasis: [{ law: "152", article: "ст. 19", note: "Меры по обеспечению безопасности ПДн при передаче" }],
+    aggregationKey: "HTTPS_ENFORCEMENT",
+    fixSteps: [
+      "Настроить принудительный редирект HTTP → HTTPS",
+      "Добавить HSTS заголовок",
+      "Проверить, что все ресурсы загружаются по HTTPS",
+    ],
   };
 }
 
 function checkSecurityHeaders(data: WebsiteData): AuditCheckResult[] {
   const results: AuditCheckResult[] = [];
+  const lawBasis: LawBasisRef[] = [{ law: "152", article: "ст. 19", note: "Технические меры безопасности" }];
   
   const hstsHeader = data.headers["strict-transport-security"];
   results.push({
     id: "SEC-002",
+    checkId: "SEC_HEADERS_HSTS_MISSING",
     name: "HSTS Header",
     category: "security",
     status: hstsHeader ? "passed" : "warning",
@@ -582,11 +614,18 @@ function checkSecurityHeaders(data: WebsiteData): AuditCheckResult[] {
     details: hstsHeader 
       ? `HSTS настроен: ${hstsHeader.substring(0, 100)}`
       : "HSTS не настроен - браузер может использовать небезопасное HTTP соединение",
+    evidence: hstsHeader 
+      ? [`Заголовок strict-transport-security: ${hstsHeader}`]
+      : ["Заголовок strict-transport-security отсутствует в ответе сервера"],
+    lawBasis,
+    aggregationKey: "SEC_HEADERS",
+    fixSteps: ["Добавить заголовок Strict-Transport-Security: max-age=31536000; includeSubDomains"],
   });
 
   const cspHeader = data.headers["content-security-policy"];
   results.push({
     id: "SEC-003",
+    checkId: "SEC_HEADERS_CSP_MISSING",
     name: "Content Security Policy",
     category: "security",
     status: cspHeader ? "passed" : "warning",
@@ -594,11 +633,18 @@ function checkSecurityHeaders(data: WebsiteData): AuditCheckResult[] {
     details: cspHeader 
       ? "CSP настроен для защиты от XSS и инъекций"
       : "CSP не настроен - сайт уязвим для XSS атак",
+    evidence: cspHeader 
+      ? [`Заголовок content-security-policy: ${cspHeader.substring(0, 200)}...`]
+      : ["Заголовок content-security-policy отсутствует"],
+    lawBasis,
+    aggregationKey: "SEC_HEADERS",
+    fixSteps: ["Настроить Content-Security-Policy заголовок", "Минимально: default-src 'self'"],
   });
 
   const xFrameOptions = data.headers["x-frame-options"];
   results.push({
     id: "SEC-004",
+    checkId: "SEC_HEADERS_XFO_MISSING",
     name: "X-Frame-Options",
     category: "security",
     status: xFrameOptions ? "passed" : "warning",
@@ -606,11 +652,18 @@ function checkSecurityHeaders(data: WebsiteData): AuditCheckResult[] {
     details: xFrameOptions 
       ? `Защита от встраивания: ${xFrameOptions}`
       : "Защита от clickjacking не настроена",
+    evidence: xFrameOptions 
+      ? [`Заголовок x-frame-options: ${xFrameOptions}`]
+      : ["Заголовок x-frame-options отсутствует"],
+    lawBasis,
+    aggregationKey: "SEC_HEADERS",
+    fixSteps: ["Добавить заголовок X-Frame-Options: DENY или SAMEORIGIN"],
   });
 
   const xContentType = data.headers["x-content-type-options"];
   results.push({
     id: "SEC-005",
+    checkId: "SEC_HEADERS_XCTO_MISSING",
     name: "X-Content-Type-Options",
     category: "security",
     status: xContentType === "nosniff" ? "passed" : "warning",
@@ -618,28 +671,49 @@ function checkSecurityHeaders(data: WebsiteData): AuditCheckResult[] {
     details: xContentType 
       ? "Защита от MIME sniffing активна"
       : "Защита от MIME sniffing не настроена",
+    evidence: xContentType 
+      ? [`Заголовок x-content-type-options: ${xContentType}`]
+      : ["Заголовок x-content-type-options отсутствует"],
+    lawBasis,
+    aggregationKey: "SEC_HEADERS",
+    fixSteps: ["Добавить заголовок X-Content-Type-Options: nosniff"],
   });
 
   return results;
 }
 
 function checkPrivacyPolicy(html: string): AuditCheckResult {
-  const lowerHtml = html.toLowerCase();
+  const evidence: string[] = [];
   
   const policyPatterns = [
-    /политик[аи|уыей]\s*конфиденциальности/i,
-    /privacy\s*policy/i,
-    /обработк[аиуеой]\s*персональных\s*данных/i,
-    /защит[аиуеой]\s*персональных\s*данных/i,
-    /href\s*=\s*["'][^"']*privacy[^"']*["']/i,
-    /href\s*=\s*["'][^"']*policy[^"']*["']/i,
-    /href\s*=\s*["'][^"']*конфиденциальност[^"']*["']/i,
+    { pattern: /политик[аи|уыей]\s*конфиденциальности/i, name: "текст 'политика конфиденциальности'" },
+    { pattern: /privacy\s*policy/i, name: "текст 'privacy policy'" },
+    { pattern: /обработк[аиуеой]\s*персональных\s*данных/i, name: "текст 'обработка персональных данных'" },
+    { pattern: /защит[аиуеой]\s*персональных\s*данных/i, name: "текст 'защита персональных данных'" },
+    { pattern: /href\s*=\s*["'][^"']*privacy[^"']*["']/i, name: "ссылка с 'privacy' в URL" },
+    { pattern: /href\s*=\s*["'][^"']*policy[^"']*["']/i, name: "ссылка с 'policy' в URL" },
+    { pattern: /href\s*=\s*["'][^"']*конфиденциальност[^"']*["']/i, name: "ссылка с 'конфиденциальность' в URL" },
   ];
 
-  const hasPolicy = policyPatterns.some(pattern => pattern.test(html));
+  const foundPatterns: string[] = [];
+  for (const { pattern, name } of policyPatterns) {
+    if (pattern.test(html)) {
+      foundPatterns.push(name);
+    }
+  }
+
+  const hasPolicy = foundPatterns.length > 0;
+  
+  if (hasPolicy) {
+    evidence.push(`Найдено: ${foundPatterns.join(", ")}`);
+  } else {
+    evidence.push("Не найдены ссылки или текст политики конфиденциальности");
+    evidence.push("Проверены паттерны: /privacy, /policy, политика конфиденциальности");
+  }
   
   return {
     id: "PDN-001",
+    checkId: "LEGAL_PRIVACY_POLICY_MISSING",
     name: "Политика конфиденциальности",
     category: "fz152",
     status: hasPolicy ? "passed" : "failed",
@@ -647,18 +721,26 @@ function checkPrivacyPolicy(html: string): AuditCheckResult {
     details: hasPolicy 
       ? "Ссылка на политику конфиденциальности найдена"
       : "Политика конфиденциальности не найдена на странице",
+    evidence,
+    lawBasis: [{ law: "152", article: "ст. 18.1", note: "Обязанность опубликовать политику обработки ПДн" }],
+    aggregationKey: "PRIVACY_POLICY",
+    fixSteps: [
+      "Разместить политику конфиденциальности на сайте",
+      "Добавить ссылку в подвал каждой страницы",
+      "Включить все обязательные разделы по ст. 18.1 ФЗ-152",
+    ],
   };
 }
 
 function checkConsentCheckbox(html: string): AuditCheckResult {
+  const evidence: string[] = [];
+  
   const consentPatterns = [
-    /согласи[еяюо]\s*(на\s*)?(обработку|передачу)/i,
-    /даю\s*согласие/i,
-    /принимаю\s*(условия|политику)/i,
-    /consent/i,
-    /type\s*=\s*["']checkbox["'][^>]*согласи/i,
-    /согласи[^"']*type\s*=\s*["']checkbox["']/i,
-    /персональных?\s*данных?/i,
+    { pattern: /согласи[еяюо]\s*(на\s*)?(обработку|передачу)/i, name: "'согласие на обработку'" },
+    { pattern: /даю\s*согласие/i, name: "'даю согласие'" },
+    { pattern: /принимаю\s*(условия|политику)/i, name: "'принимаю условия/политику'" },
+    { pattern: /consent/i, name: "'consent'" },
+    { pattern: /type\s*=\s*["']checkbox["'][^>]*согласи/i, name: "чекбокс с текстом согласия" },
   ];
 
   const formPatterns = [
@@ -667,21 +749,47 @@ function checkConsentCheckbox(html: string): AuditCheckResult {
   ];
 
   const hasForm = formPatterns.some(p => p.test(html));
-  const hasConsent = consentPatterns.some(p => p.test(html));
+  const foundConsent: string[] = [];
+  
+  for (const { pattern, name } of consentPatterns) {
+    if (pattern.test(html)) {
+      foundConsent.push(name);
+    }
+  }
+  
+  const hasConsent = foundConsent.length > 0;
 
   if (!hasForm) {
+    evidence.push("Формы сбора данных не обнаружены на странице");
     return {
       id: "PDN-002",
+      checkId: "PDN_CONSENT_CHECKBOX_MISSING",
       name: "Согласие на обработку ПДн",
       category: "fz152",
       status: "passed",
       description: "Проверка наличия чекбокса согласия в формах (ФЗ-152 ст.9)",
       details: "Формы сбора данных не обнаружены на странице",
+      evidence,
+      lawBasis: [
+        { law: "152", article: "ст. 9", note: "Согласие субъекта ПДн" },
+        { law: "152", article: "ст. 18", note: "Обязанности оператора при сборе ПДн" },
+      ],
+      aggregationKey: "PDN_CONSENT_FORMS",
     };
+  }
+
+  if (hasConsent) {
+    evidence.push(`Обнаружены формы с данными: <form> или <input type="email/tel">`);
+    evidence.push(`Найдены элементы согласия: ${foundConsent.join(", ")}`);
+  } else {
+    evidence.push(`Обнаружены формы сбора данных`);
+    evidence.push(`Не найден чекбокс согласия или текст согласия рядом с формой`);
+    evidence.push(`Проверенные паттерны: согласие на обработку, даю согласие, consent, checkbox`);
   }
 
   return {
     id: "PDN-002",
+    checkId: "PDN_CONSENT_CHECKBOX_MISSING",
     name: "Согласие на обработку ПДн",
     category: "fz152",
     status: hasConsent ? "passed" : "failed",
@@ -689,26 +797,52 @@ function checkConsentCheckbox(html: string): AuditCheckResult {
     details: hasConsent 
       ? "Механизм получения согласия на обработку ПДн найден"
       : "В формах отсутствует явное согласие на обработку персональных данных",
+    evidence,
+    lawBasis: [
+      { law: "152", article: "ст. 9", note: "Согласие субъекта ПДн" },
+      { law: "152", article: "ст. 18", note: "Обязанности оператора при сборе ПДн" },
+    ],
+    aggregationKey: "PDN_CONSENT_FORMS",
+    fixSteps: [
+      "Добавить чекбокс согласия на обработку ПДн перед кнопкой отправки",
+      "Текст согласия должен ссылаться на политику конфиденциальности",
+      "Чекбокс не должен быть предзаполненным",
+    ],
   };
 }
 
 function checkCookieBanner(html: string): AuditCheckResult {
+  const evidence: string[] = [];
+  
   const cookiePatterns = [
-    /cookie/i,
-    /куки/i,
-    /файл[аов]*\s*cookie/i,
-    /cookie\s*banner/i,
-    /cookie\s*consent/i,
-    /accept\s*cookie/i,
-    /принять\s*cookie/i,
-    /использу[ео][тм]\s*cookie/i,
-    /мы\s*используем\s*cookie/i,
+    { pattern: /cookie\s*banner/i, name: "'cookie banner'" },
+    { pattern: /cookie\s*consent/i, name: "'cookie consent'" },
+    { pattern: /accept\s*cookie/i, name: "'accept cookie'" },
+    { pattern: /принять\s*cookie/i, name: "'принять cookie'" },
+    { pattern: /использу[ео][тм]\s*cookie/i, name: "'используем cookie'" },
+    { pattern: /мы\s*используем\s*cookie/i, name: "'мы используем cookie'" },
+    { pattern: /файл[аов]*\s*cookie/i, name: "'файлы cookie'" },
   ];
 
-  const hasCookieBanner = cookiePatterns.some(p => p.test(html));
+  const foundPatterns: string[] = [];
+  for (const { pattern, name } of cookiePatterns) {
+    if (pattern.test(html)) {
+      foundPatterns.push(name);
+    }
+  }
+  
+  const hasCookieBanner = foundPatterns.length > 0;
+
+  if (hasCookieBanner) {
+    evidence.push(`Найдено: ${foundPatterns.join(", ")}`);
+  } else {
+    evidence.push("Cookie-баннер или уведомление не обнаружено");
+    evidence.push("Проверенные паттерны: cookie banner, cookie consent, accept cookie");
+  }
 
   return {
     id: "COOK-001",
+    checkId: "COOKIES_BANNER_MISSING",
     name: "Cookie-баннер",
     category: "cookies",
     status: hasCookieBanner ? "passed" : "warning",
@@ -716,24 +850,48 @@ function checkCookieBanner(html: string): AuditCheckResult {
     details: hasCookieBanner 
       ? "Cookie-баннер обнаружен"
       : "Cookie-баннер не обнаружен - возможно нарушение требований ФЗ-152",
+    evidence,
+    lawBasis: [
+      { law: "152", article: "ст. 9", note: "Согласие на обработку ПДн при использовании идентификаторов" },
+    ],
+    aggregationKey: "COOKIES_CONSENT",
+    fixSteps: [
+      "Установить cookie-баннер с возможностью выбора категорий",
+      "Не устанавливать аналитические/рекламные cookies до согласия",
+      "Сохранять выбор пользователя",
+    ],
   };
 }
 
 function checkContactInfo(html: string): AuditCheckResult {
+  const evidence: string[] = [];
+  
   const contactPatterns = [
-    /\+7\s*\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}/,
-    /8\s*\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}/,
-    /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/,
-    /телефон/i,
-    /email/i,
-    /контакт/i,
-    /связаться/i,
+    { pattern: /\+7\s*\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}/, name: "телефон +7" },
+    { pattern: /8\s*\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}/, name: "телефон 8" },
+    { pattern: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/, name: "email" },
+    { pattern: /контакт/i, name: "'контакты'" },
   ];
 
-  const hasContacts = contactPatterns.some(p => p.test(html));
+  const foundPatterns: string[] = [];
+  for (const { pattern, name } of contactPatterns) {
+    if (pattern.test(html)) {
+      foundPatterns.push(name);
+    }
+  }
+
+  const hasContacts = foundPatterns.length > 0;
+
+  if (hasContacts) {
+    evidence.push(`Найдено: ${foundPatterns.join(", ")}`);
+  } else {
+    evidence.push("Контактная информация не обнаружена");
+    evidence.push("Проверенные паттерны: телефон, email, контакты");
+  }
 
   return {
     id: "INF-001",
+    checkId: "LEGAL_CONTACTS_MISSING",
     name: "Контактная информация",
     category: "fz149",
     status: hasContacts ? "passed" : "warning",
@@ -741,6 +899,17 @@ function checkContactInfo(html: string): AuditCheckResult {
     details: hasContacts 
       ? "Контактная информация найдена"
       : "Контактная информация не найдена на странице",
+    evidence,
+    lawBasis: [
+      { law: "152", article: "ст. 18.1", note: "Публичная политика и сведения об операторе" },
+      { law: "149", article: "ст. 10.1", note: "Обязанности владельца сайта" },
+    ],
+    aggregationKey: "LEGAL_CONTACTS",
+    fixSteps: [
+      "Разместить контактную информацию оператора (email, телефон, адрес)",
+      "Указать ИНН/ОГРН организации",
+      "Добавить страницу 'Контакты' с полными реквизитами",
+    ],
   };
 }
 
