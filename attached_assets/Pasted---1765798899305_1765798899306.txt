@@ -1,0 +1,100 @@
+Что именно нужно проверить и показать (инструкция для проверки)
+Добавь в отчёт и выполни следующие шаги, с выводами команд/скринами:
+
+Пакеты и цены в БД
+
+Выполни:
+
+psql $DATABASE_URL -c "SELECT type,name,price,is_active FROM audit_packages ORDER BY type;"
+
+В отчёте покажи вывод, где есть как минимум:
+
+expressreport
+
+other
+
+ещё несколько пакетов полного аудита.
+
+Public API /api/public/packages
+
+Выполни:
+
+curl -s "http://localhost:5000/api/public/packages" | jq
+
+curl -s "http://localhost:5000/api/public/packages?service=full_audit" | jq
+
+curl -s "http://localhost:5000/api/public/packages?service=express_pdf" | jq
+
+В отчёте покажи, что:
+
+для expressreport service="express_pdf" и цена совпадает с БД;
+
+для other и остальных service="full_audit" и цены совпадают с БД.
+
+Создание полного аудита (никакого Invalid package type)
+
+Выполни:
+
+curl -i -X POST http://localhost:5000/api/audits -H "Content-Type: application/json" -d '{"websiteUrl":"https://example.com","packageType":"other"}'
+
+В отчёт вставь статус (должен быть 200) и JSON с auditId.
+
+Создание платежа YooKassa с правильной суммой и описанием
+
+Используя полученный auditId:
+
+curl -i -X POST http://localhost:5000/api/payments/create -H "Content-Type: application/json" -d '{"auditId":<ID>,"paymentMethod":"sbp"}'
+
+После запроса покажи содержимое файлов:
+
+cat debug/yookassa-last-payload.json
+
+cat debug/yookassa-last-response.json
+
+В payload должно быть:
+
+amount.value = <цена из БД>.00, не 0;
+
+правильный description:
+
+для expressreport: “Оплата за полный отчет (экспресс-проверка)”;
+
+для other и остальных: “Оплата за полный аудит сайта: <name>”.
+
+В ответе YooKassa не должно быть ошибки Authentication type is not allowed.
+
+Кнопка Test connection (SuperAdmin only)
+
+Покажи route и middleware: файл/фрагмент, где объявлен endpoint теста YooKassa и стоит requireSuperAdmin.
+
+Проверь три вызова (curl или из браузера + скрины):
+
+без авторизации → 401;
+
+под обычным пользователем → 403;
+
+под superadmin → 200 и JSON с результатом теста.
+
+В админке сделай скрин страницы “Платежи / YooKassa” с последним результатом проверки.
+
+RKN/ИНН — 4 места
+Сделай один и тот же сайт и покажи, что RKN‑проверка есть:
+
+Экспресс краткий отчёт (скрин страницы сразу после проверки);
+
+Экспресс PDF (скрин PDF блока с RKN);
+
+Полный аудит (экран результата с блоком RKN);
+
+Полный аудит PDF (скрин блока RKN в PDF).
+
+Краткий экспресс‑отчёт сразу на экране
+
+Скрин после Быстрая проверка:
+
+виден scorePercent, severity, счётчики passed/warning/failed, список критериев и кнопка покупки ниже, а не вместо отчёта.
+
+PDF кириллица
+
+Сгенерируй любой платный PDF (экспресс или полный), открой на iPhone (Files/Preview) и приложи скрин с читаемой кириллицей.
+
