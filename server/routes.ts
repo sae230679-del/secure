@@ -1129,6 +1129,15 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Invalid role" });
       }
       
+      const existingUser = await storage.getUserById(userId);
+      if (!existingUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      if (existingUser.isMasterAdmin || existingUser.email === "sae230679@yandex.ru") {
+        return res.status(403).json({ error: "Невозможно изменить роль главного администратора" });
+      }
+      
       const user = await storage.updateUserRole(userId, role);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
@@ -1152,15 +1161,28 @@ export async function registerRoutes(
   app.delete("/api/superadmin/users/:id", requireSuperAdmin, async (req, res) => {
     try {
       const userId = parseInt(req.params.id);
+      const { pin } = req.body as { pin?: string };
       
       if (userId === req.session.userId) {
         return res.status(400).json({ error: "Cannot delete yourself" });
       }
       
-      // Protect the main superadmin from deletion
       const userToDelete = await storage.getUserById(userId);
-      if (userToDelete?.email === "sae230679@yandex.ru") {
-        return res.status(403).json({ error: "Невозможно удалить главного администратора" });
+      if (!userToDelete) {
+        return res.status(404).json({ error: "Пользователь не найден" });
+      }
+      
+      if (userToDelete.isMasterAdmin || userToDelete.email === "sae230679@yandex.ru") {
+        const masterPin = process.env.MASTER_ADMIN_PIN;
+        if (!pin) {
+          return res.status(403).json({ 
+            error: "Для удаления главного администратора требуется PIN-код",
+            requiresPin: true 
+          });
+        }
+        if (pin !== masterPin) {
+          return res.status(403).json({ error: "Неверный PIN-код" });
+        }
       }
       
       await storage.deleteUser(userId);
@@ -1170,6 +1192,7 @@ export async function registerRoutes(
         action: "delete_user",
         resourceType: "user",
         resourceId: userId,
+        details: userToDelete.isMasterAdmin ? "Master admin deleted with PIN" : undefined,
       });
       
       res.json({ success: true });

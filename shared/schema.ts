@@ -21,6 +21,7 @@ export const users = pgTable("users", {
   inn: varchar("inn", { length: 12 }),
   passwordHash: text("password_hash").notNull(),
   role: varchar("role", { length: 50 }).default("user").notNull(),
+  isMasterAdmin: boolean("is_master_admin").default(false),
   pdnConsentAt: timestamp("pdn_consent_at"),
   marketingConsent: boolean("marketing_consent").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
