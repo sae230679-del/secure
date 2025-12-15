@@ -229,3 +229,94 @@ SMTP_PASS=...
 3. Download express PDF - verify Cyrillic text
 4. Login as user - verify dashboard loads
 5. Login as superadmin - verify settings pages work
+
+---
+
+## Deployment Guide
+
+### Pre-Deployment Checklist
+
+1. **Set Required Environment Variables** (in Replit Secrets):
+   - `DATABASE_URL` - PostgreSQL connection string (auto-provided by Replit)
+   - `SESSION_SECRET` - Random 32+ character string for session encryption (REQUIRED for production)
+   - `SUPERADMIN_PASSWORD` - Password for superadmin login
+
+2. **Configure Payment Providers** (via SuperAdmin panel /superadmin/payment-settings):
+   - YooKassa: Shop ID + Secret Key (obtain from yookassa.ru)
+   - Robokassa: Merchant Login + Password 1 + Password 2 (obtain from robokassa.ru)
+   - NOTE: Payment providers cannot be enabled without valid credentials
+
+3. **Optional Variables**:
+   - AI: `GIGACHAT_CLIENT_ID`, `GIGACHAT_CLIENT_SECRET` or `OPENAI_API_KEY`
+   - Email: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`
+
+### Deployment Steps
+
+1. **Verify Environment**:
+   - Confirm all required secrets are set
+   - Check that `NODE_ENV` is set to `production` (automatic in Replit deployments)
+
+2. **Database**:
+   - Database is automatically migrated on startup
+   - Superadmin user is created automatically using SUPERADMIN_PASSWORD
+
+3. **Deploy**:
+   - Click "Deploy" button in Replit
+   - Select "Autoscale" deployment type (recommended for web apps)
+   - Confirm deployment
+
+4. **Post-Deployment Configuration**:
+   - Login as superadmin at `/auth`
+   - Go to /superadmin/payment-settings
+   - Enter YooKassa or Robokassa credentials
+   - Enable desired payment provider(s)
+   - Configure installment options if needed
+
+### Post-Deployment Verification
+
+1. **Health Check**:
+   - [ ] Landing page loads at production URL
+   - [ ] Light/dark theme toggle works
+   - [ ] No console errors
+
+2. **Auth Check**:
+   - [ ] User registration works
+   - [ ] User login works
+   - [ ] Superadmin login works with SUPERADMIN_PASSWORD
+
+3. **Express Check**:
+   - [ ] Free express check completes
+   - [ ] PDF download works with Cyrillic text
+
+4. **Payment Check** (test mode recommended first):
+   - [ ] Payment creation redirects to payment provider
+   - [ ] Payment callback updates status
+   - [ ] Installment banner shows (if enabled)
+
+5. **iOS Safari Test**:
+   - [ ] Dashboard loads without localStorage errors
+   - [ ] Login session persists after refresh
+
+### Production Security Notes
+
+- Session cookies use `secure: true` and `sameSite: "none"` for cross-origin compatibility
+- Trust proxy is enabled for correct IP detection behind Replit proxy
+- Rate limiting: 100 requests per 15 minutes per IP for /api/*
+- Helmet security headers enabled (CSP disabled for compatibility)
+- All payment credentials stored in database system_settings, not hardcoded
+
+### Troubleshooting
+
+**401 Errors on Payment**:
+- Check YooKassa Shop ID and Secret Key are correct
+- Verify YooKassa account is active and not in test-only mode
+- Check diagnostics in /superadmin/payment-settings
+
+**iOS Safari Session Issues**:
+- Ensure SESSION_SECRET is set
+- Cookies require HTTPS (automatic in production)
+- Private browsing mode is supported via try-catch localStorage
+
+**Database Connection Errors**:
+- Verify DATABASE_URL is set correctly
+- Check PostgreSQL service is running
