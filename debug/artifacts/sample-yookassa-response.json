@@ -1,0 +1,29 @@
+{
+  "statusCode": 200,
+  "body": {
+    "id": "2d25e0e5-0001-5000-a000-1f0123456789",
+    "status": "pending",
+    "paid": false,
+    "amount": {
+      "value": "2990.00",
+      "currency": "RUB"
+    },
+    "confirmation": {
+      "type": "redirect",
+      "confirmation_url": "https://yoomoney.ru/payments/sbp/xxx"
+    },
+    "created_at": "2024-12-15T10:30:00.000Z",
+    "description": "Оплата за полный аудит сайта: Базовый аудит",
+    "metadata": {
+      "auditId": 123,
+      "userId": 1,
+      "packageId": 2
+    },
+    "recipient": {
+      "account_id": "123456",
+      "gateway_id": "654321"
+    },
+    "refundable": false,
+    "test": false
+  }
+}

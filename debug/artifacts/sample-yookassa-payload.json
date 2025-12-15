@@ -1,0 +1,20 @@
+{
+  "amount": {
+    "value": "2990.00",
+    "currency": "RUB"
+  },
+  "capture": true,
+  "confirmation": {
+    "type": "redirect",
+    "return_url": "https://securelex.ru/payment-result?auditId=123"
+  },
+  "description": "Оплата за полный аудит сайта: Базовый аудит",
+  "metadata": {
+    "auditId": 123,
+    "userId": 1,
+    "packageId": 2
+  },
+  "payment_method_data": {
+    "type": "sbp"
+  }
+}

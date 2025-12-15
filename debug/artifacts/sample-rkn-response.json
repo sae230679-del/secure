@@ -1,0 +1,9 @@
+{
+  "status": "passed",
+  "confidence": "high",
+  "details": "Организация зарегистрирована в реестре операторов ПД (ООО \"Пример\")",
+  "companyName": "ООО \"Пример\"",
+  "registrationNumber": "77-22-012345",
+  "registrationDate": "15.03.2020",
+  "fromCache": false
+}
