@@ -342,6 +342,37 @@ function mapCriterionNameToCheckId(name: string): string | null {
   return null;
 }
 
+// Get unique violations with their details
+interface ViolationInfo {
+  aggregationKey: string;
+  title: string;
+  checkId: string;
+}
+
+function getUniqueViolationsFromCriteria(criteria: CriteriaResult[]): ViolationInfo[] {
+  const seenAggKeys = new Set<string>();
+  const violations: ViolationInfo[] = [];
+  
+  for (const c of criteria) {
+    if (c.status === "passed") continue;
+    
+    const checkId = mapCriterionNameToCheckId(c.name);
+    if (checkId && PENALTY_MAP[checkId]) {
+      const penaltyItem = PENALTY_MAP[checkId];
+      if (!seenAggKeys.has(penaltyItem.aggregationKey)) {
+        seenAggKeys.add(penaltyItem.aggregationKey);
+        violations.push({
+          aggregationKey: penaltyItem.aggregationKey,
+          title: penaltyItem.title,
+          checkId,
+        });
+      }
+    }
+  }
+  
+  return violations;
+}
+
 // Calculate penalty totals from criteria results
 function calculatePenaltyTotalsFromCriteria(criteria: CriteriaResult[]): PenaltyTotals {
   const checkResults: { checkId: string; status: string }[] = [];
@@ -359,7 +390,11 @@ function calculatePenaltyTotalsFromCriteria(criteria: CriteriaResult[]): Penalty
 }
 
 // Render calculated penalty totals section
-function renderPenaltyTotalsSection(doc: PDFKit.PDFDocument, penaltyTotals: PenaltyTotals): void {
+function renderPenaltyTotalsSection(
+  doc: PDFKit.PDFDocument, 
+  penaltyTotals: PenaltyTotals,
+  violations: ViolationInfo[]
+): void {
   const primaryColor = "#1e3a5f";
   const dangerColor = "#dc2626";
   
@@ -376,6 +411,30 @@ function renderPenaltyTotalsSection(doc: PDFKit.PDFDocument, penaltyTotals: Pena
      .text(`Выявлено уникальных нарушений: ${penaltyTotals.uniqueViolations}`, { indent: 10 });
   doc.text(`Основная статья: КоАП РФ ст. 13.11`, { indent: 10 });
   doc.moveDown(0.5);
+  
+  // Show unique violations list (explains why penalties are not multiplied per page)
+  if (violations.length > 0) {
+    doc.fontSize(10)
+       .fillColor(primaryColor)
+       .text("Учтённые нарушения (дедупликация по типу):", { indent: 10 });
+    doc.moveDown(0.3);
+    
+    violations.forEach((v, idx) => {
+      doc.fontSize(8)
+         .fillColor(dangerColor)
+         .text(`${idx + 1}. `, 20, doc.y, { continued: true })
+         .fillColor("#374151")
+         .text(v.title, { continued: true })
+         .fillColor("#6b7280")
+         .text(` [${v.aggregationKey}]`, { continued: false });
+    });
+    doc.moveDown(0.5);
+    
+    doc.fontSize(8)
+       .fillColor("#6b7280")
+       .text("* Однотипные нарушения на разных страницах сайта учитываются как одно нарушение для расчёта штрафа.", { indent: 10 });
+    doc.moveDown(0.5);
+  }
   
   // Table header
   const tableStartY = doc.y;
@@ -709,7 +768,8 @@ export async function generatePdfReport(data: AuditReportData): Promise<Buffer> 
 
       // Calculate and render penalty totals from actual violations
       const penaltyTotals = calculatePenaltyTotalsFromCriteria(data.criteria);
-      renderPenaltyTotalsSection(doc, penaltyTotals);
+      const uniqueViolations = getUniqueViolationsFromCriteria(data.criteria);
+      renderPenaltyTotalsSection(doc, penaltyTotals, uniqueViolations);
 
       doc.moveDown(1);
       doc.rect(50, doc.y, 495, 80)
