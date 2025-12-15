@@ -12,6 +12,11 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,6 +34,7 @@ import {
   CreditCard,
   LogOut,
   ChevronUp,
+  ChevronDown,
   Settings,
   Users,
   Package,
@@ -86,6 +92,10 @@ export function AppSidebar() {
       .slice(0, 2);
   };
 
+  const isUserSectionActive = userMenuItems.some(item => location === item.url || location.startsWith(item.url + "/"));
+  const isAdminSectionActive = adminMenuItems.some(item => location === item.url || location.startsWith(item.url + "/"));
+  const isSuperAdminSectionActive = superAdminMenuItems.some(item => location === item.url || location.startsWith(item.url + "/"));
+
   return (
     <Sidebar>
       <SidebarHeader className="p-4">
@@ -96,74 +106,101 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Личный кабинет</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {userMenuItems.map((item) => (
-                <SidebarMenuItem key={item.url}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location === item.url}
-                    data-testid={`nav-${item.url.replace(/\//g, "-")}`}
-                  >
-                    <Link href={item.url}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        <Collapsible defaultOpen={isUserSectionActive || !isSuperAdmin} className="group">
+          <SidebarGroup>
+            <CollapsibleTrigger asChild>
+              <SidebarGroupLabel className="cursor-pointer flex items-center justify-between gap-1 pr-2">
+                <span>Личный кабинет</span>
+                <ChevronDown className="h-4 w-4 transition-transform duration-200 group-data-[state=closed]:-rotate-90" />
+              </SidebarGroupLabel>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {userMenuItems.map((item) => (
+                    <SidebarMenuItem key={item.url}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={location === item.url}
+                        data-testid={`nav-${item.url.replace(/\//g, "-")}`}
+                      >
+                        <Link href={item.url}>
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </CollapsibleContent>
+          </SidebarGroup>
+        </Collapsible>
 
         {isAdmin && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Администрирование</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {adminMenuItems.map((item) => (
-                  <SidebarMenuItem key={item.url}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={location === item.url}
-                      data-testid={`nav-${item.url.replace(/\//g, "-")}`}
-                    >
-                      <Link href={item.url}>
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+          <Collapsible defaultOpen={isAdminSectionActive || !isSuperAdmin} className="group">
+            <SidebarGroup>
+              <CollapsibleTrigger asChild>
+                <SidebarGroupLabel className="cursor-pointer flex items-center justify-between gap-1 pr-2">
+                  <span>Администрирование</span>
+                  <ChevronDown className="h-4 w-4 transition-transform duration-200 group-data-[state=closed]:-rotate-90" />
+                </SidebarGroupLabel>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {adminMenuItems.map((item) => (
+                      <SidebarMenuItem key={item.url}>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={location === item.url}
+                          data-testid={`nav-${item.url.replace(/\//g, "-")}`}
+                        >
+                          <Link href={item.url}>
+                            <item.icon className="h-4 w-4" />
+                            <span>{item.title}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </CollapsibleContent>
+            </SidebarGroup>
+          </Collapsible>
         )}
 
         {isSuperAdmin && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Супер-администратор</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {superAdminMenuItems.map((item) => (
-                  <SidebarMenuItem key={item.url}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={location === item.url}
-                      data-testid={`nav-${item.url.replace(/\//g, "-")}`}
-                    >
-                      <Link href={item.url}>
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+          <Collapsible defaultOpen={isSuperAdminSectionActive} className="group">
+            <SidebarGroup>
+              <CollapsibleTrigger asChild>
+                <SidebarGroupLabel className="cursor-pointer flex items-center justify-between gap-1 pr-2">
+                  <span>Супер-администратор</span>
+                  <ChevronDown className="h-4 w-4 transition-transform duration-200 group-data-[state=closed]:-rotate-90" />
+                </SidebarGroupLabel>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {superAdminMenuItems.map((item) => (
+                      <SidebarMenuItem key={item.url}>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={location === item.url}
+                          data-testid={`nav-${item.url.replace(/\//g, "-")}`}
+                        >
+                          <Link href={item.url}>
+                            <item.icon className="h-4 w-4" />
+                            <span>{item.title}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </CollapsibleContent>
+            </SidebarGroup>
+          </Collapsible>
         )}
       </SidebarContent>
 

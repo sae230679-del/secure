@@ -332,12 +332,13 @@ export async function generatePdfReport(data: AuditReportData): Promise<Buffer> 
     doc.pipe(stream);
 
     const fontPath = getFontPath();
-    console.log(`[PDF-GEN] Using font: ${fontPath}`);
+    console.log(`[PDF-GEN] Using font: ${fontPath}, exists: ${fs.existsSync(fontPath)}`);
     try {
       doc.registerFont("DejaVu", fontPath);
       doc.font("DejaVu");
+      console.log(`[PDF-GEN] DejaVu font registered successfully`);
     } catch (fontError) {
-      console.log(`[PDF-GEN] Font error, using Helvetica: ${fontError}`);
+      console.error(`[PDF-GEN] Font error, using Helvetica: ${fontError}`);
       doc.font("Helvetica");
     }
 
