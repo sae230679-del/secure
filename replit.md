@@ -72,3 +72,45 @@ Preferred communication style: Simple, everyday language.
 - **Vite**: Frontend build and dev server.
 - **drizzle-kit**: Database migration tooling.
 - **tsx**: TypeScript execution for the server.
+- **vitest**: Test framework with supertest for API integration tests.
+
+## Testing
+
+### Running Tests
+```bash
+npm test              # Run all tests once
+npm run test:watch    # Run tests in watch mode
+```
+
+### Test Suites (8 tests, 4 files)
+- **admin-settings.test.ts**: Settings update/masking, secret preservation
+- **seo-pages.test.ts**: SEO CRUD lifecycle, public visibility control
+- **pdn-workflow.test.ts**: PDN withdrawal → 30-day destruction task
+- **pdn-job.test.ts**: SCHEDULED/LEGAL_HOLD/future scheduling behavior
+
+### Test Infrastructure
+- `tests/setup.ts`: App initialization for testing
+- `tests/dbReset.ts`: Database reset with CASCADE deletes
+- `tests/authHelper.ts`: Login helpers for superadmin/user roles
+
+## Deployment
+
+### Scripts
+```bash
+npm run build         # Build frontend + backend
+npm run db:migrate    # Apply database migrations (drizzle-kit push --force)
+npm run ci            # Full CI: build + test + migrate
+npm run start         # Start production server
+```
+
+### Health Check
+`GET /api/health` returns:
+```json
+{"ok": true, "version": "1.0.0", "environment": "production", "timestamp": "..."}
+```
+
+### Production Notes
+- PDN destruction job runs every 6 hours (production only)
+- Cookie consent banner blocks analytics/marketing scripts until consent
+- `ALLOW_INSECURE_LOCALHOST_COOKIES` forbidden in production
+- `AUDIT_MOCK_MODE` forbidden in production

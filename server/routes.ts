@@ -138,6 +138,16 @@ export async function registerRoutes(
   await storage.seedPackages();
   await (storage as any).seedThemes();
 
+  // Health check endpoint for monitoring
+  app.get("/api/health", (req, res) => {
+    res.json({
+      ok: true,
+      version: process.env.npm_package_version || "1.0.0",
+      environment: process.env.NODE_ENV || "development",
+      timestamp: new Date().toISOString(),
+    });
+  });
+
   app.post("/api/auth/register", async (req, res) => {
     try {
       const data = registerSchema.parse(req.body);

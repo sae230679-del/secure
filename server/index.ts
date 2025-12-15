@@ -23,8 +23,12 @@ import { serveStatic } from "./static";
     },
   );
 
-  const PDN_JOB_INTERVAL_MS = 6 * 60 * 60 * 1000;
-  setTimeout(() => runPdnDestructionJob(), 10000);
-  setInterval(runPdnDestructionJob, PDN_JOB_INTERVAL_MS);
-  console.log("[PDN Job] Scheduled to run every 6 hours");
+  if (process.env.NODE_ENV === "production") {
+    const PDN_JOB_INTERVAL_MS = 6 * 60 * 60 * 1000;
+    setTimeout(() => runPdnDestructionJob(), 10000);
+    setInterval(runPdnDestructionJob, PDN_JOB_INTERVAL_MS);
+    console.log("[PDN Job] Scheduled to run every 6 hours (production only)");
+  } else {
+    console.log("[PDN Job] Skipped scheduling in development mode");
+  }
 })();
