@@ -25,6 +25,12 @@ export const users = pgTable("users", {
   pdnConsentAt: timestamp("pdn_consent_at"),
   marketingConsent: boolean("marketing_consent").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  emailVerifiedAt: timestamp("email_verified_at"),
+  emailVerifyTokenHash: text("email_verify_token_hash"),
+  emailVerifyTokenExpiresAt: timestamp("email_verify_token_expires_at"),
+  emailVerifySentAt: timestamp("email_verify_sent_at"),
+  passwordResetTokenHash: text("password_reset_token_hash"),
+  passwordResetTokenExpiresAt: timestamp("password_reset_token_expires_at"),
 });
 
 export const usersRelations = relations(users, ({ many }) => ({

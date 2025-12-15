@@ -1,0 +1,253 @@
+Ниже — финальный подробный жёсткий промт для Replit AI Agent: SMTP целиком в SuperAdmin, “2FA” только один раз при регистрации (подтверждение email), восстановление пароля через email, а admin/superadmin логинятся без email‑верификации (и могут сбрасывать пароль только через SuperAdmin, чтобы снизить риск). В проекте уже есть email‑функции и их вызовы в роутинге (sendLoginOtpEmail, sendPasswordResetEmail, isEmailConfigured) — их нужно переразвернуть под новую логику.​
+
+FINAL PROMPT ДЛЯ REPLIT AI AGENT (копировать целиком)
+ROLE: Replit AI Agent (senior fullstack + security + QA).
+PROJECT: SecureLex.ru (Express/TypeScript, Drizzle/Postgres, session auth).​
+OBJECTIVE: Реализовать email‑инфраструктуру и auth‑потоки:
+
+SMTP настраивается только через SuperAdmin UI.
+
+“2FA” = одноразовая email‑верификация при регистрации (после подтверждения больше не спрашивать).
+
+Восстановление пароля — только через email‑токен.
+
+Admin/SuperAdmin: не требуют email‑верификации на логине; reset пароля для них — только из SuperAdmin, не через публичный “forgot password”.
+
+Везде rate limiting, TTL, попытки, без утечек “существует ли email”.
+
+0) Жёсткие правила
+Никаких моков: письма должны реально уходить по SMTP.​
+
+Пароль SMTP не хранить в БД и не отдавать через API; только через Secret.
+
+Никаких 500 из-за отсутствия почты: публичные эндпоинты должны возвращать корректную ошибку/ok, а сервер — логировать причину.​
+
+Любая ссылка/токен — одноразовые, TTL обязателен.
+
+Нельзя раскрывать: “есть ли пользователь с таким email” в forgot-password/subscribe.
+
+1) SMTP (REG.RU) — только SuperAdmin
+1.1 Дефолтные параметры (как пресет)
+SMTP host: mail.securelex.ru
+
+SMTP port: 465
+
+secure: true (implicit TLS)
+
+username: support@securelex.ru
+
+fromEmail: support@securelex.ru
+
+fromName: SecureLex
+
+Поддержать альтернативу: port 587 + STARTTLS (secure=false + requireTls=true), но UI должен рекомендовать 465.
+
+1.2 Хранение секрета SMTP
+Secret name фиксированный: SMTP_PASSWORD (Replit Secrets).
+
+В БД хранить только smtpPasswordSecretName="SMTP_PASSWORD" и smtpPasswordIsSet:boolean (или вычислять по env).
+
+В API никогда не возвращать пароль.
+
+1.3 SuperAdmin UI
+Admin → Settings → Email (SMTP):
+
+Enabled toggle
+
+Host, Port, Secure, Require TLS(STARTTLS)
+
+Username
+
+Password field (пустое, ввод = обновление Secret)
+
+From name/email, Reply-To
+
+Кнопка “Send test email” + поле toEmail
+
+Индикатор статуса:
+
+“Configured”
+
+“Disabled”
+
+“Missing SMTP_PASSWORD secret”
+
+“Invalid settings”
+
+1.4 SuperAdmin API (только superadmin)
+GET /api/admin/settings/email (без пароля)
+
+PUT /api/admin/settings/email (может принять smtpPassword для обновления Secret)
+
+POST /api/admin/settings/email/test
+
+2) server/email.ts — единый транспорт и проверки
+Реализовать getSmtpTransport():
+
+читает настройки из systemsettings,
+
+берёт пароль из process.env.SMTP_PASSWORD,
+
+создаёт nodemailer transport,
+
+кэширует 1–5 минут и пересоздаёт при изменении настроек.
+
+Реализовать/исправить isEmailConfigured():
+
+enabled=true
+
+host/port/user/fromEmail заполнены
+
+process.env.SMTP_PASSWORD существует и не пустой.​
+
+Реализовать новые отправители:
+
+sendVerifyEmail(to, verifyUrl)
+
+sendUserPasswordResetEmail(to, resetUrl)
+
+sendAdminPasswordResetEmail(to, tempPasswordOrLink) (только из SuperAdmin; публично запрещено)
+
+Старую логику “OTP на каждый логин” отключить/удалить (не использовать sendLoginOtpEmail для login-флоу).​
+
+3) Регистрация: email‑верификация (одноразовая “2FA”)
+3.1 DB изменения
+В users добавить:
+
+emailVerifiedAt: Date | null
+
+emailVerifyTokenHash: string | null
+
+emailVerifyTokenExpiresAt: Date | null
+
+emailVerifySentAt: Date | null (для rate limit)
+
+emailVerifySendCount: number (опционально)
+
+Токен хранить только хешом: sha256(token + pepper). Pepper = process.env.SESSIONSECRET или отдельный secret.
+
+3.2 Endpoints
+POST /api/auth/register
+
+Создать пользователя с ролью по умолчанию (обычный user)
+
+emailVerifiedAt = null
+
+Сгенерировать verify token (32–48 байт), сохранить hash+TTL 60 минут
+
+Отправить письмо подтверждения (если SMTP настроен); если SMTP не настроен — вернуть 503 с понятным текстом “Email сервис временно недоступен”, без создания “мёртвых” аккаунтов (или создать, но пометить и дать пользователю сообщение — выбери одну стратегию и сделай последовательно).
+
+GET /api/auth/verify-email?token=...
+
+Проверить token hash + TTL
+
+emailVerifiedAt = now, очистить verify поля
+
+Опционально: автоматически создать сессию (login)
+
+POST /api/auth/resend-verify-email
+
+Требует авторизации или email+пароль (выбери более безопасный вариант: через login-попытку)
+
+Только если пользователь НЕ verified и роль НЕ admin/superadmin
+
+Rate limit: минимум 60 сек между отправками + максимум 5/час
+
+3.3 Правило логина (важно)
+POST /api/auth/login:
+
+Если role ∈ {admin, superadmin} → НЕ проверять emailVerifiedAt (вход разрешён)
+
+Иначе:
+
+если emailVerifiedAt == null → 403 { error: "EMAIL_NOT_VERIFIED" } + фронт показывает кнопку resend.
+
+4) Восстановление пароля
+4.1 Публичный reset — только для обычных пользователей
+POST /api/auth/forgot-password
+
+Всегда возвращать 200 { ok: true } (не раскрывать наличие email)
+
+Если user найден:
+
+если role ∈ {admin, superadmin} → НЕ отправлять публичный reset (просто логировать security event)
+
+если user не verified → можно либо не отправлять, либо отправлять сначала verify (выбери правило и опиши)
+
+иначе: создать reset token hash + TTL 30 минут, отправить reset link
+
+POST /api/auth/reset-password
+
+Проверить token+TTL, одноразовость
+
+Обновить пароль, инвалидировать токен, сбросить все активные сессии пользователя (если возможно)
+
+4.2 Reset админа — только из SuperAdmin
+Сделать эндпоинт (superadmin only):
+
+POST /api/admin/users/:id/reset-password
+
+генерирует временный пароль или reset-link
+
+отправляет на email админа (если настроено) или показывает одноразовый временный пароль один раз в UI (лучше email, но предусмотреть fallback)
+
+логирует событие
+
+5) Подписка на рассылки (через SMTP настройки)
+(Если нужна прямо сейчас)
+
+POST /api/newsletter/subscribe → pending + письмо подтверждения (double opt-in)
+
+GET /api/newsletter/confirm?token=...
+
+POST /api/newsletter/unsubscribe
+Все письма используют общий SMTP из SuperAdmin.
+
+6) UI изменения (минимум)
+Registration screen: текст “Подтвердите email, письмо отправлено” + кнопка resend.
+
+Login screen: если EMAIL_NOT_VERIFIED → показать resend.
+
+Pages:
+
+/verify-email (обработка токена)
+
+/reset-password (форма нового пароля)
+
+Admin → Settings → Email (SMTP)
+
+7) Безопасность и лимиты (обязательные)
+Токены: 32–48 bytes random, хранить hash (sha256 + pepper)
+
+TTL: verify 60 мин, reset 30 мин
+
+Attempts: ограничить ввод/использование токена (если делаешь код)
+
+Rate limit resend/forgot-password по IP + по email
+
+Логи: без токенов и без паролей
+
+8) Проверка работоспособности (deliverables)
+В конце выдать:
+
+Список изменённых файлов.
+
+Результат POST /api/admin/settings/email/test (успешно).
+
+Прогоны:
+
+обычный user: register → email verify → login ok
+
+обычный user: login без verify → 403 EMAIL_NOT_VERIFIED
+
+forgot/reset для обычного user → письмо → reset ok
+
+admin/superadmin: login без verify → ok
+
+admin/superadmin: forgot-password публичный → не шлёт, всё равно 200 ok
+
+admin reset из SuperAdmin → работает
+
+Подтверждение: OTP не используется при обычном логине.​
+
+END PROMPT.
