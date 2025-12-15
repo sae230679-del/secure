@@ -1,0 +1,721 @@
+ROLE: You are Replit Agent / Staff full‑stack engineer.
+PROJECT: SecureLex.ru — Express + React/Vite + Drizzle ORM + PostgreSQL.
+MISSION: Implement everything below end‑to‑end, including DB schema (enums+jsonb), migrations, API endpoints (PDN consent, SEO, limits), background job, UI, Docker, tests, and deployment docs.
+
+🚫 ABSOLUTE CONSTRAINTS (NON‑NEGOTIABLE)
+Do NOT modify the audit engine. Do NOT change server/audit-engine.ts — keep runExpressAudit, runAudit, runAllChecks, fetchWebsite, AI scoring, categories, statuses intact.
+
+Keep existing API contracts working: POST /api/public/express-check and POST /api/audits must remain unchanged.
+
+Use existing stack and scripts:
+
+Node.js 20.x
+
+npm run dev (development)
+
+npm run build (production build)
+
+npm run start (production server)
+
+npm run dbpush (Drizzle push schema)
+
+All DB changes via Drizzle schema + migrations (drizzle-kit).
+
+📋 SCOPE — IMPLEMENT ALL
+A) DRIZZLE "MODELS" (enum + JSONB + timestamptz)
+Use Drizzle's pgEnum, jsonb, timestamp({ withTimezone: true }) as per official docs.
+
+Enums:
+
+pdn_consent_event_type: 'GIVEN' | 'WITHDRAWN'
+
+pdn_destruction_status: 'SCHEDULED' | 'DONE' | 'LEGAL_HOLD'
+
+pdn_destruction_method: 'anonymize' | 'delete'
+
+free_limit_subject_type: 'user' | 'anon'
+
+New Tables:
+
+pdn_consent_events
+
+id serial PK
+
+user_id integer FK → users.id ON DELETE CASCADE
+
+event_type enum NOT NULL
+
+event_at timestamptz default now NOT NULL
+
+document_version text NOT NULL
+
+ip text NULL
+
+user_agent text NULL
+
+source text NOT NULL // 'register' | 'checkout' | 'lk'
+
+meta jsonb NOT NULL default {}
+
+Indexes: (user_id, event_type, event_at)
+
+pdn_destruction_acts
+
+id serial PK
+
+user_id FK → users.id ON DELETE CASCADE
+
+created_at timestamptz default now NOT NULL
+
+method enum NOT NULL
+
+summary text NOT NULL
+
+operator_user_id FK → users.id ON DELETE SET NULL
+
+details jsonb NOT NULL default {}
+
+pdn_destruction_tasks
+
+id serial PK
+
+user_id FK → users.id ON DELETE CASCADE
+
+status enum NOT NULL default 'SCHEDULED'
+
+scheduled_at timestamptz NOT NULL
+
+done_at timestamptz NULL
+
+legal_hold_reason text NULL
+
+destruction_act_id FK → pdn_destruction_acts.id ON DELETE SET NULL
+
+meta jsonb NOT NULL default {}
+
+created_at timestamptz default now NOT NULL
+
+updated_at timestamptz default now NOT NULL
+
+Indexes: (status, scheduled_at), (user_id)
+
+free_express_limit_events
+
+id serial PK
+
+subject_type enum ('user' | 'anon') NOT NULL
+
+user_id integer NULL FK → users.id ON DELETE CASCADE
+
+anon_hash text NULL // sha256(ip + '|' + user-agent)
+
+created_at timestamptz default now NOT NULL
+
+meta jsonb NOT NULL default {}
+
+Indexes: (subject_type, user_id, created_at), (subject_type, anon_hash, created_at)
+
+seo_pages
+
+id serial PK
+
+slug text UNIQUE NOT NULL
+
+h1 text NOT NULL
+
+title text NOT NULL
+
+description text NOT NULL
+
+content text NOT NULL // markdown
+
+is_active boolean NOT NULL default true
+
+meta jsonb NOT NULL default {}
+
+created_at timestamptz default now NOT NULL
+
+updated_at timestamptz default now NOT NULL
+
+B) SYSTEMSETTINGS (use existing settings table)
+The project already has settings(key text PK, value jsonb NOT NULL).
+Store all systemsettings as { "value": ... } in JSONB.
+
+Ensure these keys exist (seed defaults if missing):
+
+PDN & Limits:
+
+pdn_consent_document_version: string, default "1.0"
+
+free_express_limit_enabled: boolean, default true
+
+free_express_limit_per_24h: number, default 5
+
+free_express_limit_reset_after_paid_990_enabled: boolean, default true
+
+SEO:
+
+seo_site_name, seo_default_title, seo_default_description, seo_default_keywords
+
+seo_og_title, seo_og_description, seo_og_image_url, seo_twitter_card
+
+seo_canonical_base_url, seo_robots_default, seo_schema_org_enabled
+
+seo_sitemap_enabled, seo_robots_txt, seo_head_inject_html, seo_body_inject_html
+
+Robokassa:
+
+robokassa_enabled, robokassa_merchant_login, robokassa_password1, robokassa_password2, robokassa_is_test, robokassa_description_template
+
+C) ADMIN SETTINGS API (requireSuperAdmin)
+GET /api/admin/settings
+
+Return all keys + typed values.
+
+Mask secrets: robokassa_password1, robokassa_password2 → return "***" on GET.
+
+PUT /api/admin/settings
+
+Body: { updates: { [key: string]: any } }
+
+Validate types per key.
+
+Upsert into settings (ON CONFLICT key DO UPDATE).
+
+D) PDN CONSENT MANAGEMENT (EXPRESS ENDPOINTS)
+User endpoints (requireAuth):
+GET /api/me/pdn-status
+
+Returns:
+
+json
+{
+  "lastGivenAt": "2025-12-15T...",
+  "lastWithdrawnAt": null,
+  "scheduledDestructionAt": null,
+  "destructionStatus": "NONE" | "SCHEDULED" | "DONE" | "LEGAL_HOLD",
+  "documentVersion": "1.0"
+}
+POST /api/me/withdraw-pdn-consent
+
+Write pdn_consent_events WITHDRAWN (document_version from settings).
+
+Create pdn_destruction_tasks: scheduled_at = now + interval '30 days', status = 'SCHEDULED'.
+
+Destroy session (logout).
+
+Return { success: true, scheduledDestructionAt }.
+
+Law requirement: 152‑ФЗ ст.21 п.5 — destruction within 30 days after withdrawal.
+
+Admin endpoints (requireSuperAdmin):
+GET /api/admin/pdn/withdrawals
+
+List last 200 WITHDRAWN events.
+
+GET /api/admin/pdn/destruction-tasks?status=SCHEDULED|DONE|LEGAL_HOLD
+
+POST /api/admin/pdn/destruction-tasks/:id/legal-hold
+
+Body: { reason: string }
+
+Update task: status = 'LEGAL_HOLD', legal_hold_reason = reason.
+
+POST /api/admin/pdn/destruction-tasks/:id/run-now
+
+Manual execution: run destruction immediately, write operator_user_id.
+
+E) PDN DESTRUCTION JOB (IN-PROCESS, NO EXTERNAL SERVICES)
+Implement a safe background job in the server process:
+
+Runs every 6 hours (setInterval only in production).
+
+Select tasks: status = 'SCHEDULED' AND scheduled_at <= now.
+
+For each task:
+
+Skip if status = 'LEGAL_HOLD'.
+
+Execute storage.deleteUserOrAnonymize(userId) (implement in storage if missing).
+
+Create pdn_destruction_acts record.
+
+Update task: status = 'DONE', done_at = now, set destruction_act_id.
+
+Important:
+
+Must NOT touch audit-engine.ts.
+
+User deletion should cascade or anonymize (email → random hash, nullify PII).
+
+Invalidate sessions if stored by userId.
+
+F) TWO CHECKBOXES BEFORE PAYMENT (152‑ФЗ COMPLIANCE)
+On all paid checkouts (PDF 900 ₽, RKN 10 ₽, full audit):
+
+Require TWO independent checkboxes:
+
+☐ "Принимаю условия договора‑оферты" (link: /user-agreement)
+
+☐ "Даю согласие на обработку персональных данных" (link: /personal-data-consent)
+
+Payment button enabled ONLY if both checked.
+
+Law requirement: Consent must be separate and informed per 152‑ФЗ ст.9.
+
+When PDN checkbox is ticked and payment initiated:
+
+Write pdn_consent_events GIVEN with:
+
+document_version from settings.pdn_consent_document_version
+
+source = 'checkout'
+
+ip, user_agent
+
+G) FREE EXPRESS LIMITS (ADMIN CONTROLLED)
+Before running runExpressAudit in POST /api/public/express-check:
+
+If free_express_limit_enabled = false → allow.
+
+Determine subject:
+
+If session userId exists: subject_type = 'user', user_id = userId
+
+Else: subject_type = 'anon', anon_hash = sha256(ip + '|' + user_agent)
+
+Count free_express_limit_events for subject in last 24h.
+
+If count >= free_express_limit_per_24h → return 429 with message + remainingSeconds.
+
+Else: insert event and proceed.
+
+Add public endpoint:
+
+GET /api/public/express-limit-status
+
+Returns: { remaining: number, limit: number, resetInSeconds: number }
+
+UI:
+
+Show "Осталось N из X сегодня" if possible.
+
+On 429: clear error message + CTA to paid service.
+
+H) SEO PAGES + SITEMAP + ROBOTS
+Public endpoints:
+GET /sitemap.xml
+
+List: home page + static pages + all active seo_pages.
+
+GET /robots.txt
+
+From settings.seo_robots_txt or default that includes Sitemap: https://securelex.ru/sitemap.xml.
+
+GET /seo/:slug
+
+Render seo_pages by slug (if is_active = true).
+
+Set meta: title, description, canonical, OG tags from page + settings defaults.
+
+Render content (markdown → HTML, sanitize).
+
+Admin CRUD (requireSuperAdmin):
+GET /api/admin/seo-pages (list)
+
+POST /api/admin/seo-pages (create)
+
+PUT /api/admin/seo-pages/:id (update)
+
+DELETE /api/admin/seo-pages/:id (soft-delete: is_active = false)
+
+I) ROBOKASSA (IF ENABLED)
+If robokassa_enabled = true:
+
+Payment URL generation: compute SignatureValue from MerchantLogin:OutSum:InvId:Password#1.​
+
+Result callback verification: OutSum:InvId:Password#2 + custom params if used.
+
+Do NOT hardcode prices: use package price from DB.
+
+Mask secrets on GET /api/admin/settings.
+
+J) DRIZZLE MIGRATIONS
+Add scripts to package.json:
+
+json
+"db:generate": "drizzle-kit generate",
+"db:migrate": "drizzle-kit migrate"
+Generate migration:
+
+Run npm run db:generate for enums + new tables + indexes.
+
+If drizzle-kit has enum migration bugs, write safe SQL migration manually (CREATE TYPE IF NOT EXISTS).
+
+Commit migrations to version control.
+
+For production: prefer npm run db:migrate over dbpush.
+
+K) DOCKERFILE + DOCKER-COMPOSE
+Create production-ready Docker:
+
+Dockerfile (multi-stage):
+text
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/server/fonts ./server/fonts
+ENV NODE_ENV=production
+ENV PORT=5000
+EXPOSE 5000
+CMD ["node", "dist/index.cjs"]
+docker-compose.yml:
+text
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: securelex-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: securelex
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: securelex
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U securelex"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - securelex-net
+
+  app:
+    build: .
+    container_name: securelex-app
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DATABASE_URL: postgresql://securelex:${DB_PASSWORD}@postgres:5432/securelex
+      SESSION_SECRET: ${SESSION_SECRET}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      GIGACHAT_API_KEY: ${GIGACHAT_API_KEY}
+      SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL}
+      SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD}
+      SUPERADMIN_NAME: ${SUPERADMIN_NAME}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - securelex-net
+    command: sh -c "npm run db:migrate && npm run start"
+
+volumes:
+  postgres_data:
+
+networks:
+  securelex-net:
+    driver: bridge
+L) TESTS (MINIMUM, REAL)
+Add Vitest + Supertest tests:
+
+Express-limit test:
+
+Hit /api/public/express-check N+1 times.
+
+First N requests → 200.
+
+(N+1)th request → 429 (if limit enabled).
+
+Mock runExpressAudit at import boundary so we don't hit network, BUT do NOT modify audit-engine.
+
+PDN withdrawal test:
+
+POST /api/me/withdraw-pdn-consent.
+
+Assert: pdn_consent_events WITHDRAWN created.
+
+Assert: pdn_destruction_tasks SCHEDULED created with scheduled_at = now + 30 days.
+
+Assert: session destroyed.
+
+Admin settings test:
+
+GET /api/admin/settings → secrets masked as "***".
+
+PUT /api/admin/settings → upsert works.
+
+GET again → new values returned (secrets still masked).
+
+DB: use test DATABASE_URL or same DB with schema isolation; truncate tables in beforeEach.
+
+📦 DELIVERABLES
+Create/update these files:
+
+.env.example (see below)
+
+.replit (see below)
+
+INSTALL.md (see below)
+
+Drizzle schema (shared/schema.ts or wherever current schema lives) with enums + new tables
+
+Migrations (drizzle-kit generated + manual if needed)
+
+Server endpoints (server/routes.ts): PDN, limits, SEO, admin settings
+
+Background job (server/index.ts or separate module)
+
+Client UI (React): two checkboxes on checkout, PDN withdrawal page, admin settings/SEO pages CRUD
+
+Dockerfile + docker-compose.yml
+
+Tests (tests/ or server/tests/)
+
+📄 FILE TEMPLATES (COPY VERBATIM)
+.env.example
+bash
+# Database
+DATABASE_URL=postgresql://securelex:YOUR_PASSWORD@localhost:5432/securelex
+
+# Sessions (required in production; minimum 32 chars)
+SESSION_SECRET=your-32-char-random-secret-here
+
+# AI (optional)
+OPENAI_API_KEY=sk-your-openai-key
+GIGACHAT_API_KEY=your-gigachat-key
+
+# Superadmin (created on startup)
+SUPERADMIN_EMAIL=admin@securelex.ru
+SUPERADMIN_PASSWORD=YourSecurePassword123!
+SUPERADMIN_NAME=Admin
+
+# Runtime
+NODE_ENV=production
+PORT=5000
+
+# Optional: for CORS allowlist on Replit
+REPLIT_URL=https://your-repl-name.your-user.repl.co
+.replit
+text
+run = "npm run dev"
+
+[deployment]
+run = "npm run build && npm run db:migrate && npm run start"
+INSTALL.md
+text
+# SecureLex.ru — Installation Guide
+
+## Option 1: Replit Deployments
+
+1. **Fork/Import** this project to Replit.
+2. **Set Secrets** (Tools → Secrets or .env):
+   - Copy values from `.env.example`
+   - Generate strong `SESSION_SECRET` (32+ chars)
+   - Add `DATABASE_URL` (use Replit Postgres or external Postgres)
+   - Add API keys if using OpenAI/GigaChat
+   - Set superadmin credentials
+3. **Run migrations:**
+   ```bash
+   npm run db:migrate
+Start dev server:
+
+bash
+npm run dev
+Or click Run button (executes .replit run command).
+
+Deploy:
+
+Click Deploy in Replit.
+
+Deployment command (see .replit): npm run build && npm run db:migrate && npm run start
+
+Custom domain (optional):
+
+Go to Deployments → Custom Domain.
+
+Follow DNS instructions (CNAME or A record).
+
+SSL is automatic.
+
+Option 2: VPS (Ubuntu 22.04) with Docker
+Prerequisites
+Ubuntu 22.04 server
+
+SSH access
+
+Domain pointed to server IP (A record: securelex.ru → your_server_ip)
+
+Step 1: Install Docker
+bash
+sudo apt update && sudo apt upgrade -y
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+sudo apt install docker-compose-plugin nginx certbot python3-certbot-nginx -y
+Logout and login again to apply docker group.
+
+Step 2: Deploy application
+bash
+sudo mkdir -p /opt/securelex
+sudo chown $USER:$USER /opt/securelex
+cd /opt/securelex
+Clone or upload project files to /opt/securelex.
+
+Step 3: Configure environment
+bash
+nano .env
+Fill in values (use .env.example as template):
+
+DB_PASSWORD (strong random password)
+
+SESSION_SECRET (32+ chars random string)
+
+OPENAI_API_KEY, GIGACHAT_API_KEY (if using AI)
+
+SUPERADMIN_EMAIL, SUPERADMIN_PASSWORD, SUPERADMIN_NAME
+
+Save and exit (Ctrl+X, Y, Enter).
+
+Step 4: Build and start containers
+bash
+docker compose up -d --build
+Check status:
+
+bash
+docker compose ps
+docker compose logs -f app
+Migrations run automatically on container start (see docker-compose.yml command).
+
+Step 5: Configure Nginx reverse proxy
+bash
+sudo nano /etc/nginx/sites-available/securelex.ru
+Paste:
+
+text
+server {
+    listen 80;
+    server_name securelex.ru www.securelex.ru;
+
+    location / {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 75s;
+        client_max_body_size 10M;
+    }
+}
+Enable site:
+
+bash
+sudo ln -s /etc/nginx/sites-available/securelex.ru /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+Step 6: Enable HTTPS with Let's Encrypt
+bash
+sudo certbot --nginx -d securelex.ru -d www.securelex.ru
+Follow prompts. Certbot will auto-configure SSL and set up auto-renewal.
+
+Step 7: Verify deployment
+bash
+curl https://securelex.ru
+View logs:
+
+bash
+docker compose logs -f app
+Maintenance
+Update application:
+
+bash
+cd /opt/securelex
+git pull  # or upload new files
+docker compose down
+docker compose up -d --build
+Backup database:
+
+bash
+docker compose exec postgres pg_dump -U securelex securelex > backup_$(date +%Y%m%d).sql
+Restore database:
+
+bash
+cat backup_20251215.sql | docker compose exec -T postgres psql -U securelex securelex
+Troubleshooting
+Port 80/443 already in use:
+
+bash
+sudo lsof -i :80
+sudo lsof -i :443
+# Stop conflicting service or kill process
+Database connection errors:
+
+Check DATABASE_URL in .env
+
+Verify postgres container is healthy: docker compose ps
+
+Check logs: docker compose logs postgres
+
+Session errors:
+
+Ensure SESSION_SECRET is set and at least 32 chars
+
+Check session store table exists in DB
+
+Migrations not running:
+
+bash
+docker compose exec app npm run db:migrate
+Security Checklist
+✅ Strong SESSION_SECRET (32+ random chars)
+
+✅ Strong DB_PASSWORD
+
+✅ Firewall enabled (ufw allow 22,80,443)
+
+✅ Secrets not committed to git (.env in .gitignore)
+
+✅ HTTPS enabled via Certbot
+
+✅ Regular updates: docker compose pull && docker compose up -d
+
+text
+
+***
+
+## ✅ ACCEPTANCE CRITERIA
+
+1. **audit-engine.ts unchanged.**
+2. **Two checkboxes before payment:** offer separate from PDN consent; events saved with `document_version`.
+3. **Withdrawal creates destruction schedule:** job executes every 6h; admin can legal-hold; 30-day rule respected.
+4. **Drizzle enums+jsonb tables exist and migrated.**
+5. **Docker builds and runs** with Postgres; migrations run on startup.
+6. **Tests added and passing** (express-limit 429, withdrawal creates task, settings masked).
+7. **SEO pages CRUD + sitemap/robots implemented.**
+8. **Robokassa signature per official docs.**
+9. **INSTALL.md complete** with Replit and VPS instructions.
+
+***
+
+**END OF PROMPT. COPY AND PASTE THIS ENTIRE MESSAGE TO REPLIT AGENT.**
+
+
+
