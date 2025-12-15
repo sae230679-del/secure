@@ -1,0 +1,2 @@
+secret_key=test_*gUWfiAASo2TtTuRSWUQKsi6Hq5_9LiG_qlClJq5uNN6Y
+gate_id=512303
