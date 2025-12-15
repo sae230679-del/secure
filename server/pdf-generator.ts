@@ -4,6 +4,7 @@ import path from "path";
 import fs from "fs";
 
 const FONT_PATH = path.join(process.cwd(), "server/fonts/DejaVuSans.ttf");
+const FONT_NAME = "DejaVu";
 
 function getFontPath(): string {
   if (fs.existsSync(FONT_PATH)) {
@@ -15,6 +16,11 @@ function getFontPath(): string {
   }
   console.error(`[PDF-GEN] Font not found: ${FONT_PATH} or ${altPath}`);
   return FONT_PATH;
+}
+
+function addPageWithFont(doc: PDFKit.PDFDocument): void {
+  doc.addPage();
+  doc.font(FONT_NAME);
 }
 
 // AI mode type
@@ -163,7 +169,7 @@ function renderFullAIBlock(doc: PDFKit.PDFDocument, data: AuditReportData): void
   
   // Check if we need a new page
   if (startY + totalHeight > 720) {
-    doc.addPage();
+    addPageWithFont(doc);
   }
   
   const boxY = doc.y;
@@ -334,8 +340,8 @@ export async function generatePdfReport(data: AuditReportData): Promise<Buffer> 
     const fontPath = getFontPath();
     console.log(`[PDF-GEN] Using font: ${fontPath}, exists: ${fs.existsSync(fontPath)}`);
     try {
-      doc.registerFont("DejaVu", fontPath);
-      doc.font("DejaVu");
+      doc.registerFont(FONT_NAME, fontPath);
+      doc.font(FONT_NAME);
       console.log(`[PDF-GEN] DejaVu font registered successfully`);
     } catch (fontError) {
       console.error(`[PDF-GEN] Font error, using Helvetica: ${fontError}`);
@@ -436,7 +442,7 @@ export async function generatePdfReport(data: AuditReportData): Promise<Buffer> 
       }
     }
 
-    doc.addPage();
+    addPageWithFont(doc);
     doc.fontSize(16)
        .fillColor(primaryColor)
        .text("ДЕТАЛЬНЫЕ РЕЗУЛЬТАТЫ ПРОВЕРКИ", { underline: true });
@@ -453,7 +459,7 @@ export async function generatePdfReport(data: AuditReportData): Promise<Buffer> 
 
     Object.entries(groupedCriteria).forEach(([category, criteriaList]) => {
       if (doc.y > 700) {
-        doc.addPage();
+        addPageWithFont(doc);
       }
 
       doc.fontSize(13)
@@ -463,7 +469,7 @@ export async function generatePdfReport(data: AuditReportData): Promise<Buffer> 
 
       criteriaList.forEach((criterion, idx) => {
         if (doc.y > 720) {
-          doc.addPage();
+          addPageWithFont(doc);
         }
 
         const statusIcon = criterion.status === "passed" ? "✓" : 
@@ -503,7 +509,7 @@ export async function generatePdfReport(data: AuditReportData): Promise<Buffer> 
     const hasViolations = data.failedCount > 0 || data.warningCount > 0;
     
     if (hasViolations) {
-      doc.addPage();
+      addPageWithFont(doc);
       doc.fontSize(16)
          .fillColor(dangerColor)
          .text("⚠ ИНФОРМАЦИЯ О ШТРАФАХ И РИСКАХ", { underline: true });
@@ -516,7 +522,7 @@ export async function generatePdfReport(data: AuditReportData): Promise<Buffer> 
 
       Object.entries(FINES_INFO).forEach(([key, info]) => {
         if (doc.y > 680) {
-          doc.addPage();
+          addPageWithFont(doc);
         }
 
         doc.fontSize(12)
@@ -551,7 +557,7 @@ export async function generatePdfReport(data: AuditReportData): Promise<Buffer> 
       doc.y = warnBoxY + 100;
     }
 
-    doc.addPage();
+    addPageWithFont(doc);
     doc.fontSize(16)
        .fillColor(primaryColor)
        .text("РЕКОМЕНДАЦИИ ПО УСТРАНЕНИЮ", { underline: true });
@@ -568,7 +574,7 @@ export async function generatePdfReport(data: AuditReportData): Promise<Buffer> 
 
       failedCriteria.forEach((c, idx) => {
         if (doc.y > 700) {
-          doc.addPage();
+          addPageWithFont(doc);
         }
         doc.fontSize(10)
            .fillColor("#1f2937")
@@ -590,7 +596,7 @@ export async function generatePdfReport(data: AuditReportData): Promise<Buffer> 
 
       warningCriteria.forEach((c, idx) => {
         if (doc.y > 700) {
-          doc.addPage();
+          addPageWithFont(doc);
         }
         doc.fontSize(10)
            .fillColor("#1f2937")
@@ -601,7 +607,7 @@ export async function generatePdfReport(data: AuditReportData): Promise<Buffer> 
       doc.moveDown(1);
     }
 
-    doc.addPage();
+    addPageWithFont(doc);
     
     doc.rect(50, doc.y, 495, 200)
        .fillColor("#eff6ff")

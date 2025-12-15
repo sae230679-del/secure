@@ -1,0 +1,123 @@
+ROLE: Ты Replit Agent / Senior full‑stack engineer.
+PROJECT: SecureLex.ru (аудит 152‑ФЗ). Правки точечно в текущем репозитории, без переписывания с нуля.​
+
+Цели спринта
+YooKassa: стабильная успешная оплата expressreport (900 ₽) без 4xx/5xx, улучшить диагностику и админ‑настройки.​
+
+Robokassa: добавить как второй провайдер (создание платежа + callback с проверкой подписи).​
+
+Рассрочка/доли: единый UX (баннер + модалка выбора) и настройки в админке.​
+
+ЛК iPhone: отчёты не должны зависеть от localStorage/sessionStorage; источник правды — API.​
+
+PDF (iPhone кириллица): закрепить решение с валидным DejaVuSans.ttf и корректным применением шрифта на всех страницах.​
+
+Добавить новую услугу (новый пакет) “Проверка наличия уведомления в РКН” по умолчанию 10 ₽ (для теста реальной кассы) + возможность менять цену в админке.​
+
+0) Жёсткие требования
+Никаких хардкодов ключей/merchantId/паролей — только systemsettings/секреты на сервере.​
+
+Секреты не логировать и маскировать в админке (YooKassa secretKey, Robokassa password1/password2).​
+
+Суммы/названия/описания платежей — строго из audit_packages.​
+
+YooKassa: всегда перезаписывать debug/yookassa-last-payload.json и debug/yookassa-last-response.json; в админке показывать последний HTTP‑код + code + description.​
+
+1) YooKassa — доведение до success на 900 ₽
+Backend
+
+Синхронизировать shopId/secretKey/test|prod режим с кабинетом YooKassa; несоответствия должны быть видны через диагностику в админке. ​
+
+Разобрать 401 invalid_credentials / “Authentication type is not allowed”:
+
+при payment_method_data.type="sbp" не отправлять authentication_type и card‑поля;​
+
+если СБП не подключён — скрыть/отключить его в UI и не отправлять этот метод.​
+
+Frontend
+
+Проверить компонент/сценарий YooKassa: параметры берутся из API/конфига, токены создаёт сервер и они актуальны на момент оплаты.​
+
+Acceptance
+
+Оплата пакета expressreport (900 ₽) создаётся успешно и ведёт на оплату (redirect/confirmation без 4xx/5xx).​
+
+2) Robokassa — интеграция
+Systemsettings + админка
+
+robokassa_enabled, robokassa_merchant_login, robokassa_password1, robokassa_password2, robokassa_is_test, robokassa_description_template (с {packageName}); секреты скрывать/не логировать.​
+
+Backend
+
+POST /api/payments/create-robokassa (requireAuth) → { paymentUrl }.​
+
+GET/POST /api/payments/robokassa/callback → проверка подписи → статус paid/completed + запись транзакции.​
+
+Frontend
+
+Если Robokassa включена — выбор провайдера; Robokassa → redirect на paymentUrl.​
+
+3) Рассрочка/доли — единый UX
+Systemsettings + админка
+
+installments_yookassa_enabled, installments_robokassa_enabled, installments_banner_title, installments_banner_text.​
+
+UX
+
+На страницах оплаты: основная “Оплатить” остаётся; при включенной рассрочке — баннер + кнопка + модалка выбора провайдера рассрочки.​
+
+4) ЛК на iPhone — отчёты исчезают
+Убрать зависимость от localStorage/sessionStorage; список аудитов всегда грузить из API (например, /api/audits).​
+
+Ошибки localStorage на iOS перехватывать, UI не ломать; подтверждение на iPhone/эмуляторе.​
+
+5) PDF (кириллица iPhone) — закрепить фикс
+В репозитории валидный server/fonts/DejaVuSans.ttf (не битый/не урезанный).​
+
+В server/pdf-generator.ts: registerFont("DejaVu", path) и после каждого doc.addPage() снова ставить doc.font("DejaVu") перед текстом.​
+
+Добавить scripts/test-pdf-cyrillic.ts + npm-команду, которая генерирует тестовый PDF с русским текстом и падает, если registerFont не проходит.​
+
+6) Новая услуга: “Проверка наличия уведомления в РКН” (10 ₽)
+Требование бизнеса
+
+Это тест реальной кассы: по умолчанию цена 10 ₽, но она должна редактироваться в админке (как и у остальных пакетов).​
+
+Backend/DB
+
+Добавить новый пакет в audit_packages через миграцию/seed:
+
+packageType: например rkn_notice_check (уникальный)
+
+name: “Проверка наличия уведомления в РКН”
+
+price: 10
+
+is_active: true
+
+service: выбрать так, чтобы пакет показывался в нужном разделе витрины (если есть отдельный фильтр — добавить/обновить фильтрацию /api/public/packages).​
+
+Убедиться, что:
+
+/api/public/packages отдаёт новый пакет.​
+
+Создание заказа/аудита для этого packageType проходит тем же способом, что и остальные (либо через существующий POST /api/audits, либо через отдельный “order” — не ломая текущую модель).​
+
+Оплата YooKassa/Robokassa подхватывает цену и описание из БД автоматически.​
+
+Админка
+
+Если уже есть интерфейс управления пакетами — добавить туда редактирование цены для этого пакета.
+
+Если управления пакетами нет: реализовать минимальный CRUD/редактор для audit_packages в админке (как минимум: изменить price и is_active) без раскрытия секретов платежек.​
+
+Frontend
+
+На витрине услуг показать новую услугу как отдельную карточку/пункт, подтянутый из API.
+
+Поток оплаты и результат (после успешной оплаты) должны быть одинаковыми по UX с expressreport.​
+
+7) Финальные артефакты
+README: какие systemsettings нужны и как включать/настраивать YooKassa/Robokassa/рассрочку + где менять цену пакета “Проверка наличия уведомления в РКН”.​
+
+Чек‑лист ручной проверки: YooKassa 900 ₽, YooKassa 10 ₽, Robokassa, рассрочка баннер, ЛК iPhone, PDF кириллица.​
