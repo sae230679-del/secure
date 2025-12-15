@@ -1151,6 +1151,332 @@ export class DatabaseStorage implements IStorage {
   async getAllSecureSettings(): Promise<schema.SecureSetting[]> {
     return db.select().from(schema.secureSettings);
   }
+
+  // =====================================================
+  // PDN Consent Methods
+  // =====================================================
+  async getAllSystemSettings(): Promise<SystemSetting[]> {
+    return db.select().from(schema.systemSettings);
+  }
+
+  async createPdnConsentEvent(data: {
+    userId: number;
+    eventType: "GIVEN" | "WITHDRAWN";
+    documentVersion: string;
+    ip: string | null;
+    userAgent: string | null;
+    source: string;
+    meta: Record<string, any>;
+  }): Promise<schema.PdnConsentEvent> {
+    const [event] = await db
+      .insert(schema.pdnConsentEvents)
+      .values({
+        userId: data.userId,
+        eventType: data.eventType,
+        documentVersion: data.documentVersion,
+        ip: data.ip,
+        userAgent: data.userAgent,
+        source: data.source,
+        meta: data.meta,
+      })
+      .returning();
+    return event;
+  }
+
+  async getPdnStatus(userId: number): Promise<{
+    lastGivenAt: string | null;
+    lastWithdrawnAt: string | null;
+    scheduledDestructionAt: string | null;
+    destructionStatus: "NONE" | "SCHEDULED" | "DONE" | "LEGAL_HOLD";
+    documentVersion: string;
+  }> {
+    const docVersion = await this.getSystemSetting("pdn_consent_document_version");
+    
+    const [lastGiven] = await db
+      .select()
+      .from(schema.pdnConsentEvents)
+      .where(and(
+        eq(schema.pdnConsentEvents.userId, userId),
+        eq(schema.pdnConsentEvents.eventType, "GIVEN")
+      ))
+      .orderBy(desc(schema.pdnConsentEvents.eventAt))
+      .limit(1);
+
+    const [lastWithdrawn] = await db
+      .select()
+      .from(schema.pdnConsentEvents)
+      .where(and(
+        eq(schema.pdnConsentEvents.userId, userId),
+        eq(schema.pdnConsentEvents.eventType, "WITHDRAWN")
+      ))
+      .orderBy(desc(schema.pdnConsentEvents.eventAt))
+      .limit(1);
+
+    const [task] = await db
+      .select()
+      .from(schema.pdnDestructionTasks)
+      .where(eq(schema.pdnDestructionTasks.userId, userId))
+      .orderBy(desc(schema.pdnDestructionTasks.createdAt))
+      .limit(1);
+
+    let destructionStatus: "NONE" | "SCHEDULED" | "DONE" | "LEGAL_HOLD" = "NONE";
+    if (task) {
+      destructionStatus = task.status as "SCHEDULED" | "DONE" | "LEGAL_HOLD";
+    }
+
+    return {
+      lastGivenAt: lastGiven?.eventAt?.toISOString() || null,
+      lastWithdrawnAt: lastWithdrawn?.eventAt?.toISOString() || null,
+      scheduledDestructionAt: task?.scheduledAt?.toISOString() || null,
+      destructionStatus,
+      documentVersion: docVersion?.value || "1.0",
+    };
+  }
+
+  async createPdnDestructionTask(data: {
+    userId: number;
+    status: "SCHEDULED" | "DONE" | "LEGAL_HOLD";
+    scheduledAt: Date;
+    meta: Record<string, any>;
+  }): Promise<schema.PdnDestructionTask> {
+    const [task] = await db
+      .insert(schema.pdnDestructionTasks)
+      .values({
+        userId: data.userId,
+        status: data.status,
+        scheduledAt: data.scheduledAt,
+        meta: data.meta,
+      })
+      .returning();
+    return task;
+  }
+
+  async getPdnWithdrawals(limit: number): Promise<schema.PdnConsentEvent[]> {
+    return db
+      .select()
+      .from(schema.pdnConsentEvents)
+      .where(eq(schema.pdnConsentEvents.eventType, "WITHDRAWN"))
+      .orderBy(desc(schema.pdnConsentEvents.eventAt))
+      .limit(limit);
+  }
+
+  async getPdnDestructionTasks(status?: string): Promise<schema.PdnDestructionTask[]> {
+    if (status) {
+      return db
+        .select()
+        .from(schema.pdnDestructionTasks)
+        .where(eq(schema.pdnDestructionTasks.status, status as "SCHEDULED" | "DONE" | "LEGAL_HOLD"))
+        .orderBy(desc(schema.pdnDestructionTasks.createdAt));
+    }
+    return db
+      .select()
+      .from(schema.pdnDestructionTasks)
+      .orderBy(desc(schema.pdnDestructionTasks.createdAt));
+  }
+
+  async setPdnTaskLegalHold(taskId: number, reason: string): Promise<void> {
+    await db
+      .update(schema.pdnDestructionTasks)
+      .set({ status: "LEGAL_HOLD", legalHoldReason: reason, updatedAt: new Date() })
+      .where(eq(schema.pdnDestructionTasks.id, taskId));
+  }
+
+  async executePdnDestruction(taskId: number, operatorUserId: number): Promise<{ success: boolean; actId?: number }> {
+    const [task] = await db.select().from(schema.pdnDestructionTasks).where(eq(schema.pdnDestructionTasks.id, taskId));
+    if (!task || task.status === "DONE" || task.status === "LEGAL_HOLD") {
+      return { success: false };
+    }
+
+    // Create destruction act
+    const [act] = await db
+      .insert(schema.pdnDestructionActs)
+      .values({
+        userId: task.userId,
+        method: "anonymize",
+        summary: `Данные пользователя ${task.userId} анонимизированы по запросу`,
+        operatorUserId,
+        details: { taskId, executedAt: new Date().toISOString() },
+      })
+      .returning();
+
+    // Anonymize user data
+    await this.anonymizeUser(task.userId);
+
+    // Update task
+    await db
+      .update(schema.pdnDestructionTasks)
+      .set({ status: "DONE", doneAt: new Date(), destructionActId: act.id, updatedAt: new Date() })
+      .where(eq(schema.pdnDestructionTasks.id, taskId));
+
+    return { success: true, actId: act.id };
+  }
+
+  async anonymizeUser(userId: number): Promise<void> {
+    const randomHash = require("crypto").randomBytes(16).toString("hex");
+    await db
+      .update(schema.users)
+      .set({
+        email: `deleted-${randomHash}@anonymized.local`,
+        name: "Удалённый пользователь",
+        phone: null,
+        companyName: null,
+        inn: null,
+      })
+      .where(eq(schema.users.id, userId));
+  }
+
+  async getScheduledDestructionTasks(): Promise<schema.PdnDestructionTask[]> {
+    return db
+      .select()
+      .from(schema.pdnDestructionTasks)
+      .where(and(
+        eq(schema.pdnDestructionTasks.status, "SCHEDULED"),
+        sql`scheduled_at <= NOW()`
+      ));
+  }
+
+  // =====================================================
+  // Free Express Limit Methods
+  // =====================================================
+  async getExpressLimitStatus(userId: number | undefined, ip: string, userAgent: string): Promise<{
+    remaining: number;
+    limit: number;
+    resetInSeconds: number;
+  }> {
+    const limitEnabledSetting = await this.getSystemSetting("free_express_limit_enabled");
+    const limitEnabled = limitEnabledSetting?.value !== "false";
+    
+    const limitPerDaySetting = await this.getSystemSetting("free_express_limit_per_24h");
+    const limitPerDay = parseInt(limitPerDaySetting?.value || "5", 10);
+
+    if (!limitEnabled) {
+      return { remaining: 999, limit: 999, resetInSeconds: 0 };
+    }
+
+    const dayAgo = new Date();
+    dayAgo.setHours(dayAgo.getHours() - 24);
+
+    let count = 0;
+    let oldestEvent: Date | null = null;
+
+    if (userId) {
+      const events = await db
+        .select()
+        .from(schema.freeExpressLimitEvents)
+        .where(and(
+          eq(schema.freeExpressLimitEvents.subjectType, "user"),
+          eq(schema.freeExpressLimitEvents.userId, userId),
+          gt(schema.freeExpressLimitEvents.createdAt, dayAgo)
+        ))
+        .orderBy(schema.freeExpressLimitEvents.createdAt);
+      count = events.length;
+      if (events.length > 0) {
+        oldestEvent = events[0].createdAt;
+      }
+    } else {
+      const crypto = require("crypto");
+      const anonHash = crypto.createHash("sha256").update(`${ip}|${userAgent}`).digest("hex");
+      const events = await db
+        .select()
+        .from(schema.freeExpressLimitEvents)
+        .where(and(
+          eq(schema.freeExpressLimitEvents.subjectType, "anon"),
+          eq(schema.freeExpressLimitEvents.anonHash, anonHash),
+          gt(schema.freeExpressLimitEvents.createdAt, dayAgo)
+        ))
+        .orderBy(schema.freeExpressLimitEvents.createdAt);
+      count = events.length;
+      if (events.length > 0) {
+        oldestEvent = events[0].createdAt;
+      }
+    }
+
+    const remaining = Math.max(0, limitPerDay - count);
+    let resetInSeconds = 0;
+    if (oldestEvent) {
+      const resetTime = new Date(oldestEvent.getTime() + 24 * 60 * 60 * 1000);
+      resetInSeconds = Math.max(0, Math.floor((resetTime.getTime() - Date.now()) / 1000));
+    }
+
+    return { remaining, limit: limitPerDay, resetInSeconds };
+  }
+
+  async checkAndRecordExpressLimit(userId: number | undefined, ip: string, userAgent: string): Promise<{
+    allowed: boolean;
+    remaining: number;
+    resetInSeconds: number;
+  }> {
+    const status = await this.getExpressLimitStatus(userId, ip, userAgent);
+    
+    if (status.remaining <= 0) {
+      return { allowed: false, remaining: 0, resetInSeconds: status.resetInSeconds };
+    }
+
+    // Record the event
+    const crypto = require("crypto");
+    const anonHash = crypto.createHash("sha256").update(`${ip}|${userAgent}`).digest("hex");
+
+    await db.insert(schema.freeExpressLimitEvents).values({
+      subjectType: userId ? "user" : "anon",
+      userId: userId || null,
+      anonHash: userId ? null : anonHash,
+      meta: {},
+    });
+
+    return { allowed: true, remaining: status.remaining - 1, resetInSeconds: status.resetInSeconds };
+  }
+
+  // =====================================================
+  // SEO Pages Methods
+  // =====================================================
+  async getAllSeoPages(): Promise<schema.SeoPage[]> {
+    return db.select().from(schema.seoPages).orderBy(desc(schema.seoPages.updatedAt));
+  }
+
+  async getSeoPageBySlug(slug: string): Promise<schema.SeoPage | undefined> {
+    const [page] = await db.select().from(schema.seoPages).where(eq(schema.seoPages.slug, slug));
+    return page;
+  }
+
+  async createSeoPage(data: {
+    slug: string;
+    h1: string;
+    title: string;
+    description: string;
+    content: string;
+    isActive?: boolean;
+    meta?: Record<string, any>;
+  }): Promise<schema.SeoPage> {
+    const [page] = await db
+      .insert(schema.seoPages)
+      .values({
+        slug: data.slug,
+        h1: data.h1,
+        title: data.title,
+        description: data.description,
+        content: data.content,
+        isActive: data.isActive ?? true,
+        meta: data.meta || {},
+      })
+      .returning();
+    return page;
+  }
+
+  async updateSeoPage(id: number, data: Partial<schema.SeoPage>): Promise<schema.SeoPage | undefined> {
+    const [page] = await db
+      .update(schema.seoPages)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(schema.seoPages.id, id))
+      .returning();
+    return page;
+  }
+
+  async softDeleteSeoPage(id: number): Promise<void> {
+    await db
+      .update(schema.seoPages)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(schema.seoPages.id, id));
+  }
 }
 
 export const storage = new DatabaseStorage();

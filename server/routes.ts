@@ -2071,14 +2071,17 @@ export async function registerRoutes(
     try {
       const data = expressCheckSchema.parse(req.body);
       const ipAddress = req.ip || req.socket.remoteAddress || "unknown";
-      
-      const freeAuditLimitSetting = await storage.getSystemSetting("free_audit_limit");
-      const freeAuditLimit = freeAuditLimitSetting?.value ? parseInt(freeAuditLimitSetting.value) : 3;
-      
-      const recentAudits = await storage.getRecentPublicAuditsByIp(ipAddress, 1);
-      if (recentAudits.length >= freeAuditLimit) {
+      const userAgent = req.headers["user-agent"] || "";
+      const userId = req.session.userId;
+
+      // Check express limit (uses freeExpressLimitEvents table)
+      const limitCheck = await storage.checkAndRecordExpressLimit(userId, ipAddress, userAgent);
+      if (!limitCheck.allowed) {
+        const hoursRemaining = Math.ceil(limitCheck.resetInSeconds / 3600);
         return res.status(429).json({ 
-          error: "Превышен лимит бесплатных проверок. Попробуйте позже или зарегистрируйтесь для полного доступа." 
+          error: `Превышен лимит бесплатных проверок. Попробуйте через ${hoursRemaining} ч. или зарегистрируйтесь для полного доступа.`,
+          remaining: 0,
+          resetInSeconds: limitCheck.resetInSeconds
         });
       }
 
@@ -2835,6 +2838,316 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("[Robokassa Fail] Error:", error?.message || error);
       res.redirect("/dashboard?error=payment_error");
+    }
+  });
+
+  // =====================================================
+  // Admin Settings API (requireSuperAdmin)
+  // =====================================================
+  const SECRET_KEYS = ["robokassa_password1", "robokassa_password2", "yookassa_secret_key"];
+
+  app.get("/api/admin/settings", requireSuperAdmin, async (req, res) => {
+    try {
+      const allSettings = await storage.getAllSystemSettings();
+      const masked = allSettings.map(s => ({
+        ...s,
+        value: SECRET_KEYS.includes(s.key) && s.value ? "***" : s.value
+      }));
+      res.json(masked);
+    } catch (error: any) {
+      console.error("[Admin Settings GET] Error:", error?.message || error);
+      res.status(500).json({ error: "Failed to fetch settings" });
+    }
+  });
+
+  app.put("/api/admin/settings", requireSuperAdmin, async (req, res) => {
+    try {
+      const { updates } = req.body as { updates: Record<string, any> };
+      if (!updates || typeof updates !== "object") {
+        return res.status(400).json({ error: "updates object required" });
+      }
+
+      for (const [key, value] of Object.entries(updates)) {
+        const stringValue = typeof value === "string" ? value : JSON.stringify(value);
+        await storage.upsertSystemSetting(key, stringValue);
+      }
+
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("[Admin Settings PUT] Error:", error?.message || error);
+      res.status(500).json({ error: "Failed to update settings" });
+    }
+  });
+
+  // =====================================================
+  // PDN User Endpoints (requireAuth)
+  // =====================================================
+  app.get("/api/me/pdn-status", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const status = await storage.getPdnStatus(userId);
+      res.json(status);
+    } catch (error: any) {
+      console.error("[PDN Status] Error:", error?.message || error);
+      res.status(500).json({ error: "Failed to get PDN status" });
+    }
+  });
+
+  app.post("/api/me/withdraw-pdn-consent", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const ip = req.ip || req.socket.remoteAddress || null;
+      const userAgent = req.headers["user-agent"] || null;
+
+      const docVersionSetting = await storage.getSystemSetting("pdn_consent_document_version");
+      const docVersion = docVersionSetting?.value || "1.0";
+
+      // Record withdrawal event
+      await storage.createPdnConsentEvent({
+        userId,
+        eventType: "WITHDRAWN",
+        documentVersion: docVersion,
+        ip,
+        userAgent,
+        source: "lk",
+        meta: {}
+      });
+
+      // Schedule destruction in 30 days per 152-ФЗ ст.21 п.5
+      const scheduledAt = new Date();
+      scheduledAt.setDate(scheduledAt.getDate() + 30);
+
+      await storage.createPdnDestructionTask({
+        userId,
+        status: "SCHEDULED",
+        scheduledAt,
+        meta: {}
+      });
+
+      // Destroy session (logout)
+      req.session.destroy((err) => {
+        if (err) {
+          console.error("[PDN Withdraw] Session destroy error:", err);
+        }
+      });
+
+      res.json({ 
+        success: true, 
+        scheduledDestructionAt: scheduledAt.toISOString() 
+      });
+    } catch (error: any) {
+      console.error("[PDN Withdraw] Error:", error?.message || error);
+      res.status(500).json({ error: "Failed to withdraw consent" });
+    }
+  });
+
+  // =====================================================
+  // PDN Admin Endpoints (requireSuperAdmin)
+  // =====================================================
+  app.get("/api/admin/pdn/withdrawals", requireSuperAdmin, async (req, res) => {
+    try {
+      const events = await storage.getPdnWithdrawals(200);
+      res.json(events);
+    } catch (error: any) {
+      console.error("[PDN Withdrawals] Error:", error?.message || error);
+      res.status(500).json({ error: "Failed to fetch withdrawals" });
+    }
+  });
+
+  app.get("/api/admin/pdn/destruction-tasks", requireSuperAdmin, async (req, res) => {
+    try {
+      const status = req.query.status as string | undefined;
+      const tasks = await storage.getPdnDestructionTasks(status);
+      res.json(tasks);
+    } catch (error: any) {
+      console.error("[PDN Tasks] Error:", error?.message || error);
+      res.status(500).json({ error: "Failed to fetch tasks" });
+    }
+  });
+
+  app.post("/api/admin/pdn/destruction-tasks/:id/legal-hold", requireSuperAdmin, async (req, res) => {
+    try {
+      const taskId = parseInt(req.params.id);
+      const { reason } = req.body as { reason: string };
+      
+      if (!reason) {
+        return res.status(400).json({ error: "reason required" });
+      }
+
+      await storage.setPdnTaskLegalHold(taskId, reason);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("[PDN Legal Hold] Error:", error?.message || error);
+      res.status(500).json({ error: "Failed to set legal hold" });
+    }
+  });
+
+  app.post("/api/admin/pdn/destruction-tasks/:id/run-now", requireSuperAdmin, async (req, res) => {
+    try {
+      const taskId = parseInt(req.params.id);
+      const operatorUserId = req.session.userId!;
+      
+      const result = await storage.executePdnDestruction(taskId, operatorUserId);
+      res.json(result);
+    } catch (error: any) {
+      console.error("[PDN Run Now] Error:", error?.message || error);
+      res.status(500).json({ error: "Failed to execute destruction" });
+    }
+  });
+
+  // =====================================================
+  // Free Express Limit Endpoints
+  // =====================================================
+  app.get("/api/public/express-limit-status", async (req, res) => {
+    try {
+      const userId = req.session.userId;
+      const ip = req.ip || req.socket.remoteAddress || "";
+      const userAgent = req.headers["user-agent"] || "";
+      
+      const status = await storage.getExpressLimitStatus(userId, ip, userAgent);
+      res.json(status);
+    } catch (error: any) {
+      console.error("[Express Limit Status] Error:", error?.message || error);
+      res.status(500).json({ error: "Failed to get limit status" });
+    }
+  });
+
+  // =====================================================
+  // SEO Pages Public Endpoint
+  // =====================================================
+  app.get("/seo/:slug", async (req, res) => {
+    try {
+      const page = await storage.getSeoPageBySlug(req.params.slug);
+      if (!page || !page.isActive) {
+        return res.status(404).json({ error: "Page not found" });
+      }
+      res.json(page);
+    } catch (error: any) {
+      console.error("[SEO Page] Error:", error?.message || error);
+      res.status(500).json({ error: "Failed to fetch page" });
+    }
+  });
+
+  // =====================================================
+  // SEO Pages Admin CRUD
+  // =====================================================
+  app.get("/api/admin/seo-pages", requireSuperAdmin, async (req, res) => {
+    try {
+      const pages = await storage.getAllSeoPages();
+      res.json(pages);
+    } catch (error: any) {
+      console.error("[SEO Pages List] Error:", error?.message || error);
+      res.status(500).json({ error: "Failed to fetch pages" });
+    }
+  });
+
+  app.post("/api/admin/seo-pages", requireSuperAdmin, async (req, res) => {
+    try {
+      const page = await storage.createSeoPage(req.body);
+      res.json(page);
+    } catch (error: any) {
+      console.error("[SEO Page Create] Error:", error?.message || error);
+      res.status(500).json({ error: "Failed to create page" });
+    }
+  });
+
+  app.put("/api/admin/seo-pages/:id", requireSuperAdmin, async (req, res) => {
+    try {
+      const pageId = parseInt(req.params.id);
+      const page = await storage.updateSeoPage(pageId, req.body);
+      res.json(page);
+    } catch (error: any) {
+      console.error("[SEO Page Update] Error:", error?.message || error);
+      res.status(500).json({ error: "Failed to update page" });
+    }
+  });
+
+  app.delete("/api/admin/seo-pages/:id", requireSuperAdmin, async (req, res) => {
+    try {
+      const pageId = parseInt(req.params.id);
+      await storage.softDeleteSeoPage(pageId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("[SEO Page Delete] Error:", error?.message || error);
+      res.status(500).json({ error: "Failed to delete page" });
+    }
+  });
+
+  // =====================================================
+  // Sitemap and Robots.txt
+  // =====================================================
+  app.get("/sitemap.xml", async (req, res) => {
+    try {
+      const baseUrl = await storage.getSystemSetting("seo_canonical_base_url") || "https://securelex.ru";
+      const seoPages = await storage.getAllSeoPages();
+      const activePages = seoPages.filter(p => p.isActive);
+
+      let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+      xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+      
+      // Static pages
+      const staticPages = [
+        { loc: "/", priority: "1.0" },
+        { loc: "/user-agreement", priority: "0.5" },
+        { loc: "/personal-data-consent", priority: "0.5" },
+      ];
+      
+      for (const page of staticPages) {
+        xml += `  <url><loc>${baseUrl}${page.loc}</loc><priority>${page.priority}</priority></url>\n`;
+      }
+      
+      // Dynamic SEO pages
+      for (const page of activePages) {
+        xml += `  <url><loc>${baseUrl}/seo/${page.slug}</loc><priority>0.7</priority></url>\n`;
+      }
+      
+      xml += '</urlset>';
+      
+      res.type("application/xml").send(xml);
+    } catch (error: any) {
+      console.error("[Sitemap] Error:", error?.message || error);
+      res.status(500).send("Error generating sitemap");
+    }
+  });
+
+  app.get("/robots.txt", async (req, res) => {
+    try {
+      const robotsSetting = await storage.getSystemSetting("seo_robots_txt");
+      const robotsTxt = robotsSetting?.value || "User-agent: *\nAllow: /\nSitemap: https://securelex.ru/sitemap.xml";
+      res.type("text/plain").send(robotsTxt);
+    } catch (error: any) {
+      console.error("[Robots.txt] Error:", error?.message || error);
+      res.type("text/plain").send("User-agent: *\nAllow: /");
+    }
+  });
+
+  // =====================================================
+  // PDN Consent Recording for Checkout (called from frontend)
+  // =====================================================
+  app.post("/api/pdn-consent", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const ip = req.ip || req.socket.remoteAddress || null;
+      const userAgent = req.headers["user-agent"] || null;
+      const { source } = req.body as { source: string };
+
+      const docVersionSetting = await storage.getSystemSetting("pdn_consent_document_version");
+      const docVersion = docVersionSetting?.value || "1.0";
+
+      await storage.createPdnConsentEvent({
+        userId,
+        eventType: "GIVEN",
+        documentVersion: docVersion,
+        ip,
+        userAgent,
+        source: source || "checkout",
+        meta: {}
+      });
+
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("[PDN Consent] Error:", error?.message || error);
+      res.status(500).json({ error: "Failed to record consent" });
     }
   });
 

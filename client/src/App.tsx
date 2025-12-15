@@ -30,6 +30,8 @@ import SuperAdminLogsPage from "@/pages/superadmin-logs";
 import SuperAdminPromoCodesPage from "@/pages/superadmin-promo-codes";
 import SuperAdminEmailSettingsPage from "@/pages/superadmin-email-settings";
 import SuperAdminPaymentSettingsPage from "@/pages/superadmin-payment-settings";
+import PdnManagementPage from "@/pages/superadmin/pdn-management";
+import SeoManagementPage from "@/pages/superadmin/seo-pages";
 import ReferralPage from "@/pages/referral";
 import CheckoutPage from "@/pages/checkout";
 import PaymentResultPage from "@/pages/payment-result";
@@ -41,6 +43,7 @@ import PrivacyPolicyPage from "@/pages/privacy-policy";
 import CookiesPolicyPage from "@/pages/cookies-policy";
 import UserAgreementPage from "@/pages/user-agreement";
 import PersonalDataPage from "@/pages/personal-data";
+import PrivacyPage from "@/pages/dashboard/privacy";
 import { Loader2, LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -269,6 +272,14 @@ function Router() {
         </ProtectedRoute>
       </Route>
       
+      <Route path="/dashboard/privacy">
+        <ProtectedRoute>
+          <DashboardLayout>
+            <PrivacyPage />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+      
       <Route path="/checkout/:auditId">
         <ProtectedRoute>
           <CheckoutPage />
@@ -396,6 +407,26 @@ function Router() {
           <SuperAdminRoute>
             <DashboardLayout>
               <SuperAdminPaymentSettingsPage />
+            </DashboardLayout>
+          </SuperAdminRoute>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/superadmin/pdn">
+        <ProtectedRoute>
+          <SuperAdminRoute>
+            <DashboardLayout>
+              <PdnManagementPage />
+            </DashboardLayout>
+          </SuperAdminRoute>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/superadmin/seo-pages">
+        <ProtectedRoute>
+          <SuperAdminRoute>
+            <DashboardLayout>
+              <SeoManagementPage />
             </DashboardLayout>
           </SuperAdminRoute>
         </ProtectedRoute>

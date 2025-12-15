@@ -47,6 +47,7 @@ import {
   Tag,
   Mail,
   Wallet,
+  FileText,
 } from "lucide-react";
 
 export function AppSidebar() {
@@ -80,6 +81,8 @@ export function AppSidebar() {
     { title: "Платежи / ЮKassa", url: "/superadmin/payment-settings", icon: Wallet },
     { title: "Темы дизайна", url: "/superadmin/themes", icon: Palette },
     { title: "Промокоды", url: "/superadmin/promo-codes", icon: Tag },
+    { title: "Управление ПДн", url: "/superadmin/pdn", icon: Shield },
+    { title: "SEO-страницы", url: "/superadmin/seo-pages", icon: FileText },
     { title: "Журнал действий", url: "/superadmin/logs", icon: Activity },
   ];
 

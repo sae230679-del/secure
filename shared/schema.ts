@@ -1,8 +1,16 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, boolean, jsonb, serial } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, boolean, jsonb, serial, pgEnum, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
+
+// =====================================================
+// PDN (Personal Data) & Limits Enums
+// =====================================================
+export const pdnConsentEventTypeEnum = pgEnum("pdn_consent_event_type", ["GIVEN", "WITHDRAWN"]);
+export const pdnDestructionStatusEnum = pgEnum("pdn_destruction_status", ["SCHEDULED", "DONE", "LEGAL_HOLD"]);
+export const pdnDestructionMethodEnum = pgEnum("pdn_destruction_method", ["anonymize", "delete"]);
+export const freeLimitSubjectTypeEnum = pgEnum("free_limit_subject_type", ["user", "anon"]);
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -504,3 +512,142 @@ export type CriteriaResult = {
 };
 
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+
+// =====================================================
+// PDN Consent Events - tracks user consent given/withdrawn
+// =====================================================
+export const pdnConsentEvents = pgTable("pdn_consent_events", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  eventType: pdnConsentEventTypeEnum("event_type").notNull(),
+  eventAt: timestamp("event_at", { withTimezone: true }).defaultNow().notNull(),
+  documentVersion: text("document_version").notNull(),
+  ip: text("ip"),
+  userAgent: text("user_agent"),
+  source: text("source").notNull(), // 'register' | 'checkout' | 'lk'
+  meta: jsonb("meta").default({}).notNull(),
+}, (table) => [
+  index("pdn_consent_user_event_idx").on(table.userId, table.eventType, table.eventAt),
+]);
+
+export const pdnConsentEventsRelations = relations(pdnConsentEvents, ({ one }) => ({
+  user: one(users, {
+    fields: [pdnConsentEvents.userId],
+    references: [users.id],
+  }),
+}));
+
+// =====================================================
+// PDN Destruction Acts - records of actual data destruction
+// =====================================================
+export const pdnDestructionActs = pgTable("pdn_destruction_acts", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  method: pdnDestructionMethodEnum("method").notNull(),
+  summary: text("summary").notNull(),
+  operatorUserId: integer("operator_user_id").references(() => users.id, { onDelete: "set null" }),
+  details: jsonb("details").default({}).notNull(),
+});
+
+export const pdnDestructionActsRelations = relations(pdnDestructionActs, ({ one }) => ({
+  user: one(users, {
+    fields: [pdnDestructionActs.userId],
+    references: [users.id],
+  }),
+  operator: one(users, {
+    fields: [pdnDestructionActs.operatorUserId],
+    references: [users.id],
+  }),
+}));
+
+// =====================================================
+// PDN Destruction Tasks - scheduled destruction after consent withdrawal
+// =====================================================
+export const pdnDestructionTasks = pgTable("pdn_destruction_tasks", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  status: pdnDestructionStatusEnum("status").default("SCHEDULED").notNull(),
+  scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
+  doneAt: timestamp("done_at", { withTimezone: true }),
+  legalHoldReason: text("legal_hold_reason"),
+  destructionActId: integer("destruction_act_id").references(() => pdnDestructionActs.id, { onDelete: "set null" }),
+  meta: jsonb("meta").default({}).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("pdn_tasks_status_scheduled_idx").on(table.status, table.scheduledAt),
+  index("pdn_tasks_user_idx").on(table.userId),
+]);
+
+export const pdnDestructionTasksRelations = relations(pdnDestructionTasks, ({ one }) => ({
+  user: one(users, {
+    fields: [pdnDestructionTasks.userId],
+    references: [users.id],
+  }),
+  destructionAct: one(pdnDestructionActs, {
+    fields: [pdnDestructionTasks.destructionActId],
+    references: [pdnDestructionActs.id],
+  }),
+}));
+
+// =====================================================
+// Free Express Limit Events - tracks usage of free express checks
+// =====================================================
+export const freeExpressLimitEvents = pgTable("free_express_limit_events", {
+  id: serial("id").primaryKey(),
+  subjectType: freeLimitSubjectTypeEnum("subject_type").notNull(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+  anonHash: text("anon_hash"), // sha256(ip + '|' + user-agent)
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  meta: jsonb("meta").default({}).notNull(),
+}, (table) => [
+  index("free_limit_user_idx").on(table.subjectType, table.userId, table.createdAt),
+  index("free_limit_anon_idx").on(table.subjectType, table.anonHash, table.createdAt),
+]);
+
+export const freeExpressLimitEventsRelations = relations(freeExpressLimitEvents, ({ one }) => ({
+  user: one(users, {
+    fields: [freeExpressLimitEvents.userId],
+    references: [users.id],
+  }),
+}));
+
+// =====================================================
+// SEO Pages - dynamic SEO-optimized content pages
+// =====================================================
+export const seoPages = pgTable("seo_pages", {
+  id: serial("id").primaryKey(),
+  slug: text("slug").notNull().unique(),
+  h1: text("h1").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  content: text("content").notNull(), // markdown
+  isActive: boolean("is_active").default(true).notNull(),
+  meta: jsonb("meta").default({}).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// =====================================================
+// New Types
+// =====================================================
+export type PdnConsentEvent = typeof pdnConsentEvents.$inferSelect;
+export type PdnDestructionAct = typeof pdnDestructionActs.$inferSelect;
+export type PdnDestructionTask = typeof pdnDestructionTasks.$inferSelect;
+export type FreeExpressLimitEvent = typeof freeExpressLimitEvents.$inferSelect;
+export type SeoPage = typeof seoPages.$inferSelect;
+
+export const insertPdnConsentEventSchema = createInsertSchema(pdnConsentEvents).omit({
+  id: true,
+  eventAt: true,
+});
+
+export const insertSeoPageSchema = createInsertSchema(seoPages).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertPdnConsentEvent = z.infer<typeof insertPdnConsentEventSchema>;
+export type InsertSeoPage = z.infer<typeof insertSeoPageSchema>;

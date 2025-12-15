@@ -204,4 +204,41 @@ app.use((req, res, next) => {
       log(`serving on port ${port}`);
     },
   );
+
+  // =====================================================
+  // PDN Destruction Background Job (every 6 hours)
+  // Per 152-ФЗ: Auto-execute destruction tasks after 30-day waiting period
+  // =====================================================
+  const PDN_JOB_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+  async function runPdnDestructionJob() {
+    try {
+      const tasks = await storage.getScheduledDestructionTasks();
+      if (tasks.length === 0) {
+        console.log("[PDN Job] No scheduled tasks ready for destruction.");
+        return;
+      }
+
+      console.log(`[PDN Job] Found ${tasks.length} tasks ready for destruction.`);
+      
+      for (const task of tasks) {
+        if (task.status !== "SCHEDULED") continue;
+        
+        console.log(`[PDN Job] Processing task ${task.id} for user ${task.userId}`);
+        const result = await storage.executePdnDestruction(task.id, 0); // 0 = system operator
+        if (result.success) {
+          console.log(`[PDN Job] Task ${task.id} completed. Act ID: ${result.actId}`);
+        } else {
+          console.log(`[PDN Job] Task ${task.id} skipped (status: ${task.status})`);
+        }
+      }
+    } catch (error: any) {
+      console.error("[PDN Job] Error:", error?.message || error);
+    }
+  }
+
+  // Run once on startup, then every 6 hours
+  setTimeout(() => runPdnDestructionJob(), 10000); // 10s delay on startup
+  setInterval(runPdnDestructionJob, PDN_JOB_INTERVAL_MS);
+  console.log("[PDN Job] Scheduled to run every 6 hours");
 })();

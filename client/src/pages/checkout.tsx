@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -70,6 +72,9 @@ export default function CheckoutPage() {
   } | null>(null);
   const [promoError, setPromoError] = useState<string | null>(null);
   const [installmentsModalOpen, setInstallmentsModalOpen] = useState(false);
+  
+  const [offerAccepted, setOfferAccepted] = useState(false);
+  const [pdnConsentAccepted, setPdnConsentAccepted] = useState(false);
 
   const { data: installmentsSettings } = useQuery<InstallmentsSettings>({
     queryKey: ["/api/public/installments-settings"],
@@ -184,9 +189,31 @@ export default function CheckoutPage() {
   const discount = calculateDiscount();
   const finalAmount = Math.max(0, (auditPackage?.price || 0) - discount);
 
-  const handlePayment = () => {
+  const pdnConsentMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/pdn-consent", { source: "checkout" });
+      return response.json();
+    },
+  });
+
+  const handlePayment = async () => {
     if (!auditId) return;
+    if (!offerAccepted || !pdnConsentAccepted) {
+      toast({
+        title: "Необходимо принять условия",
+        description: "Для продолжения оплаты примите оферту и согласие на обработку персональных данных",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setPaymentStatus("processing");
+    
+    try {
+      await pdnConsentMutation.mutateAsync();
+    } catch {
+    }
+    
     paymentMutation.mutate({ 
       auditId, 
       paymentMethod: selectedMethod,
@@ -495,6 +522,50 @@ export default function CheckoutPage() {
                       <span>Итого</span>
                       <span>{formatPrice(finalAmount)}</span>
                     </div>
+                    
+                    <Separator />
+                    
+                    <div className="space-y-3">
+                      <div className="flex items-start gap-3">
+                        <Checkbox 
+                          id="offer-consent"
+                          checked={offerAccepted}
+                          onCheckedChange={(checked) => setOfferAccepted(checked === true)}
+                          data-testid="checkbox-offer"
+                        />
+                        <Label htmlFor="offer-consent" className="text-sm leading-tight cursor-pointer">
+                          Принимаю условия{" "}
+                          <a 
+                            href="/user-agreement" 
+                            target="_blank" 
+                            className="text-primary underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            публичной оферты
+                          </a>
+                        </Label>
+                      </div>
+                      
+                      <div className="flex items-start gap-3">
+                        <Checkbox 
+                          id="pdn-consent"
+                          checked={pdnConsentAccepted}
+                          onCheckedChange={(checked) => setPdnConsentAccepted(checked === true)}
+                          data-testid="checkbox-pdn-consent"
+                        />
+                        <Label htmlFor="pdn-consent" className="text-sm leading-tight cursor-pointer">
+                          Даю согласие на{" "}
+                          <a 
+                            href="/personal-data-consent" 
+                            target="_blank" 
+                            className="text-primary underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            обработку персональных данных
+                          </a>
+                        </Label>
+                      </div>
+                    </div>
                   </>
                 ) : (
                   <p className="text-muted-foreground">Загрузка...</p>
@@ -505,7 +576,7 @@ export default function CheckoutPage() {
                   className="w-full" 
                   size="lg"
                   onClick={handlePayment}
-                  disabled={paymentStatus === "processing" || !audit}
+                  disabled={paymentStatus === "processing" || !audit || !offerAccepted || !pdnConsentAccepted}
                   data-testid="button-pay"
                 >
                   {paymentStatus === "processing" ? (
