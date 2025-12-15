@@ -88,12 +88,53 @@ Powered by {provider} | ai_mode: {mode}
 - `hybrid`: Automatically falls back to next provider
 - `tri_hybrid`: Continues with remaining providers, selects best available result
 
-## 7. Current Status
+## 7. Diagnostics API
+
+### Endpoint: `GET /api/admin/diagnostics/ai-keys`
+
+**Access**: SuperAdmin only
+
+**Response format**:
+```json
+{
+  "hasGigaChatKey": false,
+  "hasOpenAiKey": false,
+  "aiModeConfigured": "gigachat_only",
+  "effectiveAiMode": "none (no GIGACHATAPIKEY)"
+}
+```
+
+**Field descriptions**:
+| Field | Type | Description |
+|-------|------|-------------|
+| `hasGigaChatKey` | boolean | True if GIGACHATAPIKEY env var is set |
+| `hasOpenAiKey` | boolean | True if OPENAIAPIKEY env var is set |
+| `aiModeConfigured` | string | AI mode from system settings |
+| `effectiveAiMode` | string | Actual mode that will be used (accounts for missing keys) |
+
+**Effective mode logic**:
+- If configured mode is `none` → effective is `none`
+- If configured mode is `gigachat_only` but no key → effective is `none (no GIGACHATAPIKEY)`
+- If configured mode is `openai_only` but no key → effective is `none (no OPENAIAPIKEY)`
+- If configured mode is `hybrid` but no keys → effective is `none (no keys)`
+- If configured mode is `hybrid` and at least one key → effective is `hybrid`
+
+## 8. Current Status
 
 - **Default Mode**: `gigachat_only`
 - **Configured Keys**: None (needs configuration in SuperAdmin panel)
+- **Effective Mode**: `none` (no keys configured)
 
-## 8. Recommendations
+### AI Status Quick Check:
+```bash
+# Login as superadmin first
+curl -X POST /api/auth/login -d '{"email":"admin@securelex.ru","password":"..."}'
+
+# Then check AI status
+curl /api/admin/diagnostics/ai-keys
+```
+
+## 9. Recommendations
 
 1. Configure at least one AI provider key for full functionality
 2. Use `hybrid` mode for production (best reliability)
