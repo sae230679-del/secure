@@ -32,6 +32,16 @@ Preferred communication style: Simple, everyday language.
 - **Key Tables**: users, audit_packages, audits, audit_results, payments, reports, contracts, referrals, promo_codes, themes, audit_logs
 
 ### Recent Changes (December 2024)
+
+#### Sprint December 15, 2024
+- **iOS Safari localStorage Fix**: Wrapped all localStorage calls with try-catch for iOS Safari private browsing compatibility
+- **New "Проверка РКН" Package**: Added new 10₽ package for quick Roskomnadzor registry checks
+- **Robokassa Integration**: Full payment provider support with settings in superadmin panel
+- **Installments (Рассрочка)**: Added installment payment options via YooKassa/Robokassa with banner/modal in checkout
+- **YooKassa Diagnostics**: Admin panel shows last payment request/response for debugging
+- **PDF Cyrillic Fix**: Fixed font rendering on all pages with DejaVu font after each addPage()
+
+#### Earlier December 2024
 - **Comprehensive Theme System**: New preset-based design theme architecture
   - ThemeManagerProvider in `client/src/lib/theme-manager.tsx` manages all theme state
   - ColorModeToggle component for light/dark mode switching with localStorage persistence
@@ -106,3 +116,116 @@ Preferred communication style: Simple, everyday language.
 - **Vite**: Frontend build and dev server with HMR
 - **drizzle-kit**: Database migration tooling (`npm run db:push`)
 - **tsx**: TypeScript execution for server
+
+---
+
+## Manual Testing Checklist
+
+### Pre-Release Checklist
+
+#### 1. Authentication Flow
+- [ ] User registration with valid email
+- [ ] User login/logout
+- [ ] Password reset flow (if implemented)
+- [ ] Session persistence after page refresh
+- [ ] SuperAdmin login with SUPERADMIN_PASSWORD
+
+#### 2. Landing Page
+- [ ] Hero section displays correctly
+- [ ] Package cards show correct prices
+- [ ] "Проверка РКН" package (10₽) visible
+- [ ] Footer with Yookassa branding
+- [ ] Light/dark theme toggle works
+- [ ] Mobile responsive layout
+
+#### 3. Express Check (Free)
+- [ ] Enter URL and run free check
+- [ ] Results display with traffic light system
+- [ ] Express report PDF download button works
+- [ ] PDF renders Cyrillic correctly on all pages
+
+#### 4. Package Selection & Checkout
+- [ ] All packages display with correct prices
+- [ ] Select package and proceed to checkout
+- [ ] Promo code input works
+- [ ] Payment method selection (YooKassa/Robokassa)
+- [ ] Installment banner displays (if enabled)
+- [ ] Installment modal opens with provider options
+
+#### 5. Payment Processing
+- [ ] YooKassa payment creation
+- [ ] Robokassa payment creation
+- [ ] Payment callback handling
+- [ ] Payment status updates
+- [ ] Payment diagnostics in admin panel
+
+#### 6. User Dashboard (ЛК)
+- [ ] Dashboard loads without localStorage errors (iOS Safari)
+- [ ] Audit list displays correctly
+- [ ] Individual audit details page
+- [ ] PDF report download for completed audits
+- [ ] Contract signing workflow
+
+#### 7. Admin Panel (/admin/*)
+- [ ] Admin dashboard with stats
+- [ ] Paid audits list
+- [ ] Package management with price editing
+- [ ] Audit re-run functionality
+
+#### 8. SuperAdmin Panel (/superadmin/*)
+- [ ] User management (view, edit roles, delete)
+- [ ] System settings (AI provider, email)
+- [ ] Payment settings (YooKassa, Robokassa)
+- [ ] Installment settings (enable/disable, banner text)
+- [ ] Theme management (create, edit, activate themes)
+- [ ] Promo codes management
+- [ ] Audit logs
+
+#### 9. Cross-Browser Testing
+- [ ] Chrome (desktop)
+- [ ] Safari (desktop)
+- [ ] Firefox (desktop)
+- [ ] iOS Safari (including private browsing)
+- [ ] Chrome Mobile
+
+#### 10. Performance & Security
+- [ ] Pages load within 3 seconds
+- [ ] No console errors in browser
+- [ ] No exposed secrets in frontend
+- [ ] HTTPS enforced in production
+
+### Environment Variables Required
+
+```
+DATABASE_URL=postgresql://...
+SUPERADMIN_PASSWORD=...
+
+# YooKassa
+YANDEX_KASSA_SHOP_ID=...
+YANDEX_KASSA_SECURE_TOKEN=...
+YANDEX_KASSA_MODE=live|test
+
+# Robokassa (optional)
+ROBOKASSA_LOGIN=...
+ROBOKASSA_PASSWORD1=...
+ROBOKASSA_PASSWORD2=...
+ROBOKASSA_TEST_MODE=false|true
+
+# AI Provider (optional - defaults to GigaChat)
+GIGACHAT_CLIENT_ID=...
+GIGACHAT_CLIENT_SECRET=...
+OPENAI_API_KEY=...
+
+# Email (optional)
+SMTP_HOST=...
+SMTP_PORT=...
+SMTP_USER=...
+SMTP_PASS=...
+```
+
+### Quick Sanity Check (5 minutes)
+1. Open landing page - verify packages show
+2. Run express check on any URL
+3. Download express PDF - verify Cyrillic text
+4. Login as user - verify dashboard loads
+5. Login as superadmin - verify settings pages work
