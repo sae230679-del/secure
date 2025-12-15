@@ -2,6 +2,16 @@ import PDFDocument from "pdfkit";
 import { PassThrough } from "stream";
 import path from "path";
 import fs from "fs";
+import { 
+  PENALTY_MAP, 
+  calcPenaltyTotals, 
+  attachPenalties, 
+  formatRub, 
+  getSubjectName,
+  SELF_EMPLOYED_RULE,
+  type SubjectType,
+  type PenaltyTotals
+} from "./penalties-map";
 
 const FONT_PATH = path.join(process.cwd(), "server/fonts/DejaVuSans.ttf");
 const FONT_NAME = "DejaVu";
@@ -283,6 +293,118 @@ function getLawFromCategory(category: string): string {
   return "";
 }
 
+// Calculate penalty totals from criteria results
+function calculatePenaltyTotalsFromCriteria(criteria: CriteriaResult[]): PenaltyTotals {
+  const checkResults = criteria.map(c => {
+    let checkId = c.name;
+    if (c.name.includes("HTTPS") || c.name.includes("SSL")) checkId = "SEC-001";
+    else if (c.name.includes("HSTS")) checkId = "SEC-002";
+    else if (c.name.includes("CSP") || c.name.includes("Content Security")) checkId = "SEC-003";
+    else if (c.name.includes("X-Frame")) checkId = "SEC-004";
+    else if (c.name.includes("X-Content-Type")) checkId = "SEC-005";
+    else if (c.name.includes("Политика") || c.name.includes("конфиденциальности")) checkId = "LEGAL_PRIVACY_POLICY_MISSING";
+    else if (c.name.includes("Согласие") || c.name.includes("ПДн")) checkId = "PDN_CONSENT_CHECKBOX_MISSING";
+    else if (c.name.includes("Cookie")) checkId = "COOKIES_BANNER_MISSING";
+    else if (c.name.includes("Контакт")) checkId = "LEGAL_CONTACTS_MISSING";
+    
+    return { checkId, status: c.status };
+  });
+  
+  return calcPenaltyTotals(checkResults);
+}
+
+// Render calculated penalty totals section
+function renderPenaltyTotalsSection(doc: PDFKit.PDFDocument, penaltyTotals: PenaltyTotals): void {
+  const primaryColor = "#1e3a5f";
+  const dangerColor = "#dc2626";
+  
+  if (penaltyTotals.uniqueViolations === 0) return;
+  
+  doc.moveDown(1);
+  doc.fontSize(14)
+     .fillColor(primaryColor)
+     .text("РАСЧЁТ ШТРАФНЫХ РИСКОВ ПО КоАП РФ", { underline: true });
+  doc.moveDown(0.5);
+  
+  doc.fontSize(9)
+     .fillColor("#6b7280")
+     .text(`Выявлено уникальных нарушений: ${penaltyTotals.uniqueViolations}`, { indent: 10 });
+  doc.text(`Основная статья: КоАП РФ ст. 13.11`, { indent: 10 });
+  doc.moveDown(0.5);
+  
+  // Table header
+  const tableStartY = doc.y;
+  const colWidths = [140, 100, 100, 140];
+  const rowHeight = 22;
+  
+  doc.rect(50, tableStartY, 480, rowHeight)
+     .fillColor("#f3f4f6")
+     .fill();
+  
+  doc.fillColor("#1f2937")
+     .fontSize(9);
+  
+  let x = 55;
+  doc.text("Тип субъекта", x, tableStartY + 6, { width: colWidths[0] });
+  x += colWidths[0];
+  doc.text("MIN штраф", x, tableStartY + 6, { width: colWidths[1], align: "right" });
+  x += colWidths[1];
+  doc.text("MAX штраф", x, tableStartY + 6, { width: colWidths[2], align: "right" });
+  x += colWidths[2];
+  doc.text("Примечание", x, tableStartY + 6, { width: colWidths[3] });
+  
+  let currentY = tableStartY + rowHeight;
+  
+  const subjectOrder: SubjectType[] = ["citizen", "selfEmployed", "official", "ip", "legalEntity"];
+  
+  subjectOrder.forEach((subject, idx) => {
+    const totals = penaltyTotals.bySubject[subject];
+    const bgColor = idx % 2 === 0 ? "#ffffff" : "#f9fafb";
+    
+    doc.rect(50, currentY, 480, rowHeight)
+       .fillColor(bgColor)
+       .fill();
+    
+    doc.rect(50, currentY, 480, rowHeight)
+       .strokeColor("#e5e7eb")
+       .lineWidth(0.5)
+       .stroke();
+    
+    let x = 55;
+    doc.fillColor("#374151")
+       .fontSize(9);
+    
+    doc.text(getSubjectName(subject), x, currentY + 6, { width: colWidths[0] });
+    x += colWidths[0];
+    
+    const minColor = totals.minRub > 0 ? dangerColor : "#374151";
+    const maxColor = totals.maxRub > 0 ? dangerColor : "#374151";
+    
+    doc.fillColor(minColor)
+       .text(formatRub(totals.minRub), x, currentY + 6, { width: colWidths[1], align: "right" });
+    x += colWidths[1];
+    doc.fillColor(maxColor)
+       .text(formatRub(totals.maxRub), x, currentY + 6, { width: colWidths[2], align: "right" });
+    x += colWidths[2];
+    
+    const note = subject === "selfEmployed" ? "как физлицо" : "";
+    doc.fillColor("#6b7280")
+       .fontSize(8)
+       .text(note, x, currentY + 7, { width: colWidths[3] });
+    
+    currentY += rowHeight;
+  });
+  
+  doc.y = currentY + 10;
+  
+  // Self-employed rule note
+  doc.fontSize(8)
+     .fillColor("#6b7280")
+     .text(`* ${SELF_EMPLOYED_RULE}`, 50, doc.y, { width: 480 });
+  
+  doc.moveDown(1);
+}
+
 export async function generatePdfReport(data: AuditReportData): Promise<Buffer> {
   console.log(`[PDF-GEN] Starting PDF generation for audit ${data.auditId}`);
   
@@ -539,6 +661,10 @@ export async function generatePdfReport(data: AuditReportData): Promise<Buffer> 
         
         doc.moveDown(1);
       });
+
+      // Calculate and render penalty totals from actual violations
+      const penaltyTotals = calculatePenaltyTotalsFromCriteria(data.criteria);
+      renderPenaltyTotalsSection(doc, penaltyTotals);
 
       doc.moveDown(1);
       doc.rect(50, doc.y, 495, 80)
