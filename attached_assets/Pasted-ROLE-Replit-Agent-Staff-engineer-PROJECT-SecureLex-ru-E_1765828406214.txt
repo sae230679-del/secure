@@ -1,0 +1,177 @@
+ROLE: Replit Agent / Staff engineer.
+PROJECT: SecureLex.ru (Express + React/Vite + Drizzle + Postgres).
+STATUS: PDN SuperAdmin page enhanced with tabs + data-testid; API endpoints exist:
+
+/api/admin/pdn/consents
+
+/api/admin/pdn/destruction-tasks
+
+/api/admin/pdn/withdrawals
+App runs. Now implement a real automated testsuite and make it pass reliably.
+
+NON‑NEGOTIABLE RULES
+Do NOT modify server/audit-engine.ts behavior.​
+
+Do NOT break existing endpoints and UI.​
+
+No mocking in production code; mocks allowed only in tests.​
+
+Tests must be stable (no timing flakiness, no dependency on real external network).
+
+GOAL
+Add backend integration tests with Vitest + Supertest (and minimal helpers) to cover:
+
+PDN consent/withdrawal workflow and destruction tasks
+
+SEO pages CRUD + public retrieval rules
+
+Admin settings upsert + secret masking
+
+1) ADD TEST TOOLING
+1.1 Dependencies
+Add dev deps:
+
+vitest
+
+supertest
+
+@types/supertest
+
+cross-env (if needed for env in scripts)
+
+If React tests are not required now, do NOT add React Testing Library. Focus on API integration tests only.
+
+1.2 Scripts
+In package.json add:
+
+"test": "vitest run"
+
+"test:watch": "vitest"
+
+optionally "test:coverage": "vitest run --coverage" (only if coverage plugin already present; otherwise skip).
+
+2) TEST ENV + DB STRATEGY (MUST BE RELIABLE)
+2.1 Test DB
+Use DATABASE_URL from env. If DATABASE_URL_TEST is present, prefer it; otherwise use DATABASE_URL and truncate tables before each test.
+
+2.2 Auto-migrate before tests
+Ensure schema exists before tests:
+
+either call drizzle-kit migrate in a pretest script, or
+
+in a test setup file run migrations programmatically (acceptable if already present tooling exists).
+
+2.3 Deterministic DB cleanup
+Create helper tests/dbReset.ts that truncates only relevant tables using raw SQL TRUNCATE ... CASCADE in a safe order (no Promise.all). Use transaction. (Reference approach: TRUNCATE CASCADE discussion).​
+
+At minimum truncate:
+
+users
+
+settings
+
+seo_pages
+
+pdn_consent_events
+
+pdn_destruction_tasks
+
+pdn_destruction_acts
+
+session (if needed)
+
+3) AUTH IN TESTS (SESSION COOKIE)
+Because the app uses cookie sessions, tests must authenticate by capturing cookies and reusing them (supertest agent pattern). Supertest supports cookie persistence via agent or manual cookie header.​
+
+Implement helper tests/loginAsSuperAdmin.ts that:
+
+Ensures superadmin exists (call existing storage.ensureSuperAdmin() if accessible, or hit an existing bootstrapping path).
+
+Logs in via the actual login endpoint used by UI (find it in routes; do not invent new endpoints).
+
+Returns a request.agent(app) instance with cookie stored.
+
+If login is OTP-based and hard to test, add a test-only bypass guarded by NODE_ENV === 'test':
+
+e.g. POST /api/test/login-as-superadmin that sets session userId.
+But only do this if absolutely necessary and it must be excluded from production behavior (must refuse if not test env).
+
+4) TEST CASES (MUST IMPLEMENT ALL)
+4.1 Admin settings masking + upsert
+Write tests:
+
+PUT /api/admin/settings with updates including:
+
+pdn_consent_document_version = "1.0-test"
+
+robokassa_password1 = "secret1"
+
+robokassa_password2 = "secret2"
+
+GET /api/admin/settings and assert:
+
+pdn_consent_document_version returned as "1.0-test"
+
+robokassa_password1 returned as "***"
+
+robokassa_password2 returned as "***"
+
+4.2 SEO CRUD + public endpoint behavior
+As superadmin:
+
+POST /api/admin/seo-pages create page: slug "test-page", active true
+
+GET /api/admin/seo-pages contains it
+
+PUT /api/admin/seo-pages/:id update title/description/content
+
+GET /api/public/seo/test-page returns it (200)
+
+DELETE /api/admin/seo-pages/:id (soft delete sets is_active=false)
+
+GET /api/public/seo/test-page must return 404 (or 410) because inactive pages are not public
+
+4.3 PDN: withdrawal event + 30-day task
+Create a normal user and log in as that user (same cookie technique).
+
+Ensure setting pdn_consent_document_version exists
+
+POST /api/me/withdraw-pdn-consent
+
+Assert in DB:
+
+pdn_consent_events has WITHDRAWN for that user with document_version
+
+pdn_destruction_tasks has SCHEDULED with scheduled_at approx now+30 days (allow small tolerance)
+
+Assert session invalidated (next call to an authed endpoint returns 401)
+
+4.4 PDN job behavior (unit/integration)
+Test the job execution without waiting 6 hours:
+
+Expose the job runner as an exported function (e.g. runPdnDestructionOnce()), and scheduler calls it on interval.
+
+In tests: create SCHEDULED task with scheduled_at in the past.
+
+Call runPdnDestructionOnce() directly.
+
+Assert:
+
+pdn_destruction_acts created
+
+task status becomes DONE
+
+If task is LEGAL_HOLD, runner does not change it
+
+This must not modify audit-engine.​
+
+5) OUTPUT REQUIREMENTS
+When finished:
+
+Provide new/changed files list
+
+Provide exact commands to run tests locally and in Replit
+
+Confirm tests pass with npm test
+
+END.
