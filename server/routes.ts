@@ -1998,6 +1998,32 @@ export async function registerRoutes(
     return result;
   }
 
+  // Public API: Get active packages with prices (read-only, no auth required)
+  app.get("/api/public/packages", async (req, res) => {
+    try {
+      const typeFilter = req.query.type as string | undefined;
+      const packages = await storage.getPackages();
+      
+      const activePackages = packages
+        .filter(pkg => pkg.isActive)
+        .filter(pkg => !typeFilter || pkg.type === typeFilter)
+        .map(pkg => ({
+          id: pkg.id,
+          type: pkg.type,
+          name: pkg.name,
+          price: pkg.price,
+          category: pkg.category,
+          description: pkg.description,
+          isActive: pkg.isActive,
+        }));
+      
+      res.json(activePackages);
+    } catch (error) {
+      console.error("Failed to fetch public packages:", error);
+      res.status(500).json({ error: "Failed to fetch packages" });
+    }
+  });
+
   app.post("/api/public/express-check", async (req, res) => {
     try {
       const data = expressCheckSchema.parse(req.body);
