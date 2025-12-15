@@ -74,8 +74,8 @@ DATABASE_URL=postgresql://securelex:YOUR_PASSWORD@localhost:5432/securelex
 SESSION_SECRET=your-32-char-random-secret-here
 
 # AI провайдеры
-OPENAI_API_KEY=sk-your-openai-key
-GIGACHAT_API_KEY=your-gigachat-key
+OPENAIAPIKEY=sk-your-openai-key
+GIGACHATAPIKEY=your-gigachat-key
 
 # Суперадмин
 SUPERADMIN_PASSWORD=YourSecurePassword123!
@@ -139,8 +139,8 @@ services:
       - PORT=5000
       - DATABASE_URL=postgresql://securelex:${DB_PASSWORD}@db:5432/securelex
       - SESSION_SECRET=${SESSION_SECRET}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - GIGACHAT_API_KEY=${GIGACHAT_API_KEY}
+      - OPENAIAPIKEY=${OPENAIAPIKEY}
+      - GIGACHATAPIKEY=${GIGACHATAPIKEY}
       - SUPERADMIN_PASSWORD=${SUPERADMIN_PASSWORD}
       - SUPERADMIN_EMAIL=${SUPERADMIN_EMAIL}
       - SUPERADMIN_NAME=${SUPERADMIN_NAME}

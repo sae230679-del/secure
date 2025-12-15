@@ -1282,8 +1282,8 @@ export async function registerRoutes(
           console.error("Failed to decrypt gigachat key");
         }
       }
-      if (!gigachatKey && process.env.GIGACHAT_API_KEY) {
-        gigachatKey = process.env.GIGACHAT_API_KEY;
+      if (!gigachatKey && process.env.GIGACHATAPIKEY) {
+        gigachatKey = process.env.GIGACHATAPIKEY;
         gigachatSource = "env";
       }
       
@@ -1295,8 +1295,8 @@ export async function registerRoutes(
           console.error("Failed to decrypt openai key");
         }
       }
-      if (!openaiKey && process.env.OPENAI_API_KEY) {
-        openaiKey = process.env.OPENAI_API_KEY;
+      if (!openaiKey && process.env.OPENAIAPIKEY) {
+        openaiKey = process.env.OPENAIAPIKEY;
         openaiSource = "env";
       }
 

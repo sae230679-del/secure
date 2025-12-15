@@ -8,8 +8,8 @@ export async function getApiKey(provider: "gigachat" | "openai" | "yandex"): Pro
     yandex: "yandex_iam_token",
   };
   const envVarNames: Record<string, string> = {
-    gigachat: "GIGACHAT_API_KEY",
-    openai: "OPENAI_API_KEY",
+    gigachat: "GIGACHATAPIKEY",
+    openai: "OPENAIAPIKEY",
     yandex: "YANDEX_IAM_TOKEN",
   };
   const keyName = keyNames[provider];

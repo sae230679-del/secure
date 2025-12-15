@@ -11,8 +11,8 @@ In the Replit Secrets tab, add the following:
 | `DATABASE_URL` | PostgreSQL connection string (auto-configured with Replit DB) |
 | `SESSION_SECRET` | Random 32+ character string for session encryption |
 | `SUPERADMIN_PASSWORD` | Password for the superadmin account |
-| `OPENAI_API_KEY` | OpenAI API key (optional, for AI analysis) |
-| `GIGACHAT_API_KEY` | GigaChat API key (optional, for Russian AI) |
+| `OPENAIAPIKEY` | OpenAI API key (optional, for AI analysis) |
+| `GIGACHATAPIKEY` | GigaChat API key (optional, for Russian AI) |
 
 ### 2. Database Migration
 
@@ -63,8 +63,8 @@ Edit the `.env` file with your production values:
 ```bash
 DATABASE_URL=postgresql://securelex:YOUR_PASSWORD@db:5432/securelex
 SESSION_SECRET=your-32-char-random-secret-here
-OPENAI_API_KEY=sk-your-openai-key
-GIGACHAT_API_KEY=your-gigachat-key
+OPENAIAPIKEY=sk-your-openai-key
+GIGACHATAPIKEY=your-gigachat-key
 SUPERADMIN_EMAIL=admin@securelex.ru
 SUPERADMIN_PASSWORD=YourSecurePassword123!
 SUPERADMIN_NAME=Admin

@@ -25,7 +25,7 @@ function isPrivateIp(hostname: string): boolean {
 let cachedGigaChatToken: { token: string; expiresAt: number } | null = null;
 
 async function getGigaChatAccessToken(): Promise<string | null> {
-  const apiKey = process.env.GIGACHAT_API_KEY;
+  const apiKey = process.env.GIGACHATAPIKEY;
   if (!apiKey) return null;
 
   if (cachedGigaChatToken && cachedGigaChatToken.expiresAt > Date.now()) {
@@ -1039,8 +1039,8 @@ async function runLevel2Analysis(
   level1Results: AuditCheckResult[],
   aiMode: AuditAiMode = "gigachat_only"
 ): Promise<{ additionalChecks: AuditCheckResult[]; summary: string; recommendations: string[] }> {
-  const openaiKey = process.env.OPENAI_API_KEY;
-  const gigachatKey = process.env.GIGACHAT_API_KEY;
+  const openaiKey = process.env.OPENAIAPIKEY;
+  const gigachatKey = process.env.GIGACHATAPIKEY;
 
   if (aiMode === "none") {
     return {
@@ -1057,23 +1057,23 @@ async function runLevel2Analysis(
     return {
       additionalChecks: [],
       summary: "ИИ-анализ недоступен: не настроены API ключи",
-      recommendations: ["Настройте OPENAI_API_KEY или GIGACHAT_API_KEY для глубокого анализа"],
+      recommendations: ["Настройте OPENAIAPIKEY или GIGACHATAPIKEY для глубокого анализа"],
     };
   }
 
   if (aiMode === "gigachat_only" && !gigachatKey) {
     return {
       additionalChecks: [],
-      summary: "GigaChat недоступен: не настроен GIGACHAT_API_KEY",
-      recommendations: ["Настройте GIGACHAT_API_KEY для анализа"],
+      summary: "GigaChat недоступен: не настроен GIGACHATAPIKEY",
+      recommendations: ["Настройте GIGACHATAPIKEY для анализа"],
     };
   }
 
   if (aiMode === "openai_only" && !openaiKey) {
     return {
       additionalChecks: [],
-      summary: "OpenAI недоступен: не настроен OPENAI_API_KEY",
-      recommendations: ["Настройте OPENAI_API_KEY для анализа"],
+      summary: "OpenAI недоступен: не настроен OPENAIAPIKEY",
+      recommendations: ["Настройте OPENAIAPIKEY для анализа"],
     };
   }
 

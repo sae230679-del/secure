@@ -32,12 +32,12 @@ The system supports the following AI analysis modes:
 
 ### `gigachat_only` Mode:
 - Calls only GigaChat API
-- Requires: `GIGACHAT_API_KEY` env var or database key
+- Requires: `GIGACHATAPIKEY` env var or database key
 - If key missing: Returns error message
 
 ### `openai_only` Mode:
 - Calls only OpenAI API
-- Requires: `OPENAI_API_KEY` env var or database key
+- Requires: `OPENAIAPIKEY` env var or database key
 - If key missing: Returns error message
 
 ### `yandex_only` Mode:
@@ -79,7 +79,7 @@ Powered by {provider} | ai_mode: {mode}
 
 ### Missing API Keys:
 - If selected mode requires unavailable key, audit returns informative error
-- Example: `"GigaChat недоступен: не настроен GIGACHAT_API_KEY"`
+- Example: `"GigaChat недоступен: не настроен GIGACHATAPIKEY"`
 
 ### All Keys Missing (hybrid/tri_hybrid):
 - Returns: `"ИИ-анализ недоступен: не настроены API ключи"`
