@@ -191,6 +191,7 @@ export function ExpressCheck() {
   const [result, setResult] = useState<ExpressResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPurchasing, setIsPurchasing] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [showInnModal, setShowInnModal] = useState(false);
   const [innInput, setInnInput] = useState("");
   const [isCheckingInn, setIsCheckingInn] = useState(false);
@@ -391,6 +392,43 @@ export function ExpressCheck() {
     }
   };
 
+  const handleDownloadPdf = async () => {
+    if (!checkToken) return;
+    
+    setIsDownloading(true);
+    try {
+      const response = await fetch(`/api/public/express-check/${checkToken}/pdf`);
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Ошибка при генерации PDF");
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `express-report-${new Date().toISOString().split("T")[0]}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast({
+        title: "PDF скачан",
+        description: "Краткий отчёт успешно сохранён",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Ошибка",
+        description: err.message || "Не удалось скачать PDF",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   const handleProceedToPackages = () => {
     if (!websiteUrl || !selectedType) return;
     
@@ -445,7 +483,9 @@ export function ExpressCheck() {
             <AuditResultsView
               results={result.briefResults}
               isExpress={true}
+              onDownloadPdf={handleDownloadPdf}
               onPurchaseFullReport={handlePurchaseReport}
+              isDownloading={isDownloading}
               isPurchasing={isPurchasing}
             />
           ) : (

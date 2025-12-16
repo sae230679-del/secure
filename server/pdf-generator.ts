@@ -5,7 +5,6 @@ import fs from "fs";
 import { 
   PENALTY_MAP, 
   calcPenaltyTotals, 
-  attachPenalties, 
   formatRub, 
   getSubjectName,
   SELF_EMPLOYED_RULE,
@@ -15,6 +14,127 @@ import {
 
 const FONT_PATH = path.join(process.cwd(), "server/fonts/DejaVuSans.ttf");
 const FONT_NAME = "DejaVu";
+
+const COLORS = {
+  primary: "#1a56db",
+  primaryDark: "#1e3a5f",
+  secondary: "#6b7280",
+  success: "#22c55e",
+  successLight: "#dcfce7",
+  warning: "#f59e0b",
+  warningLight: "#fef9c3",
+  danger: "#dc2626",
+  dangerLight: "#fee2e2",
+  text: "#1f2937",
+  textMuted: "#4b5563",
+  textLight: "#9ca3af",
+  background: "#ffffff",
+  backgroundAlt: "#f3f4f6",
+  border: "#e5e7eb",
+  accent: "#eff6ff",
+  accentBorder: "#bfdbfe",
+};
+
+const PAGE = {
+  width: 595,
+  height: 842,
+  marginTop: 60,
+  marginBottom: 50,
+  marginLeft: 50,
+  marginRight: 50,
+  contentWidth: 495,
+  headerHeight: 35,
+  footerHeight: 25,
+};
+
+interface LawRef {
+  act: string;
+  ref: string;
+}
+
+interface HostingInfo {
+  status: "ru" | "foreign" | "uncertain";
+  confidence: number;
+  ips: string[];
+  providerGuess: string | null;
+  evidence: string[];
+  ai: {
+    used: boolean;
+    provider?: string;
+    rawSummary?: string;
+  };
+}
+
+interface BriefHighlight {
+  id: string;
+  title: string;
+  status: "ok" | "warn" | "fail" | "na";
+  severity: "critical" | "medium" | "low" | "info";
+  summary: string;
+  howToFixShort?: string;
+  law?: LawRef[];
+}
+
+interface BriefScore {
+  percent: number;
+  severity: "low" | "medium" | "high";
+  totals: {
+    checks: number;
+    ok: number;
+    warn: number;
+    fail: number;
+    na: number;
+  };
+}
+
+interface BriefCta {
+  fullReportPriceRub: number;
+  fullReportIncludes: string[];
+}
+
+interface BriefResults {
+  site: {
+    domain: string;
+    ssl: boolean;
+    responseTimeMs: number;
+  };
+  score: BriefScore;
+  hosting: HostingInfo;
+  highlights: BriefHighlight[];
+  cta: BriefCta;
+}
+
+interface CriteriaResult {
+  name: string;
+  description: string;
+  status: "passed" | "warning" | "failed";
+  details: string;
+  category?: string;
+  law?: string;
+  howToFix?: string;
+  codeExample?: string;
+  evidence?: string[];
+}
+
+interface PdfReportData {
+  auditId: number;
+  websiteUrl: string;
+  companyName?: string;
+  scorePercent: number;
+  severity: "red" | "yellow" | "green";
+  passedCount: number;
+  warningCount: number;
+  failedCount: number;
+  totalCount: number;
+  createdAt: Date;
+  packageName: string;
+  briefResults?: BriefResults;
+  criteria?: CriteriaResult[];
+  aiSummary?: string;
+  aiRecommendations?: string[];
+}
+
+type ReportType = "express" | "full";
 
 function getFontPath(): string {
   if (fs.existsSync(FONT_PATH)) {
@@ -28,248 +148,919 @@ function getFontPath(): string {
   return FONT_PATH;
 }
 
-function addPageWithFont(doc: PDFKit.PDFDocument): void {
-  doc.addPage();
-  doc.font(FONT_NAME);
+function formatDate(date: Date): string {
+  return new Date(date).toLocaleDateString("ru-RU", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 }
 
-// AI mode type
-type AuditAiMode = "gigachat_only" | "openai_only" | "hybrid" | "none";
-
-// Color constants for AI block
-const AI_COLORS = {
-  header: "#6366f1",      // Indigo for AI header
-  critical: "#dc2626",    // Red for critical items
-  medium: "#f59e0b",      // Amber for medium priority
-  low: "#22c55e",         // Green for low priority / passed
-  text: "#374151",        // Gray-700 for text
-  background: "#eef2ff",  // Light indigo background
-  border: "#a5b4fc",      // Indigo border
-};
-
-interface CriteriaResult {
-  name: string;
-  description: string;
-  status: "passed" | "warning" | "failed";
-  details: string;
-  category?: string;
-  law?: string;
-}
-
-interface AuditReportData {
-  auditId: number;
-  websiteUrl: string;
-  companyName?: string;
-  scorePercent: number;
-  severity: string;
-  passedCount: number;
-  warningCount: number;
-  failedCount: number;
-  totalCount: number;
-  criteria: CriteriaResult[];
-  createdAt: Date;
-  packageName: string;
-  // AI analysis fields
-  aiSummary?: string;
-  aiRecommendations?: string[];
-  aiMode?: AuditAiMode;
-}
-
-// Classify recommendation priority based on keywords
-function classifyPriority(text: string): "critical" | "medium" | "low" {
-  const textLower = text.toLowerCase();
-  if (textLower.includes("критич") || textLower.includes("срочно") || 
-      textLower.includes("немедленно") || textLower.includes("обязательно") ||
-      textLower.includes("штраф") || textLower.includes("блокировк")) {
-    return "critical";
-  }
-  if (textLower.includes("рекоменду") || textLower.includes("желательно") ||
-      textLower.includes("следует") || textLower.includes("важно")) {
-    return "medium";
-  }
-  return "low";
-}
-
-// Get icon for priority
-function getPriorityIcon(priority: "critical" | "medium" | "low"): string {
-  switch (priority) {
-    case "critical": return "[!]";
-    case "medium": return "[~]";
-    case "low": return "[+]";
+function getSeverityText(severity: string): string {
+  switch (severity) {
+    case "low":
+    case "green": return "Соответствует";
+    case "medium":
+    case "yellow": return "Частично соответствует";
+    case "high":
+    case "red": return "Не соответствует";
+    default: return "Неизвестно";
   }
 }
 
-// Get color for priority
-function getPriorityColor(priority: "critical" | "medium" | "low"): string {
-  switch (priority) {
-    case "critical": return AI_COLORS.critical;
-    case "medium": return AI_COLORS.medium;
-    case "low": return AI_COLORS.low;
+function getSeverityColor(severity: string): string {
+  switch (severity) {
+    case "low":
+    case "green": return COLORS.success;
+    case "medium":
+    case "yellow": return COLORS.warning;
+    case "high":
+    case "red": return COLORS.danger;
+    default: return COLORS.secondary;
   }
 }
 
-// Render express (brief) AI block - for expressreport package
-function renderExpressAIBlock(doc: PDFKit.PDFDocument, data: AuditReportData): void {
-  const startY = doc.y;
+function getStatusIcon(status: string): string {
+  switch (status) {
+    case "ok":
+    case "passed": return "[OK]";
+    case "warn":
+    case "warning": return "[!]";
+    case "fail":
+    case "failed": return "[X]";
+    case "na":
+    default: return "[-]";
+  }
+}
+
+function getStatusColor(status: string): string {
+  switch (status) {
+    case "ok":
+    case "passed": return COLORS.success;
+    case "warn":
+    case "warning": return COLORS.warning;
+    case "fail":
+    case "failed": return COLORS.danger;
+    case "na":
+    default: return COLORS.secondary;
+  }
+}
+
+function mapCriterionToCheckId(name: string): string | null {
+  const nameLower = name.toLowerCase();
   
-  // Background box
-  doc.rect(50, startY, 495, 120)
-     .fillColor(AI_COLORS.background)
-     .fill();
+  if (nameLower.includes("политик") && (nameLower.includes("конфиденциальн") || nameLower.includes("пдн"))) {
+    return "LEGAL_PRIVACY_POLICY_MISSING";
+  }
+  if (nameLower.includes("согласи") && (nameLower.includes("форм") || nameLower.includes("чекбокс"))) {
+    return "PDN_CONSENT_CHECKBOX_MISSING";
+  }
+  if (nameLower.includes("cookie") && (nameLower.includes("баннер") || nameLower.includes("согласи"))) {
+    return "COOKIES_BANNER_MISSING";
+  }
+  if (nameLower.includes("контакт") || nameLower.includes("реквизит")) {
+    return "LEGAL_CONTACTS_MISSING";
+  }
+  if (nameLower.includes("https") || nameLower.includes("ssl")) {
+    return "TECH_NO_HTTPS";
+  }
+  if (nameLower.includes("hsts")) return "TECH_NO_HSTS";
+  if (nameLower.includes("csp")) return "TECH_NO_CSP";
   
-  // Border
-  doc.rect(50, startY, 495, 120)
-     .strokeColor(AI_COLORS.border)
-     .lineWidth(1)
-     .stroke();
+  return null;
+}
+
+function calculatePenalties(criteria: CriteriaResult[]): { totals: PenaltyTotals; violations: Array<{ title: string; key: string }> } {
+  const checkResults: { checkId: string; status: "passed" | "warning" | "failed" }[] = [];
+  const seenKeys = new Set<string>();
+  const violations: Array<{ title: string; key: string }> = [];
   
-  // Header
-  doc.fillColor(AI_COLORS.header)
-     .fontSize(14)
-     .text("[AI] ИИ-АНАЛИЗ", 70, startY + 12);
-  
-  // Summary (truncated to 2 lines max)
-  doc.fillColor(AI_COLORS.text)
-     .fontSize(10);
-  
-  const summaryText = data.aiSummary || "";
-  const truncatedSummary = summaryText.length > 200 
-    ? summaryText.substring(0, 197) + "..." 
-    : summaryText;
-  
-  doc.text("Резюме:", 70, startY + 35, { underline: true });
-  doc.text(truncatedSummary, 70, startY + 50, { width: 455 });
-  
-  // TOP-3 recommendations
-  if (data.aiRecommendations && data.aiRecommendations.length > 0) {
-    const top3 = data.aiRecommendations.slice(0, 3);
-    let recY = startY + 80;
+  for (const c of criteria) {
+    if (c.status === "passed") continue;
     
-    doc.text("ТОП-3:", 70, recY, { underline: true });
-    recY += 12;
-    
-    top3.forEach((rec, idx) => {
-      const priority = classifyPriority(rec);
-      const icon = getPriorityIcon(priority);
-      const color = getPriorityColor(priority);
-      const shortRec = rec.length > 60 ? rec.substring(0, 57) + "..." : rec;
+    const checkId = mapCriterionToCheckId(c.name);
+    if (checkId && PENALTY_MAP[checkId]) {
+      const penalty = PENALTY_MAP[checkId];
+      checkResults.push({ checkId, status: c.status });
       
-      doc.fillColor(color)
-         .text(icon, 70, recY, { continued: true })
-         .fillColor(AI_COLORS.text)
-         .text(` ${shortRec}`, { continued: false });
-      recY += 12;
+      if (!seenKeys.has(penalty.aggregationKey)) {
+        seenKeys.add(penalty.aggregationKey);
+        violations.push({ title: penalty.title, key: penalty.aggregationKey });
+      }
+    }
+  }
+  
+  return { totals: calcPenaltyTotals(checkResults), violations };
+}
+
+class PdfReportGenerator {
+  private doc: PDFKit.PDFDocument;
+  private data: PdfReportData;
+  private reportType: ReportType;
+  private pageNumber: number = 1;
+  private totalPages: number = 0;
+  
+  constructor(data: PdfReportData, reportType: ReportType) {
+    this.data = data;
+    this.reportType = reportType;
+    
+    this.doc = new PDFDocument({
+      size: "A4",
+      margins: { top: PAGE.marginTop, bottom: PAGE.marginBottom, left: PAGE.marginLeft, right: PAGE.marginRight },
+      bufferPages: true,
+      info: {
+        Title: `${reportType === "express" ? "Экспресс-отчёт" : "Полный отчёт"} - ${data.websiteUrl}`,
+        Author: "SecureLex.ru",
+        Subject: "Аудит соответствия законодательству РФ",
+        Keywords: "ФЗ-152, ФЗ-149, аудит, персональные данные, GDPR",
+      },
+    });
+    
+    const fontPath = getFontPath();
+    try {
+      this.doc.registerFont(FONT_NAME, fontPath);
+      this.doc.font(FONT_NAME);
+    } catch (e) {
+      console.error(`[PDF-GEN] Font error: ${e}`);
+      this.doc.font("Helvetica");
+    }
+  }
+  
+  private addNewPage(): void {
+    this.doc.addPage();
+    this.doc.font(FONT_NAME);
+    this.pageNumber++;
+  }
+  
+  private checkPageBreak(neededHeight: number): void {
+    const available = PAGE.height - PAGE.marginBottom - PAGE.footerHeight - this.doc.y;
+    if (neededHeight > available) {
+      this.addNewPage();
+      this.doc.y = PAGE.marginTop + PAGE.headerHeight + 10;
+    }
+  }
+  
+  private renderHeader(): void {
+    const y = 20;
+    
+    this.doc.fontSize(10)
+       .fillColor(COLORS.primary)
+       .text("SECURELEX.RU", PAGE.marginLeft, y, { continued: false });
+    
+    this.doc.fontSize(8)
+       .fillColor(COLORS.secondary)
+       .text(this.data.websiteUrl, PAGE.marginLeft + 200, y + 2, { width: 200, align: "center" });
+    
+    this.doc.fontSize(8)
+       .fillColor(COLORS.secondary)
+       .text(formatDate(this.data.createdAt), PAGE.width - PAGE.marginRight - 80, y + 2, { width: 80, align: "right" });
+    
+    this.doc.moveTo(PAGE.marginLeft, y + 18)
+       .lineTo(PAGE.width - PAGE.marginRight, y + 18)
+       .strokeColor(COLORS.border)
+       .lineWidth(0.5)
+       .stroke();
+  }
+  
+  private renderFooter(pageNum: number, totalPages: number): void {
+    const y = PAGE.height - 35;
+    
+    this.doc.moveTo(PAGE.marginLeft, y)
+       .lineTo(PAGE.width - PAGE.marginRight, y)
+       .strokeColor(COLORS.border)
+       .lineWidth(0.5)
+       .stroke();
+    
+    this.doc.fontSize(7)
+       .fillColor(COLORS.textLight)
+       .text(
+         `Стр. ${pageNum} из ${totalPages}`,
+         PAGE.marginLeft,
+         y + 8,
+         { width: 60 }
+       );
+    
+    this.doc.fontSize(7)
+       .fillColor(COLORS.textLight)
+       .text(
+         "Данный отчёт носит информационный характер и не является юридическим заключением.",
+         PAGE.marginLeft + 80,
+         y + 8,
+         { width: PAGE.contentWidth - 140, align: "center" }
+       );
+    
+    this.doc.fontSize(7)
+       .fillColor(COLORS.textLight)
+       .text(
+         `#${this.data.auditId}`,
+         PAGE.width - PAGE.marginRight - 60,
+         y + 8,
+         { width: 60, align: "right" }
+       );
+  }
+  
+  private renderCoverPage(): void {
+    this.doc.y = 150;
+    
+    this.doc.fontSize(28)
+       .fillColor(COLORS.primary)
+       .text("SECURELEX.RU", { align: "center" });
+    
+    this.doc.moveDown(0.3);
+    this.doc.fontSize(11)
+       .fillColor(COLORS.secondary)
+       .text("Проверка сайтов на соответствие законодательству РФ", { align: "center" });
+    
+    this.doc.moveDown(2);
+    
+    const reportTitle = this.reportType === "express" ? "ЭКСПРЕСС-ОТЧЁТ" : "ПОЛНЫЙ ОТЧЁТ АУДИТА";
+    this.doc.fontSize(22)
+       .fillColor(COLORS.text)
+       .text(reportTitle, { align: "center" });
+    
+    this.doc.moveDown(0.8);
+    
+    const displayUrl = this.data.briefResults?.site?.domain || this.data.websiteUrl;
+    this.doc.fontSize(16)
+       .fillColor(COLORS.primary)
+       .text(displayUrl, { align: "center" });
+    
+    this.doc.moveDown(2);
+    
+    const boxY = this.doc.y;
+    const boxHeight = 140;
+    
+    this.doc.rect(PAGE.marginLeft, boxY, PAGE.contentWidth, boxHeight)
+       .fillColor(COLORS.backgroundAlt)
+       .fill();
+    
+    this.doc.rect(PAGE.marginLeft, boxY, PAGE.contentWidth, boxHeight)
+       .strokeColor(COLORS.border)
+       .lineWidth(1)
+       .stroke();
+    
+    const scoreSize = 60;
+    const scoreX = PAGE.marginLeft + 40;
+    const scoreY = boxY + (boxHeight - scoreSize) / 2;
+    
+    const scorePercent = this.data.briefResults?.score?.percent ?? this.data.scorePercent ?? 0;
+    const severity = this.data.briefResults?.score?.severity ?? this.data.severity ?? "high";
+    const severityColor = getSeverityColor(severity);
+    
+    this.doc.circle(scoreX + scoreSize / 2, scoreY + scoreSize / 2, scoreSize / 2)
+       .fillColor(severityColor)
+       .fill();
+    
+    this.doc.fontSize(24)
+       .fillColor("#ffffff")
+       .text(`${scorePercent}%`, scoreX, scoreY + 18, { width: scoreSize, align: "center" });
+    
+    const infoX = PAGE.marginLeft + 130;
+    let infoY = boxY + 20;
+    
+    this.doc.fontSize(10).fillColor(COLORS.text);
+    
+    this.doc.text("Дата проверки:", infoX, infoY);
+    this.doc.text(formatDate(this.data.createdAt), infoX + 120, infoY);
+    infoY += 22;
+    
+    this.doc.text("Тип отчёта:", infoX, infoY);
+    this.doc.text(this.data.packageName || (this.reportType === "express" ? "Экспресс-отчёт" : "Полный аудит"), infoX + 120, infoY);
+    infoY += 22;
+    
+    this.doc.text("Статус:", infoX, infoY);
+    this.doc.fillColor(severityColor)
+       .text(getSeverityText(severity), infoX + 120, infoY);
+    infoY += 22;
+    
+    this.doc.fillColor(COLORS.text);
+    this.doc.text("Результаты:", infoX, infoY);
+    
+    const totals = this.data.briefResults?.score?.totals;
+    const passedCount = totals?.ok ?? this.data.passedCount ?? 0;
+    const warningCount = totals?.warn ?? this.data.warningCount ?? 0;
+    const failedCount = totals?.fail ?? this.data.failedCount ?? 0;
+    
+    const statsX = infoX + 120;
+    this.doc.fillColor(COLORS.success).text(`${passedCount} OK`, statsX, infoY, { continued: true });
+    this.doc.fillColor(COLORS.text).text(" / ", { continued: true });
+    this.doc.fillColor(COLORS.warning).text(`${warningCount} `, { continued: true });
+    this.doc.fillColor(COLORS.text).text("/ ", { continued: true });
+    this.doc.fillColor(COLORS.danger).text(`${failedCount} `, { continued: false });
+    
+    this.doc.y = boxY + boxHeight + 30;
+  }
+  
+  private renderHostingBlock(): void {
+    const hosting = this.data.briefResults?.hosting;
+    if (!hosting) return;
+    
+    this.checkPageBreak(100);
+    
+    this.doc.fontSize(14)
+       .fillColor(COLORS.primaryDark)
+       .text("РАЗМЕЩЕНИЕ СЕРВЕРА", PAGE.marginLeft, this.doc.y);
+    this.doc.moveDown(0.5);
+    
+    const boxY = this.doc.y;
+    const boxHeight = 70;
+    
+    let bgColor: string;
+    let statusText: string;
+    let flag: string;
+    
+    switch (hosting.status) {
+      case "ru":
+      case "russian":
+        bgColor = COLORS.successLight;
+        statusText = "Размещён в России";
+        flag = "[RU]";
+        break;
+      case "foreign":
+        bgColor = COLORS.dangerLight;
+        statusText = "Размещён за рубежом";
+        flag = "[--]";
+        break;
+      default:
+        bgColor = COLORS.warningLight;
+        statusText = "Не удалось определить";
+        flag = "[?]";
+    }
+    
+    this.doc.rect(PAGE.marginLeft, boxY, PAGE.contentWidth, boxHeight)
+       .fillColor(bgColor)
+       .fill();
+    
+    this.doc.fontSize(14)
+       .fillColor(COLORS.text)
+       .text(`${flag} ${statusText}`, PAGE.marginLeft + 15, boxY + 15);
+    
+    const providerName = hosting.providerGuess || (hosting as any).provider;
+    if (providerName) {
+      this.doc.fontSize(10)
+         .fillColor(COLORS.textMuted)
+         .text(`Провайдер: ${providerName}`, PAGE.marginLeft + 15, boxY + 35);
+    }
+    
+    if (hosting.ips && hosting.ips.length > 0) {
+      this.doc.fontSize(9)
+         .fillColor(COLORS.textLight)
+         .text(`IP: ${hosting.ips.slice(0, 3).join(", ")}${hosting.ips.length > 3 ? "..." : ""}`, PAGE.marginLeft + 15, boxY + 50);
+    }
+    
+    if (hosting.confidence && hosting.confidence < 80) {
+      this.doc.fontSize(8)
+         .fillColor(COLORS.warning)
+         .text(`Уверенность: ${hosting.confidence}%`, PAGE.marginLeft + 350, boxY + 15);
+    }
+    
+    this.doc.y = boxY + boxHeight + 15;
+  }
+  
+  private renderHighlightsTable(): void {
+    const highlights = this.data.briefResults?.highlights || [];
+    if (highlights.length === 0) return;
+    
+    this.checkPageBreak(50);
+    
+    this.doc.fontSize(14)
+       .fillColor(COLORS.primaryDark)
+       .text("КЛЮЧЕВЫЕ ПРОВЕРКИ", PAGE.marginLeft, this.doc.y);
+    this.doc.moveDown(0.5);
+    
+    const tableStartY = this.doc.y;
+    const colWidths = [30, 280, 90, 95];
+    const rowHeight = 28;
+    
+    this.doc.rect(PAGE.marginLeft, tableStartY, PAGE.contentWidth, rowHeight)
+       .fillColor(COLORS.backgroundAlt)
+       .fill();
+    
+    let x = PAGE.marginLeft + 5;
+    this.doc.fontSize(9).fillColor(COLORS.text);
+    this.doc.text("", x, tableStartY + 8);
+    x += colWidths[0];
+    this.doc.text("Критерий", x, tableStartY + 8, { width: colWidths[1] });
+    x += colWidths[1];
+    this.doc.text("Статус", x, tableStartY + 8, { width: colWidths[2], align: "center" });
+    x += colWidths[2];
+    this.doc.text("Закон", x, tableStartY + 8, { width: colWidths[3], align: "center" });
+    
+    let currentY = tableStartY + rowHeight;
+    
+    highlights.forEach((item, idx) => {
+      this.checkPageBreak(rowHeight + 5);
+      
+      const bgColor = idx % 2 === 0 ? COLORS.background : COLORS.backgroundAlt;
+      
+      this.doc.rect(PAGE.marginLeft, currentY, PAGE.contentWidth, rowHeight)
+         .fillColor(bgColor)
+         .fill();
+      
+      this.doc.rect(PAGE.marginLeft, currentY, PAGE.contentWidth, rowHeight)
+         .strokeColor(COLORS.border)
+         .lineWidth(0.3)
+         .stroke();
+      
+      let x = PAGE.marginLeft + 5;
+      
+      this.doc.fontSize(10)
+         .fillColor(getStatusColor(item.status))
+         .text(getStatusIcon(item.status), x, currentY + 8, { width: colWidths[0] });
+      x += colWidths[0];
+      
+      this.doc.fontSize(9)
+         .fillColor(COLORS.text)
+         .text(item.title, x, currentY + 5, { width: colWidths[1] - 5 });
+      x += colWidths[1];
+      
+      const statusLabel = (item.status === "ok" || item.status === "passed") ? "OK" : 
+                         (item.status === "warn" || item.status === "warning") ? "Внимание" : 
+                         (item.status === "fail" || item.status === "failed") ? "Нарушение" : "-";
+      this.doc.fontSize(8)
+         .fillColor(getStatusColor(item.status))
+         .text(statusLabel, x, currentY + 8, { width: colWidths[2], align: "center" });
+      x += colWidths[2];
+      
+      const lawText = Array.isArray(item.law) && item.law.length > 0 
+        ? item.law.map(l => l.ref || l.act).join(", ").substring(0, 20) 
+        : (typeof item.law === "string" ? item.law : "-");
+      this.doc.fontSize(8)
+         .fillColor(COLORS.textMuted)
+         .text(lawText, x, currentY + 8, { width: colWidths[3], align: "center" });
+      
+      currentY += rowHeight;
+    });
+    
+    this.doc.y = currentY + 15;
+  }
+  
+  private renderBriefRecommendations(): void {
+    const highlights = this.data.briefResults?.highlights || [];
+    const issues = highlights.filter(h => h.status !== "ok" && h.status !== "passed" && h.status !== "na");
+    
+    if (issues.length === 0) return;
+    
+    this.checkPageBreak(80);
+    
+    this.doc.fontSize(14)
+       .fillColor(COLORS.primaryDark)
+       .text("КРАТКИЕ РЕКОМЕНДАЦИИ", PAGE.marginLeft, this.doc.y);
+    this.doc.moveDown(0.5);
+    
+    issues.slice(0, 6).forEach((item, idx) => {
+      this.checkPageBreak(45);
+      
+      const boxY = this.doc.y;
+      const bgColor = (item.status === "fail" || item.status === "failed") ? COLORS.dangerLight : COLORS.warningLight;
+      
+      this.doc.rect(PAGE.marginLeft, boxY, PAGE.contentWidth, 35)
+         .fillColor(bgColor)
+         .fill();
+      
+      this.doc.fontSize(10)
+         .fillColor(COLORS.text)
+         .text(`${idx + 1}. ${item.title}`, PAGE.marginLeft + 10, boxY + 5);
+      
+      if (item.howToFixShort) {
+        this.doc.fontSize(8)
+           .fillColor(COLORS.textMuted)
+           .text(item.howToFixShort, PAGE.marginLeft + 20, boxY + 20, { width: PAGE.contentWidth - 30 });
+      }
+      
+      this.doc.y = boxY + 40;
     });
   }
   
-  doc.y = startY + 130;
-}
-
-// Render full AI block - for all other packages
-function renderFullAIBlock(doc: PDFKit.PDFDocument, data: AuditReportData): void {
-  const startY = doc.y;
-  const recommendations = data.aiRecommendations || [];
-  
-  // Calculate height needed
-  const headerHeight = 30;
-  const summaryHeight = 60;
-  const recHeight = Math.min(recommendations.length * 18, 120);
-  const footerHeight = 25;
-  const totalHeight = headerHeight + summaryHeight + recHeight + footerHeight + 20;
-  
-  // Check if we need a new page
-  if (startY + totalHeight > 720) {
-    addPageWithFont(doc);
+  private renderCtaPage(): void {
+    this.addNewPage();
+    this.doc.y = 150;
+    
+    const boxY = this.doc.y;
+    const boxHeight = 280;
+    
+    this.doc.rect(PAGE.marginLeft, boxY, PAGE.contentWidth, boxHeight)
+       .fillColor(COLORS.accent)
+       .fill();
+    
+    this.doc.rect(PAGE.marginLeft, boxY, PAGE.contentWidth, boxHeight)
+       .strokeColor(COLORS.accentBorder)
+       .lineWidth(2)
+       .stroke();
+    
+    this.doc.fontSize(18)
+       .fillColor(COLORS.primary)
+       .text("ЭТО ЭКСПРЕСС-ОТЧЁТ", PAGE.marginLeft + 20, boxY + 25, { width: PAGE.contentWidth - 40, align: "center" });
+    
+    this.doc.moveDown(0.5);
+    this.doc.fontSize(12)
+       .fillColor(COLORS.text)
+       .text("Вы видите сокращённую версию анализа.", { align: "center" });
+    
+    this.doc.moveDown(1.5);
+    this.doc.fontSize(16)
+       .fillColor(COLORS.primaryDark)
+       .text("Закажите полный отчёт за 900 руб.", { align: "center" });
+    
+    this.doc.moveDown(1);
+    
+    const benefits = [
+      "Детальный разбор всех 30+ критериев проверки",
+      "Пошаговые инструкции по устранению нарушений",
+      "Примеры кода для вашего сайта",
+      "Расчёт штрафных рисков по КоАП РФ",
+      "Чек-лист для внутреннего аудита",
+      "Ссылки на официальные ресурсы РКН",
+    ];
+    
+    let benefitY = this.doc.y;
+    benefits.forEach((benefit) => {
+      this.doc.fontSize(10)
+         .fillColor(COLORS.success)
+         .text("[+]", PAGE.marginLeft + 60, benefitY, { continued: true })
+         .fillColor(COLORS.text)
+         .text(` ${benefit}`, { continued: false });
+      benefitY += 18;
+    });
+    
+    this.doc.y = benefitY + 20;
+    
+    this.doc.fontSize(12)
+       .fillColor(COLORS.danger)
+       .text("Защитите свой бизнес от штрафов до 18 000 000 руб!", { align: "center" });
+    
+    this.doc.moveDown(1.5);
+    
+    this.doc.fontSize(11)
+       .fillColor(COLORS.primary)
+       .text("securelex.ru/audit", { align: "center", underline: true });
+    
+    this.doc.moveDown(0.5);
+    this.doc.fontSize(10)
+       .fillColor(COLORS.textMuted)
+       .text("support@securelex.ru", { align: "center" });
   }
   
-  const boxY = doc.y;
-  
-  // Background box
-  doc.rect(50, boxY, 495, totalHeight)
-     .fillColor(AI_COLORS.background)
-     .fill();
-  
-  // Border
-  doc.rect(50, boxY, 495, totalHeight)
-     .strokeColor(AI_COLORS.border)
-     .lineWidth(1)
-     .stroke();
-  
-  // Header with icon
-  doc.fillColor(AI_COLORS.header)
-     .fontSize(14)
-     .text("[AI] ИИ-АНАЛИТИКА ПО ФЗ-152/149", 70, boxY + 12);
-  
-  // Summary section
-  doc.fillColor(AI_COLORS.text)
-     .fontSize(11)
-     .text("РЕЗЮМЕ АНАЛИЗА:", 70, boxY + 35, { underline: true });
-  
-  doc.fontSize(10);
-  const summaryText = data.aiSummary || "Анализ не проведён";
-  doc.text(summaryText, 70, boxY + 50, { width: 455 });
-  
-  // Recommendations section
-  if (recommendations.length > 0) {
-    let recY = boxY + summaryHeight + headerHeight;
+  private renderFullCriteriaTable(): void {
+    const criteria = this.data.criteria || [];
+    if (criteria.length === 0) return;
     
-    doc.fillColor(AI_COLORS.text)
-       .fontSize(11)
-       .text("РЕКОМЕНДАЦИИ:", 70, recY, { underline: true });
-    recY += 15;
+    this.addNewPage();
+    this.doc.y = PAGE.marginTop + PAGE.headerHeight + 10;
     
-    recommendations.forEach((rec, idx) => {
-      if (recY > boxY + totalHeight - 30) return; // Don't overflow
+    this.doc.fontSize(16)
+       .fillColor(COLORS.primaryDark)
+       .text("ПОЛНАЯ ТАБЛИЦА ПРОВЕРОК", PAGE.marginLeft, this.doc.y);
+    this.doc.moveDown(1);
+    
+    const categories: Record<string, CriteriaResult[]> = {};
+    criteria.forEach(c => {
+      const cat = c.category || "Общие требования";
+      if (!categories[cat]) categories[cat] = [];
+      categories[cat].push(c);
+    });
+    
+    Object.entries(categories).forEach(([category, items]) => {
+      this.checkPageBreak(60);
       
-      const priority = classifyPriority(rec);
-      const icon = getPriorityIcon(priority);
-      const color = getPriorityColor(priority);
+      this.doc.fontSize(12)
+         .fillColor(COLORS.primary)
+         .text(`>> ${category}`, PAGE.marginLeft, this.doc.y);
+      this.doc.moveDown(0.5);
       
-      doc.fillColor(color)
-         .fontSize(10)
-         .text(icon, 70, recY, { continued: true })
-         .fillColor(AI_COLORS.text)
-         .text(` ${rec}`, { continued: false, width: 440 });
+      items.forEach((item, idx) => {
+        this.checkPageBreak(35);
+        
+        const statusIcon = getStatusIcon(item.status);
+        const statusColor = getStatusColor(item.status);
+        
+        this.doc.fontSize(10)
+           .fillColor(statusColor)
+           .text(statusIcon, PAGE.marginLeft, this.doc.y, { continued: true })
+           .fillColor(COLORS.text)
+           .text(` ${item.name}`, { continued: false });
+        
+        if (item.description) {
+          this.doc.fontSize(8)
+             .fillColor(COLORS.textMuted)
+             .text(item.description, PAGE.marginLeft + 25, this.doc.y, { width: PAGE.contentWidth - 25 });
+        }
+        
+        this.doc.moveDown(0.5);
+      });
       
-      recY += 18;
+      this.doc.moveDown(0.5);
     });
   }
   
-  // Footer with AI provider info
-  const aiModeText = data.aiMode === "gigachat_only" ? "GigaChat" :
-                     data.aiMode === "openai_only" ? "OpenAI GPT" :
-                     data.aiMode === "hybrid" ? "Hybrid (OpenAI + GigaChat)" : "N/A";
+  private renderDetailedAnalysis(): void {
+    const criteria = this.data.criteria || [];
+    const issues = criteria.filter(c => c.status !== "passed");
+    
+    if (issues.length === 0) return;
+    
+    this.addNewPage();
+    this.doc.y = PAGE.marginTop + PAGE.headerHeight + 10;
+    
+    this.doc.fontSize(16)
+       .fillColor(COLORS.danger)
+       .text("ДЕТАЛЬНЫЙ РАЗБОР НАРУШЕНИЙ", PAGE.marginLeft, this.doc.y);
+    this.doc.moveDown(1);
+    
+    issues.forEach((item, idx) => {
+      this.checkPageBreak(120);
+      
+      const boxY = this.doc.y;
+      const bgColor = item.status === "failed" ? COLORS.dangerLight : COLORS.warningLight;
+      
+      this.doc.rect(PAGE.marginLeft, boxY, PAGE.contentWidth, 25)
+         .fillColor(bgColor)
+         .fill();
+      
+      this.doc.fontSize(11)
+         .fillColor(COLORS.text)
+         .text(`${idx + 1}. ${item.name}`, PAGE.marginLeft + 10, boxY + 7);
+      
+      if (item.law) {
+        this.doc.fontSize(8)
+           .fillColor(COLORS.danger)
+           .text(item.law, PAGE.marginLeft + 380, boxY + 9, { width: 110, align: "right" });
+      }
+      
+      this.doc.y = boxY + 30;
+      
+      if (item.description) {
+        this.doc.fontSize(9)
+           .fillColor(COLORS.text)
+           .text("Описание:", PAGE.marginLeft + 10, this.doc.y, { underline: true });
+        this.doc.fontSize(9)
+           .fillColor(COLORS.textMuted)
+           .text(item.description, PAGE.marginLeft + 10, this.doc.y + 12, { width: PAGE.contentWidth - 20 });
+        this.doc.moveDown(0.8);
+      }
+      
+      if (item.howToFix) {
+        this.doc.fontSize(9)
+           .fillColor(COLORS.success)
+           .text("Как исправить:", PAGE.marginLeft + 10, this.doc.y, { underline: true });
+        this.doc.fontSize(9)
+           .fillColor(COLORS.text)
+           .text(item.howToFix, PAGE.marginLeft + 10, this.doc.y + 12, { width: PAGE.contentWidth - 20 });
+        this.doc.moveDown(0.8);
+      }
+      
+      if (item.codeExample) {
+        this.checkPageBreak(80);
+        
+        this.doc.fontSize(9)
+           .fillColor(COLORS.primary)
+           .text("Пример кода:", PAGE.marginLeft + 10, this.doc.y, { underline: true });
+        
+        const codeY = this.doc.y + 12;
+        const codeHeight = Math.min(60, item.codeExample.split("\n").length * 12 + 10);
+        
+        this.doc.rect(PAGE.marginLeft + 10, codeY, PAGE.contentWidth - 20, codeHeight)
+           .fillColor("#f8f9fa")
+           .fill();
+        
+        this.doc.rect(PAGE.marginLeft + 10, codeY, PAGE.contentWidth - 20, codeHeight)
+           .strokeColor(COLORS.border)
+           .lineWidth(0.5)
+           .stroke();
+        
+        this.doc.fontSize(8)
+           .fillColor(COLORS.text)
+           .text(item.codeExample.substring(0, 300), PAGE.marginLeft + 15, codeY + 5, { width: PAGE.contentWidth - 30 });
+        
+        this.doc.y = codeY + codeHeight + 5;
+      }
+      
+      this.doc.moveDown(1);
+    });
+  }
   
-  doc.fillColor("#9ca3af")
-     .fontSize(8)
-     .text(`Powered by ${aiModeText} | ai_mode: ${data.aiMode || "unknown"}`, 
-           70, boxY + totalHeight - 18, { width: 455, align: "right" });
+  private renderPenaltySection(): void {
+    const criteria = this.data.criteria || [];
+    const { totals, violations } = calculatePenalties(criteria);
+    
+    if (totals.uniqueViolations === 0) return;
+    
+    this.checkPageBreak(200);
+    
+    this.doc.fontSize(14)
+       .fillColor(COLORS.danger)
+       .text("РАСЧЁТ ШТРАФНЫХ РИСКОВ", PAGE.marginLeft, this.doc.y);
+    this.doc.moveDown(0.3);
+    
+    this.doc.fontSize(9)
+       .fillColor(COLORS.textMuted)
+       .text(`Выявлено нарушений: ${totals.uniqueViolations} | Основание: КоАП РФ ст. 13.11`, PAGE.marginLeft, this.doc.y);
+    this.doc.moveDown(0.8);
+    
+    const tableY = this.doc.y;
+    const rowHeight = 22;
+    const colWidths = [150, 100, 100, 145];
+    
+    this.doc.rect(PAGE.marginLeft, tableY, PAGE.contentWidth, rowHeight)
+       .fillColor(COLORS.backgroundAlt)
+       .fill();
+    
+    let x = PAGE.marginLeft + 5;
+    this.doc.fontSize(9).fillColor(COLORS.text);
+    this.doc.text("Тип субъекта", x, tableY + 6);
+    x += colWidths[0];
+    this.doc.text("MIN", x, tableY + 6, { width: colWidths[1], align: "right" });
+    x += colWidths[1];
+    this.doc.text("MAX", x, tableY + 6, { width: colWidths[2], align: "right" });
+    x += colWidths[2];
+    this.doc.text("Примечание", x, tableY + 6, { width: colWidths[3] });
+    
+    let currentY = tableY + rowHeight;
+    const subjects: SubjectType[] = ["citizen", "selfEmployed", "official", "ip", "legalEntity"];
+    
+    subjects.forEach((subj, idx) => {
+      const data = totals.bySubject[subj];
+      const bg = idx % 2 === 0 ? COLORS.background : COLORS.backgroundAlt;
+      
+      this.doc.rect(PAGE.marginLeft, currentY, PAGE.contentWidth, rowHeight)
+         .fillColor(bg)
+         .fill();
+      
+      this.doc.rect(PAGE.marginLeft, currentY, PAGE.contentWidth, rowHeight)
+         .strokeColor(COLORS.border)
+         .lineWidth(0.3)
+         .stroke();
+      
+      let x = PAGE.marginLeft + 5;
+      this.doc.fontSize(9).fillColor(COLORS.text);
+      this.doc.text(getSubjectName(subj), x, currentY + 6);
+      x += colWidths[0];
+      
+      this.doc.fillColor(data.minRub > 0 ? COLORS.danger : COLORS.text);
+      this.doc.text(formatRub(data.minRub), x, currentY + 6, { width: colWidths[1], align: "right" });
+      x += colWidths[1];
+      
+      this.doc.fillColor(data.maxRub > 0 ? COLORS.danger : COLORS.text);
+      this.doc.text(formatRub(data.maxRub), x, currentY + 6, { width: colWidths[2], align: "right" });
+      x += colWidths[2];
+      
+      const note = subj === "selfEmployed" ? "как физлицо" : "";
+      this.doc.fontSize(8).fillColor(COLORS.textMuted);
+      this.doc.text(note, x, currentY + 7);
+      
+      currentY += rowHeight;
+    });
+    
+    this.doc.y = currentY + 10;
+    
+    this.doc.fontSize(8)
+       .fillColor(COLORS.textMuted)
+       .text(`* ${SELF_EMPLOYED_RULE}`, PAGE.marginLeft, this.doc.y, { width: PAGE.contentWidth });
+    
+    this.doc.moveDown(1);
+  }
   
-  doc.y = boxY + totalHeight + 10;
+  private renderChecklist(): void {
+    const criteria = this.data.criteria || [];
+    const issues = criteria.filter(c => c.status !== "passed");
+    
+    if (issues.length === 0) return;
+    
+    this.addNewPage();
+    this.doc.y = PAGE.marginTop + PAGE.headerHeight + 10;
+    
+    this.doc.fontSize(16)
+       .fillColor(COLORS.primaryDark)
+       .text("ЧЕК-ЛИСТ ДЛЯ УСТРАНЕНИЯ НАРУШЕНИЙ", PAGE.marginLeft, this.doc.y);
+    this.doc.moveDown(0.5);
+    
+    this.doc.fontSize(9)
+       .fillColor(COLORS.textMuted)
+       .text("Распечатайте эту страницу и отмечайте выполненные пункты:", PAGE.marginLeft, this.doc.y);
+    this.doc.moveDown(1);
+    
+    issues.forEach((item, idx) => {
+      this.checkPageBreak(25);
+      
+      this.doc.rect(PAGE.marginLeft, this.doc.y, 12, 12)
+         .strokeColor(COLORS.text)
+         .lineWidth(1)
+         .stroke();
+      
+      this.doc.fontSize(10)
+         .fillColor(COLORS.text)
+         .text(`${idx + 1}. ${item.name}`, PAGE.marginLeft + 20, this.doc.y + 1);
+      
+      this.doc.moveDown(0.8);
+    });
+  }
+  
+  private renderResourcesPage(): void {
+    this.addNewPage();
+    this.doc.y = PAGE.marginTop + PAGE.headerHeight + 10;
+    
+    this.doc.fontSize(16)
+       .fillColor(COLORS.primaryDark)
+       .text("ПОЛЕЗНЫЕ РЕСУРСЫ", PAGE.marginLeft, this.doc.y);
+    this.doc.moveDown(1);
+    
+    const resources = [
+      { title: "Роскомнадзор - официальный сайт", url: "rkn.gov.ru" },
+      { title: "Реестр операторов ПДн", url: "pd.rkn.gov.ru" },
+      { title: "Федеральный закон 152-ФЗ", url: "consultant.ru/document/cons_doc_LAW_61801" },
+      { title: "Федеральный закон 149-ФЗ", url: "consultant.ru/document/cons_doc_LAW_61798" },
+      { title: "КоАП РФ ст. 13.11", url: "consultant.ru/document/cons_doc_LAW_34661" },
+      { title: "ФСТЭК России", url: "fstec.ru" },
+    ];
+    
+    resources.forEach((res, idx) => {
+      this.doc.fontSize(10)
+         .fillColor(COLORS.text)
+         .text(`${idx + 1}. ${res.title}`, PAGE.marginLeft, this.doc.y);
+      
+      this.doc.fontSize(9)
+         .fillColor(COLORS.primary)
+         .text(res.url, PAGE.marginLeft + 20, this.doc.y);
+      
+      this.doc.moveDown(0.8);
+    });
+    
+    this.doc.moveDown(2);
+    
+    this.doc.fontSize(11)
+       .fillColor(COLORS.primaryDark)
+       .text("КОНТАКТЫ SECURELEX.RU", PAGE.marginLeft, this.doc.y);
+    this.doc.moveDown(0.5);
+    
+    this.doc.fontSize(10)
+       .fillColor(COLORS.text)
+       .text("Сайт: securelex.ru", PAGE.marginLeft, this.doc.y);
+    this.doc.text("Email: support@securelex.ru");
+  }
+  
+  private addHeadersAndFooters(): void {
+    const range = this.doc.bufferedPageRange();
+    this.totalPages = range.count;
+    
+    for (let i = 0; i < this.totalPages; i++) {
+      this.doc.switchToPage(i);
+      this.renderHeader();
+      this.renderFooter(i + 1, this.totalPages);
+    }
+  }
+  
+  async generate(): Promise<Buffer> {
+    console.log(`[PDF-GEN] Starting ${this.reportType} report for audit #${this.data.auditId}`);
+    
+    return new Promise((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      const stream = new PassThrough();
+      
+      stream.on("data", (chunk) => chunks.push(chunk));
+      stream.on("end", () => resolve(Buffer.concat(chunks)));
+      stream.on("error", reject);
+      
+      this.doc.pipe(stream);
+      
+      this.renderCoverPage();
+      
+      if (this.reportType === "express") {
+        this.addNewPage();
+        this.doc.y = PAGE.marginTop + PAGE.headerHeight + 10;
+        
+        this.renderHostingBlock();
+        this.renderHighlightsTable();
+        this.renderBriefRecommendations();
+        this.renderCtaPage();
+      } else {
+        this.addNewPage();
+        this.doc.y = PAGE.marginTop + PAGE.headerHeight + 10;
+        
+        this.renderHostingBlock();
+        this.renderHighlightsTable();
+        this.renderFullCriteriaTable();
+        this.renderDetailedAnalysis();
+        this.renderPenaltySection();
+        this.renderChecklist();
+        this.renderResourcesPage();
+      }
+      
+      this.addHeadersAndFooters();
+      
+      this.doc.end();
+    });
+  }
 }
 
-const FINES_INFO: Record<string, { law: string; article: string; fine: string; risk: string }> = {
-  "ФЗ-152": {
-    law: "Федеральный закон № 152-ФЗ «О персональных данных»",
-    article: "ст. 13.11 КоАП РФ",
-    fine: "от 6 000 до 18 000 000 ₽",
-    risk: "Штрафы для должностных лиц от 10 000 ₽, для юрлиц от 60 000 ₽ до 18 000 000 ₽ при повторных нарушениях",
-  },
-  "ФЗ-149": {
-    law: "Федеральный закон № 149-ФЗ «Об информации»",
-    article: "ст. 13.18 КоАП РФ, ст. 274 УК РФ",
-    fine: "от 50 000 до 500 000 ₽",
-    risk: "Блокировка сайта Роскомнадзором, уголовная ответственность за утечку данных",
-  },
-};
+export async function generatePdfReport(
+  data: PdfReportData, 
+  type: ReportType = "full"
+): Promise<Buffer> {
+  const generator = new PdfReportGenerator(data, type);
+  return generator.generate();
+}
 
-const CATEGORY_COLORS: Record<string, [number, number, number]> = {
-  passed: [34, 139, 34],
-  warning: [218, 165, 32],
-  failed: [220, 53, 69],
-};
-
-function getCategoryFromCriteria(name: string): string {
+export function getCriteriaCategory(name: string): string {
   const nameLower = name.toLowerCase();
   if (nameLower.includes("персональн") || nameLower.includes("согласи") || nameLower.includes("152")) {
     return "ФЗ-152";
@@ -284,630 +1075,4 @@ function getCategoryFromCriteria(name: string): string {
     return "Техническая безопасность";
   }
   return "Общие требования";
-}
-
-function getLawFromCategory(category: string): string {
-  if (category === "ФЗ-152") return "ФЗ-152";
-  if (category === "ФЗ-149") return "ФЗ-149";
-  if (category === "Cookie-политика") return "ФЗ-152";
-  return "";
-}
-
-// Map criterion names to PENALTY_MAP checkIds
-function mapCriterionNameToCheckId(name: string): string | null {
-  const nameLower = name.toLowerCase();
-  
-  // Privacy policy
-  if (nameLower.includes("политик") && (nameLower.includes("конфиденциальн") || nameLower.includes("пдн"))) {
-    return "LEGAL_PRIVACY_POLICY_MISSING";
-  }
-  if (nameLower.includes("privacy policy")) return "LEGAL_PRIVACY_POLICY_MISSING";
-  
-  // Consent checkbox  
-  if (nameLower.includes("согласи") && (nameLower.includes("форм") || nameLower.includes("чекбокс") || nameLower.includes("checkbox"))) {
-    return "PDN_CONSENT_CHECKBOX_MISSING";
-  }
-  if (nameLower.includes("согласие на обработку")) return "PDN_CONSENT_CHECKBOX_MISSING";
-  
-  // Cookie banner
-  if (nameLower.includes("cookie") && (nameLower.includes("баннер") || nameLower.includes("banner") || nameLower.includes("согласи"))) {
-    return "COOKIES_BANNER_MISSING";
-  }
-  
-  // Contacts
-  if (nameLower.includes("контакт") || nameLower.includes("реквизит")) {
-    return "LEGAL_CONTACTS_MISSING";
-  }
-  
-  // HTTPS/SSL
-  if (nameLower.includes("https") || nameLower.includes("ssl") || nameLower.includes("сертификат")) {
-    return "TECH_NO_HTTPS";
-  }
-  
-  // Security headers
-  if (nameLower.includes("hsts")) return "TECH_NO_HSTS";
-  if (nameLower.includes("csp") || nameLower.includes("content-security-policy")) return "TECH_NO_CSP";
-  if (nameLower.includes("x-frame") || nameLower.includes("frame-options")) return "TECH_NO_XFRAME";
-  if (nameLower.includes("x-content-type") || nameLower.includes("content-type-options")) return "TECH_NO_CONTENT_TYPE_OPTIONS";
-  
-  // Data processing agreement
-  if (nameLower.includes("поручени") && nameLower.includes("обработк")) return "LEGAL_NO_DPA";
-  
-  // Operator notification
-  if (nameLower.includes("реестр") || nameLower.includes("уведомлени")) return "LEGAL_RKN_NO_NOTIFICATION";
-  
-  // Data localization
-  if (nameLower.includes("локализац") || nameLower.includes("россий")) return "LEGAL_DATA_NOT_LOCALIZED";
-  
-  return null;
-}
-
-// Get unique violations with their details
-interface ViolationInfo {
-  aggregationKey: string;
-  title: string;
-  checkId: string;
-}
-
-function getUniqueViolationsFromCriteria(criteria: CriteriaResult[]): ViolationInfo[] {
-  const seenAggKeys = new Set<string>();
-  const violations: ViolationInfo[] = [];
-  
-  for (const c of criteria) {
-    if (c.status === "passed") continue;
-    
-    const checkId = mapCriterionNameToCheckId(c.name);
-    if (checkId && PENALTY_MAP[checkId]) {
-      const penaltyItem = PENALTY_MAP[checkId];
-      if (!seenAggKeys.has(penaltyItem.aggregationKey)) {
-        seenAggKeys.add(penaltyItem.aggregationKey);
-        violations.push({
-          aggregationKey: penaltyItem.aggregationKey,
-          title: penaltyItem.title,
-          checkId,
-        });
-      }
-    }
-  }
-  
-  return violations;
-}
-
-// Calculate penalty totals from criteria results
-function calculatePenaltyTotalsFromCriteria(criteria: CriteriaResult[]): PenaltyTotals {
-  const checkResults: { checkId: string; status: "passed" | "warning" | "failed" }[] = [];
-  
-  for (const c of criteria) {
-    if (c.status === "passed") continue; // Skip passed checks
-    
-    const checkId = mapCriterionNameToCheckId(c.name);
-    if (checkId && PENALTY_MAP[checkId]) {
-      checkResults.push({ checkId, status: c.status });
-    }
-  }
-  
-  return calcPenaltyTotals(checkResults);
-}
-
-// Render calculated penalty totals section
-function renderPenaltyTotalsSection(
-  doc: PDFKit.PDFDocument, 
-  penaltyTotals: PenaltyTotals,
-  violations: ViolationInfo[]
-): void {
-  const primaryColor = "#1e3a5f";
-  const dangerColor = "#dc2626";
-  
-  if (penaltyTotals.uniqueViolations === 0) return;
-  
-  doc.moveDown(1);
-  doc.fontSize(14)
-     .fillColor(primaryColor)
-     .text("РАСЧЁТ ШТРАФНЫХ РИСКОВ ПО КоАП РФ", { underline: true });
-  doc.moveDown(0.5);
-  
-  doc.fontSize(9)
-     .fillColor("#6b7280")
-     .text(`Выявлено уникальных нарушений: ${penaltyTotals.uniqueViolations}`, { indent: 10 });
-  doc.text(`Основная статья: КоАП РФ ст. 13.11`, { indent: 10 });
-  doc.moveDown(0.5);
-  
-  // Show unique violations list (explains why penalties are not multiplied per page)
-  if (violations.length > 0) {
-    doc.fontSize(10)
-       .fillColor(primaryColor)
-       .text("Учтённые нарушения (дедупликация по типу):", { indent: 10 });
-    doc.moveDown(0.3);
-    
-    violations.forEach((v, idx) => {
-      doc.fontSize(8)
-         .fillColor(dangerColor)
-         .text(`${idx + 1}. `, 20, doc.y, { continued: true })
-         .fillColor("#374151")
-         .text(v.title, { continued: true })
-         .fillColor("#6b7280")
-         .text(` [${v.aggregationKey}]`, { continued: false });
-    });
-    doc.moveDown(0.5);
-    
-    doc.fontSize(8)
-       .fillColor("#6b7280")
-       .text("* Однотипные нарушения на разных страницах сайта учитываются как одно нарушение для расчёта штрафа.", { indent: 10 });
-    doc.moveDown(0.5);
-  }
-  
-  // Table header
-  const tableStartY = doc.y;
-  const colWidths = [140, 100, 100, 140];
-  const rowHeight = 22;
-  
-  doc.rect(50, tableStartY, 480, rowHeight)
-     .fillColor("#f3f4f6")
-     .fill();
-  
-  doc.fillColor("#1f2937")
-     .fontSize(9);
-  
-  let x = 55;
-  doc.text("Тип субъекта", x, tableStartY + 6, { width: colWidths[0] });
-  x += colWidths[0];
-  doc.text("MIN штраф", x, tableStartY + 6, { width: colWidths[1], align: "right" });
-  x += colWidths[1];
-  doc.text("MAX штраф", x, tableStartY + 6, { width: colWidths[2], align: "right" });
-  x += colWidths[2];
-  doc.text("Примечание", x, tableStartY + 6, { width: colWidths[3] });
-  
-  let currentY = tableStartY + rowHeight;
-  
-  const subjectOrder: SubjectType[] = ["citizen", "selfEmployed", "official", "ip", "legalEntity"];
-  
-  subjectOrder.forEach((subject, idx) => {
-    const totals = penaltyTotals.bySubject[subject];
-    const bgColor = idx % 2 === 0 ? "#ffffff" : "#f9fafb";
-    
-    doc.rect(50, currentY, 480, rowHeight)
-       .fillColor(bgColor)
-       .fill();
-    
-    doc.rect(50, currentY, 480, rowHeight)
-       .strokeColor("#e5e7eb")
-       .lineWidth(0.5)
-       .stroke();
-    
-    let x = 55;
-    doc.fillColor("#374151")
-       .fontSize(9);
-    
-    doc.text(getSubjectName(subject), x, currentY + 6, { width: colWidths[0] });
-    x += colWidths[0];
-    
-    const minColor = totals.minRub > 0 ? dangerColor : "#374151";
-    const maxColor = totals.maxRub > 0 ? dangerColor : "#374151";
-    
-    doc.fillColor(minColor)
-       .text(formatRub(totals.minRub), x, currentY + 6, { width: colWidths[1], align: "right" });
-    x += colWidths[1];
-    doc.fillColor(maxColor)
-       .text(formatRub(totals.maxRub), x, currentY + 6, { width: colWidths[2], align: "right" });
-    x += colWidths[2];
-    
-    const note = subject === "selfEmployed" ? "как физлицо" : "";
-    doc.fillColor("#6b7280")
-       .fontSize(8)
-       .text(note, x, currentY + 7, { width: colWidths[3] });
-    
-    currentY += rowHeight;
-  });
-  
-  doc.y = currentY + 10;
-  
-  // Self-employed rule note
-  doc.fontSize(8)
-     .fillColor("#6b7280")
-     .text(`* ${SELF_EMPLOYED_RULE}`, 50, doc.y, { width: 480 });
-  
-  doc.moveDown(1);
-}
-
-export async function generatePdfReport(data: AuditReportData): Promise<Buffer> {
-  console.log(`[PDF-GEN] Starting PDF generation for audit ${data.auditId}`);
-  
-  const safeData: AuditReportData = {
-    auditId: data.auditId || 0,
-    websiteUrl: data.websiteUrl || "unknown",
-    companyName: data.companyName,
-    scorePercent: data.scorePercent ?? 0,
-    severity: data.severity || "red",
-    passedCount: data.passedCount ?? 0,
-    warningCount: data.warningCount ?? 0,
-    failedCount: data.failedCount ?? 0,
-    totalCount: data.totalCount ?? 0,
-    criteria: (data.criteria || []).map(c => ({
-      name: c?.name || "Без названия",
-      description: c?.description || "",
-      status: c?.status || "warning",
-      details: c?.details || "",
-      category: c?.category,
-      law: c?.law,
-    })),
-    createdAt: data.createdAt || new Date(),
-    packageName: data.packageName || "Аудит",
-    aiSummary: data.aiSummary,
-    aiRecommendations: data.aiRecommendations || [],
-    aiMode: data.aiMode,
-  };
-  
-  console.log(`[PDF-GEN] SafeData: criteria=${safeData.criteria.length}, score=${safeData.scorePercent}`);
-  
-  return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({
-      size: "A4",
-      margins: { top: 50, bottom: 50, left: 50, right: 50 },
-      bufferPages: true,
-      info: {
-        Title: `Отчёт аудита сайта ${safeData.websiteUrl}`,
-        Author: "SecureLex.ru",
-        Subject: "Аудит соответствия законодательству",
-        Keywords: "ФЗ-152, ФЗ-149, аудит, персональные данные",
-      },
-    });
-    
-    const data = safeData;
-
-    const chunks: Buffer[] = [];
-    const stream = new PassThrough();
-
-    stream.on("data", (chunk) => chunks.push(chunk));
-    stream.on("end", () => resolve(Buffer.concat(chunks)));
-    stream.on("error", reject);
-
-    doc.pipe(stream);
-
-    const fontPath = getFontPath();
-    console.log(`[PDF-GEN] Using font: ${fontPath}, exists: ${fs.existsSync(fontPath)}`);
-    try {
-      doc.registerFont(FONT_NAME, fontPath);
-      doc.font(FONT_NAME);
-      console.log(`[PDF-GEN] DejaVu font registered successfully`);
-    } catch (fontError) {
-      console.error(`[PDF-GEN] Font error, using Helvetica: ${fontError}`);
-      doc.font("Helvetica");
-    }
-
-    const primaryColor = "#1a56db";
-    const secondaryColor = "#6b7280";
-    const successColor = "#22c55e";
-    const warningColor = "#eab308";
-    const dangerColor = "#dc2626";
-
-    doc.fontSize(24)
-       .fillColor(primaryColor)
-       .text("SECURELEX.RU", { align: "center" });
-    
-    doc.moveDown(0.5);
-    doc.fontSize(10)
-       .fillColor(secondaryColor)
-       .text("Сервис проверки сайтов на соответствие законодательству РФ", { align: "center" });
-
-    doc.moveDown(2);
-    doc.fontSize(20)
-       .fillColor("#1f2937")
-       .text("ПОЛНЫЙ ОТЧЁТ АУДИТА", { align: "center" });
-
-    doc.moveDown(1);
-    doc.fontSize(14)
-       .fillColor(primaryColor)
-       .text(data.websiteUrl, { align: "center" });
-
-    doc.moveDown(2);
-
-    const boxY = doc.y;
-    doc.rect(50, boxY, 495, 100)
-       .fillColor("#f3f4f6")
-       .fill();
-
-    doc.fillColor("#1f2937")
-       .fontSize(12)
-       .text("Дата проведения:", 70, boxY + 15)
-       .text("Тип проверки:", 70, boxY + 35)
-       .text("Общий результат:", 70, boxY + 55)
-       .text("Статус:", 70, boxY + 75);
-
-    doc.fontSize(12)
-       .text(new Date(data.createdAt).toLocaleDateString("ru-RU", { 
-         year: "numeric", 
-         month: "long", 
-         day: "numeric" 
-       }), 200, boxY + 15)
-       .text(data.packageName, 200, boxY + 35)
-       .text(`${data.scorePercent}%`, 200, boxY + 55);
-
-    const severityText = data.severity === "green" ? "Соответствует" : 
-                         data.severity === "yellow" ? "Частично соответствует" : "Не соответствует";
-    const severityColor = data.severity === "green" ? successColor : 
-                          data.severity === "yellow" ? warningColor : dangerColor;
-    doc.fillColor(severityColor)
-       .text(severityText, 200, boxY + 75);
-
-    doc.y = boxY + 120;
-
-    doc.moveDown(1);
-    doc.fontSize(11)
-       .fillColor("#1f2937");
-    
-    const statsY = doc.y;
-    const colWidth = 165;
-    
-    doc.rect(50, statsY, colWidth - 5, 50).fillColor("#dcfce7").fill();
-    doc.rect(50 + colWidth, statsY, colWidth - 5, 50).fillColor("#fef9c3").fill();
-    doc.rect(50 + colWidth * 2, statsY, colWidth - 5, 50).fillColor("#fee2e2").fill();
-
-    doc.fillColor("#166534").fontSize(20)
-       .text(data.passedCount.toString(), 50, statsY + 10, { width: colWidth - 5, align: "center" });
-    doc.fontSize(10).text("Пройдено", 50, statsY + 32, { width: colWidth - 5, align: "center" });
-
-    doc.fillColor("#854d0e").fontSize(20)
-       .text(data.warningCount.toString(), 50 + colWidth, statsY + 10, { width: colWidth - 5, align: "center" });
-    doc.fontSize(10).text("Предупреждений", 50 + colWidth, statsY + 32, { width: colWidth - 5, align: "center" });
-
-    doc.fillColor("#991b1b").fontSize(20)
-       .text(data.failedCount.toString(), 50 + colWidth * 2, statsY + 10, { width: colWidth - 5, align: "center" });
-    doc.fontSize(10).text("Нарушений", 50 + colWidth * 2, statsY + 32, { width: colWidth - 5, align: "center" });
-
-    doc.y = statsY + 70;
-
-    // AI Analysis Block - render ONLY if AI data is available
-    if (data.aiSummary && data.aiRecommendations && data.aiRecommendations.length > 0) {
-      doc.moveDown(1);
-      
-      // Use express (brief) block for expressreport package, full block for others
-      if (data.packageName === "Экспресс-отчёт" || data.packageName?.includes("Экспресс") || data.packageName === "expressreport") {
-        renderExpressAIBlock(doc, data);
-      } else {
-        renderFullAIBlock(doc, data);
-      }
-    }
-
-    addPageWithFont(doc);
-    doc.fontSize(16)
-       .fillColor(primaryColor)
-       .text("ДЕТАЛЬНЫЕ РЕЗУЛЬТАТЫ ПРОВЕРКИ", { underline: true });
-    doc.moveDown(1);
-
-    const groupedCriteria: Record<string, CriteriaResult[]> = {};
-    data.criteria.forEach(c => {
-      const category = c.category || getCategoryFromCriteria(c.name);
-      if (!groupedCriteria[category]) {
-        groupedCriteria[category] = [];
-      }
-      groupedCriteria[category].push({ ...c, category });
-    });
-
-    Object.entries(groupedCriteria).forEach(([category, criteriaList]) => {
-      if (doc.y > 700) {
-        addPageWithFont(doc);
-      }
-
-      doc.fontSize(13)
-         .fillColor(primaryColor)
-         .text(`▶ ${category}`, { continued: false });
-      doc.moveDown(0.5);
-
-      criteriaList.forEach((criterion, idx) => {
-        if (doc.y > 720) {
-          addPageWithFont(doc);
-        }
-
-        const statusIcon = criterion.status === "passed" ? "✓" : 
-                           criterion.status === "warning" ? "⚠" : "✗";
-        const statusColor = criterion.status === "passed" ? successColor : 
-                            criterion.status === "warning" ? warningColor : dangerColor;
-
-        doc.fontSize(11)
-           .fillColor(statusColor)
-           .text(statusIcon, { continued: true })
-           .fillColor("#1f2937")
-           .text(` ${criterion.name}`, { continued: false });
-
-        doc.fontSize(9)
-           .fillColor(secondaryColor)
-           .text(`   ${criterion.description}`, { indent: 20 });
-
-        if (criterion.details) {
-          doc.fontSize(9)
-             .fillColor("#4b5563")
-             .text(`   Детали: ${criterion.details}`, { indent: 20 });
-        }
-
-        const law = criterion.law || getLawFromCategory(category);
-        if (law && criterion.status !== "passed") {
-          doc.fontSize(9)
-             .fillColor(dangerColor)
-             .text(`   Требование: ${law}`, { indent: 20 });
-        }
-
-        doc.moveDown(0.5);
-      });
-
-      doc.moveDown(0.5);
-    });
-
-    const hasViolations = data.failedCount > 0 || data.warningCount > 0;
-    
-    if (hasViolations) {
-      addPageWithFont(doc);
-      doc.fontSize(16)
-         .fillColor(dangerColor)
-         .text("⚠ ИНФОРМАЦИЯ О ШТРАФАХ И РИСКАХ", { underline: true });
-      doc.moveDown(1);
-
-      doc.fontSize(10)
-         .fillColor("#1f2937")
-         .text("При выявленных нарушениях законодательства предусмотрены следующие санкции:");
-      doc.moveDown(1);
-
-      Object.entries(FINES_INFO).forEach(([key, info]) => {
-        if (doc.y > 680) {
-          addPageWithFont(doc);
-        }
-
-        doc.fontSize(12)
-           .fillColor(primaryColor)
-           .text(info.law, { underline: false });
-        
-        doc.fontSize(10)
-           .fillColor("#1f2937");
-        
-        doc.text(`Статья: ${info.article}`, { indent: 10 });
-        doc.text(`Размер штрафа: ${info.fine}`, { indent: 10 });
-        doc.fillColor(dangerColor)
-           .text(`Риски: ${info.risk}`, { indent: 10 });
-        
-        doc.moveDown(1);
-      });
-
-      // Calculate and render penalty totals from actual violations
-      const penaltyTotals = calculatePenaltyTotalsFromCriteria(data.criteria);
-      const uniqueViolations = getUniqueViolationsFromCriteria(data.criteria);
-      renderPenaltyTotalsSection(doc, penaltyTotals, uniqueViolations);
-
-      doc.moveDown(1);
-      doc.rect(50, doc.y, 495, 80)
-         .fillColor("#fef2f2")
-         .fill();
-
-      const warnBoxY = doc.y;
-      doc.fillColor(dangerColor)
-         .fontSize(12)
-         .text("ВАЖНО!", 70, warnBoxY + 15, { underline: true });
-      doc.fontSize(10)
-         .fillColor("#991b1b")
-         .text("С 1 сентября 2023 года штрафы за нарушения в области персональных данных", 70, warnBoxY + 35)
-         .text("увеличены в несколько раз. Рекомендуем устранить нарушения в ближайшее время.", 70, warnBoxY + 50);
-
-      doc.y = warnBoxY + 100;
-    }
-
-    addPageWithFont(doc);
-    doc.fontSize(16)
-       .fillColor(primaryColor)
-       .text("РЕКОМЕНДАЦИИ ПО УСТРАНЕНИЮ", { underline: true });
-    doc.moveDown(1);
-
-    const failedCriteria = data.criteria.filter(c => c.status === "failed");
-    const warningCriteria = data.criteria.filter(c => c.status === "warning");
-
-    if (failedCriteria.length > 0) {
-      doc.fontSize(12)
-         .fillColor(dangerColor)
-         .text("Критические нарушения (требуют немедленного устранения):");
-      doc.moveDown(0.5);
-
-      failedCriteria.forEach((c, idx) => {
-        if (doc.y > 700) {
-          addPageWithFont(doc);
-        }
-        doc.fontSize(10)
-           .fillColor("#1f2937")
-           .text(`${idx + 1}. ${c.name}`, { indent: 10 });
-        doc.fontSize(9)
-           .fillColor(secondaryColor)
-           .text(`   Рекомендация: Необходимо устранить нарушение для соответствия требованиям законодательства`, { indent: 20 });
-        doc.moveDown(0.3);
-      });
-
-      doc.moveDown(1);
-    }
-
-    if (warningCriteria.length > 0) {
-      doc.fontSize(12)
-         .fillColor(warningColor)
-         .text("Предупреждения (рекомендуется исправить):");
-      doc.moveDown(0.5);
-
-      warningCriteria.forEach((c, idx) => {
-        if (doc.y > 700) {
-          addPageWithFont(doc);
-        }
-        doc.fontSize(10)
-           .fillColor("#1f2937")
-           .text(`${idx + 1}. ${c.name}`, { indent: 10 });
-        doc.moveDown(0.3);
-      });
-
-      doc.moveDown(1);
-    }
-
-    addPageWithFont(doc);
-    
-    doc.rect(50, doc.y, 495, 200)
-       .fillColor("#eff6ff")
-       .fill();
-
-    const promoY = doc.y;
-    
-    doc.fillColor(primaryColor)
-       .fontSize(14)
-       .text("ЗАКАЖИТЕ ПОЛНЫЙ АУДИТ САЙТА", 70, promoY + 20, { align: "center", width: 455 });
-
-    doc.fontSize(11)
-       .fillColor("#1f2937")
-       .text("на соответствие ФЗ-152, ФЗ-149", 70, promoY + 45, { align: "center", width: 455 });
-
-    doc.moveDown(1);
-    doc.fontSize(10)
-       .text("В полный аудит входит:", 70, promoY + 70);
-
-    const services = [
-      "Выявление всех нарушений законодательства",
-      "Подготовка Политики конфиденциальности",
-      "Составление форм согласия на обработку ПД",
-      "Инструкции для сотрудников",
-      "Настройка Cookie-баннера",
-      "Юридическое сопровождение",
-    ];
-
-    services.forEach((service, idx) => {
-      doc.fontSize(9)
-         .fillColor("#1f2937")
-         .text(`✓ ${service}`, 80, promoY + 90 + idx * 14);
-    });
-
-    doc.fontSize(12)
-       .fillColor(dangerColor)
-       .text("ЗАЩИТА ОТ ШТРАФОВ И БЛОКИРОВКИ!", 70, promoY + 175, { align: "center", width: 455 });
-
-    doc.y = promoY + 220;
-
-    doc.moveDown(1);
-    doc.fontSize(11)
-       .fillColor(primaryColor)
-       .text("Контакты:", { underline: true });
-    doc.moveDown(0.5);
-    doc.fontSize(10)
-       .fillColor("#1f2937")
-       .text("Сайт: securelex.ru")
-       .text("Email: support@securelex.ru")
-       .text("Телефон: +7 (XXX) XXX-XX-XX");
-
-    const pageCount = doc.bufferedPageRange().count;
-    for (let i = 0; i < pageCount; i++) {
-      doc.switchToPage(i);
-      
-      doc.fontSize(8)
-         .fillColor(secondaryColor)
-         .text(
-           `SecureLex.ru | Отчёт аудита #${data.auditId} | ${data.websiteUrl} | Страница ${i + 1} из ${pageCount}`,
-           50,
-           doc.page.height - 30,
-           { align: "center", width: 495 }
-         );
-    }
-
-    doc.end();
-  });
-}
-
-export function getCriteriaCategory(name: string): string {
-  return getCategoryFromCriteria(name);
 }

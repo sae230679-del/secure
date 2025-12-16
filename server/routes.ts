@@ -2631,6 +2631,73 @@ export async function registerRoutes(
     }
   });
 
+  // Download express PDF report by token
+  app.get("/api/public/express-check/:token/pdf", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const audit = await storage.getPublicAuditByToken(token);
+      
+      if (!audit) {
+        return res.status(404).json({ error: "Проверка не найдена" });
+      }
+      
+      if (audit.status !== "completed") {
+        return res.status(400).json({ error: "Проверка ещё не завершена" });
+      }
+      
+      const summaryData = audit.summaryJson as any;
+      const briefResults = summaryData?.briefResults || null;
+      const hostingInfo = summaryData?.hostingInfo || null;
+      const checks = Array.isArray(summaryData) ? summaryData : (summaryData?.checks || []);
+      
+      // Convert checks to criteria format
+      const criteria = checks.map((check: any) => ({
+        name: check.name || check.title || "Проверка",
+        description: check.description || check.summary || "",
+        status: check.status || "warning",
+        details: check.details || "",
+        category: check.category,
+        law: check.law,
+        howToFix: check.howToFix || check.howToFixShort,
+      }));
+      
+      console.log(`[PDF] Generating express PDF for token ${token}`);
+      
+      const pdfBuffer = await generatePdfReport({
+        auditId: audit.id,
+        websiteUrl: audit.websiteUrlNormalized || "unknown",
+        scorePercent: audit.scorePercent || 0,
+        severity: (audit.severity as "red" | "yellow" | "green") || "red",
+        passedCount: audit.passedCount || 0,
+        warningCount: audit.warningCount || 0,
+        failedCount: audit.failedCount || 0,
+        totalCount: audit.totalCount || criteria.length,
+        criteria,
+        createdAt: audit.createdAt || new Date(),
+        packageName: "Экспресс-проверка",
+        briefResults: briefResults ? {
+          score: briefResults.score || audit.scorePercent || 0,
+          severity: briefResults.severity || audit.severity || "red",
+          hosting: hostingInfo || briefResults.hosting || { status: "uncertain" },
+          highlights: briefResults.highlights || [],
+          cta: briefResults.cta || { title: "Полный аудит", price: 900, benefits: [] },
+        } : undefined,
+      }, "express");
+      
+      const filename = `express-report-${audit.websiteUrlNormalized?.replace(/[^a-zA-Z0-9]/g, "_") || "audit"}-${new Date().toISOString().split("T")[0]}.pdf`;
+      
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.setHeader("Content-Length", pdfBuffer.length);
+      res.send(pdfBuffer);
+      
+      console.log(`[PDF] Express PDF sent: ${filename} (${pdfBuffer.length} bytes)`);
+    } catch (error) {
+      console.error("Express PDF generation error:", error);
+      res.status(500).json({ error: "Ошибка при генерации PDF отчёта" });
+    }
+  });
+
   // SuperAdmin: Test Yookassa connection
   app.post("/api/superadmin/test-yookassa", requireSuperAdmin, async (req, res) => {
     try {
