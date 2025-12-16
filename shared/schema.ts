@@ -903,7 +903,8 @@ export const guideSections = pgTable("guide_sections", {
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
   icon: varchar("icon", { length: 50 }), // Lucide icon name
-  isPublished: boolean("is_published").default(true).notNull(),
+  isVisible: boolean("is_visible").default(true).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [

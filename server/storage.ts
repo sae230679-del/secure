@@ -1901,8 +1901,8 @@ export class DatabaseStorage implements IStorage {
       return db
         .select()
         .from(schema.guideSections)
-        .where(eq(schema.guideSections.isPublished, true))
-        .orderBy(schema.guideSections.id);
+        .where(eq(schema.guideSections.isVisible, true))
+        .orderBy(schema.guideSections.sortOrder, schema.guideSections.id);
     }
     return db.select().from(schema.guideSections).orderBy(schema.guideSections.id);
   }
@@ -2085,7 +2085,7 @@ export class DatabaseStorage implements IStorage {
       .select({ slug: schema.guideSections.slug, title: schema.guideSections.title })
       .from(schema.guideSections)
       .where(and(
-        eq(schema.guideSections.isPublished, true),
+        eq(schema.guideSections.isVisible, true),
         sql`${schema.guideSections.title} ILIKE ${searchPattern}`
       ))
       .limit(3);
@@ -2156,15 +2156,15 @@ export class DatabaseStorage implements IStorage {
     console.log("[SEED] Creating default guide sections...");
     
     const defaultSections: schema.InsertGuideSection[] = [
-      { slug: "documents", title: "Документы и шаблоны", description: "Политики, согласия, акты и прочие документы для работы с ПДн", icon: "FileText", isPublished: true },
-      { slug: "cookies", title: "Cookies и трекинг", description: "Правила использования cookies, баннеры и согласия", icon: "Cookie", isPublished: true },
-      { slug: "rkn", title: "РКН и обязанности оператора", description: "Уведомления, реестр операторов, проверки Роскомнадзора", icon: "Shield", isPublished: true },
-      { slug: "forms-consent", title: "Формы и согласия", description: "Формы сбора данных, согласия на обработку ПДн", icon: "ClipboardCheck", isPublished: true },
-      { slug: "registry-processes", title: "Реестр и процессы", description: "Реестр обработки данных, внутренние процессы", icon: "Database", isPublished: true },
-      { slug: "processors-transfers", title: "Обработчики и передачи", description: "Поручения обработки, трансграничная передача", icon: "Users", isPublished: true },
-      { slug: "retention-deletion", title: "Сроки и удаление", description: "Сроки хранения, уничтожение персональных данных", icon: "Clock", isPublished: true },
-      { slug: "security-access", title: "Безопасность и доступы", description: "Защита ПДн, контроль доступа, инциденты", icon: "Lock", isPublished: true },
-      { slug: "content-149", title: "Контент и 149-ФЗ", description: "Информационное законодательство, обязательная маркировка", icon: "Newspaper", isPublished: true },
+      { slug: "documents", title: "Документы и шаблоны", description: "Политики, согласия, акты и прочие документы для работы с ПДн", icon: "FileText", isVisible: true, sortOrder: 10 },
+      { slug: "cookies", title: "Cookies и трекинг", description: "Правила использования cookies, баннеры и согласия", icon: "Cookie", isVisible: true, sortOrder: 20 },
+      { slug: "rkn", title: "РКН и обязанности оператора", description: "Уведомления, реестр операторов, проверки Роскомнадзора", icon: "Shield", isVisible: true, sortOrder: 30 },
+      { slug: "forms-consent", title: "Формы и согласия", description: "Формы сбора данных, согласия на обработку ПДн", icon: "ClipboardCheck", isVisible: true, sortOrder: 40 },
+      { slug: "registry-processes", title: "Реестр и процессы", description: "Реестр обработки данных, внутренние процессы", icon: "Database", isVisible: true, sortOrder: 50 },
+      { slug: "processors-transfers", title: "Обработчики и передачи", description: "Поручения обработки, трансграничная передача", icon: "Users", isVisible: true, sortOrder: 60 },
+      { slug: "retention-deletion", title: "Сроки и удаление", description: "Сроки хранения, уничтожение персональных данных", icon: "Clock", isVisible: true, sortOrder: 70 },
+      { slug: "security-access", title: "Безопасность и доступы", description: "Защита ПДн, контроль доступа, инциденты", icon: "Lock", isVisible: true, sortOrder: 80 },
+      { slug: "content-149", title: "Контент и 149-ФЗ", description: "Информационное законодательство, обязательная маркировка", icon: "Newspaper", isVisible: true, sortOrder: 90 },
     ];
 
     for (const section of defaultSections) {
