@@ -144,6 +144,24 @@ describe('Guide API', () => {
       
       expect(res.status).toBe(400);
     });
+
+    it('should reject invalid sortOrder type', async () => {
+      const agent = await loginAsSuperAdmin();
+      
+      const sectionsRes = await agent.get('/api/admin/guide/sections');
+      const sections = sectionsRes.body;
+      
+      const items = sections.map((s: any, i: number) => ({ 
+        id: s.id, 
+        sortOrder: i === 0 ? "invalid" : (i + 1) * 10 
+      }));
+
+      const res = await agent
+        .put('/api/admin/guide/sections/reorder')
+        .send({ items });
+      
+      expect(res.status).toBe(400);
+    });
   });
 
   describe('PATCH /api/admin/guide/sections/:id', () => {

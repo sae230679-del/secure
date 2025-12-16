@@ -1904,7 +1904,10 @@ export class DatabaseStorage implements IStorage {
         .where(eq(schema.guideSections.isVisible, true))
         .orderBy(schema.guideSections.sortOrder, schema.guideSections.id);
     }
-    return db.select().from(schema.guideSections).orderBy(schema.guideSections.id);
+    return db
+      .select()
+      .from(schema.guideSections)
+      .orderBy(schema.guideSections.sortOrder, schema.guideSections.id);
   }
 
   async getGuideSectionBySlug(slug: string): Promise<schema.GuideSection | undefined> {
@@ -1971,18 +1974,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async reorderGuideSections(items: Array<{ id: number; sortOrder: number }>): Promise<schema.GuideSection[]> {
-    // Update in transaction
-    for (const item of items) {
-      await db
-        .update(schema.guideSections)
-        .set({ sortOrder: item.sortOrder, updatedAt: new Date() })
-        .where(eq(schema.guideSections.id, item.id));
-    }
+    // Atomic update in transaction
+    return await db.transaction(async (tx) => {
+      const updatedAt = new Date();
+      for (const item of items) {
+        await tx
+          .update(schema.guideSections)
+          .set({ sortOrder: item.sortOrder, updatedAt })
+          .where(eq(schema.guideSections.id, item.id));
+      }
 
-    return db
-      .select()
-      .from(schema.guideSections)
-      .orderBy(schema.guideSections.sortOrder, schema.guideSections.id);
+      return tx
+        .select()
+        .from(schema.guideSections)
+        .orderBy(schema.guideSections.sortOrder, schema.guideSections.id);
+    });
   }
 
   // =====================================================
