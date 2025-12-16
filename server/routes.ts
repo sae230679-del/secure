@@ -3304,6 +3304,7 @@ export async function registerRoutes(
       const smtpFrom = await storage.getSystemSetting("smtp_from");
       const smtpFromName = await storage.getSystemSetting("smtp_from_name");
       const smtpReplyTo = await storage.getSystemSetting("smtp_reply_to");
+      const smtpPass = await storage.getSystemSetting("smtp_pass");
       
       res.json({
         status,
@@ -3317,6 +3318,7 @@ export async function registerRoutes(
           from: smtpFrom?.value || "support@securelex.ru",
           fromName: smtpFromName?.value || "SecureLex",
           replyTo: smtpReplyTo?.value || "",
+          hasPassword: !!(smtpPass?.value || process.env.SMTP_PASSWORD),
         },
       });
     } catch (error: any) {
@@ -3327,15 +3329,17 @@ export async function registerRoutes(
 
   app.put("/api/admin/settings/email", requireSuperAdmin, async (req, res) => {
     try {
-      const { enabled, host, port, secure, requireTls, user, from, fromName, replyTo } = req.body;
+      const { enabled, host, port, secure, requireTls, user, pass, from, fromName, replyTo } = req.body;
       
-      // Update settings (password is never stored in DB - use SMTP_PASSWORD secret)
+      // Update settings including password (stored securely in DB)
       if (enabled !== undefined) await storage.upsertSystemSetting("smtp_enabled", String(enabled));
       if (host !== undefined) await storage.upsertSystemSetting("smtp_host", host);
       if (port !== undefined) await storage.upsertSystemSetting("smtp_port", String(port));
       if (secure !== undefined) await storage.upsertSystemSetting("smtp_secure", String(secure));
       if (requireTls !== undefined) await storage.upsertSystemSetting("smtp_require_tls", String(requireTls));
       if (user !== undefined) await storage.upsertSystemSetting("smtp_user", user);
+      // Only update password if provided (don't overwrite with empty)
+      if (pass && pass.trim()) await storage.upsertSystemSetting("smtp_pass", pass);
       if (from !== undefined) await storage.upsertSystemSetting("smtp_from", from);
       if (fromName !== undefined) await storage.upsertSystemSetting("smtp_from_name", fromName);
       if (replyTo !== undefined) await storage.upsertSystemSetting("smtp_reply_to", replyTo);
@@ -3344,16 +3348,16 @@ export async function registerRoutes(
       const { invalidateSmtpCache } = await import("./email");
       invalidateSmtpCache();
       
-      // Log the action
+      // Log the action (never log password)
       const userId = req.session.userId!;
       await storage.createAuditLog({
         userId,
         action: "smtp_settings_updated",
         targetType: "system",
-        details: { changedBy: userId },
+        details: { changedBy: userId, passwordUpdated: !!(pass && pass.trim()) },
       });
       
-      res.json({ success: true, message: "SMTP settings updated. Remember to set SMTP_PASSWORD in Secrets." });
+      res.json({ success: true, message: "Настройки SMTP сохранены" });
     } catch (error: any) {
       console.error("[SMTP Settings PUT] Error:", error?.message || error);
       res.status(500).json({ error: "Failed to update email settings" });
@@ -3389,10 +3393,10 @@ export async function registerRoutes(
       const user = settings.find(s => s.key === "smtp_user")?.value || "support@securelex.ru";
       const from = settings.find(s => s.key === "smtp_from")?.value || "support@securelex.ru";
       const fromName = settings.find(s => s.key === "smtp_from_name")?.value || "SecureLex";
-      const pass = process.env.SMTP_PASSWORD;
+      const pass = settings.find(s => s.key === "smtp_pass")?.value || process.env.SMTP_PASSWORD;
       
       if (!pass) {
-        return res.status(400).json({ error: "SMTP_PASSWORD secret not set" });
+        return res.status(400).json({ error: "Пароль SMTP не настроен" });
       }
       
       const transportConfig: any = {
@@ -3430,6 +3434,57 @@ export async function registerRoutes(
       console.error("[SMTP Test] Error:", error?.message || error);
       res.status(500).json({ 
         error: "Failed to send test email",
+        details: error?.message || String(error)
+      });
+    }
+  });
+
+  app.post("/api/admin/settings/email/verify", requireSuperAdmin, async (req, res) => {
+    try {
+      const { getSmtpStatus } = await import("./email");
+      const status = await getSmtpStatus();
+      
+      if (!status.configured) {
+        return res.status(400).json({ 
+          error: `SMTP не настроен: ${status.reason}`,
+          status 
+        });
+      }
+      
+      // Verify connection
+      const nodemailer = await import("nodemailer");
+      const settings = await storage.getSystemSettings();
+      
+      const host = settings.find(s => s.key === "smtp_host")?.value || "mail.securelex.ru";
+      const port = parseInt(settings.find(s => s.key === "smtp_port")?.value || "465");
+      const secure = settings.find(s => s.key === "smtp_secure")?.value !== "false";
+      const requireTls = settings.find(s => s.key === "smtp_require_tls")?.value === "true";
+      const user = settings.find(s => s.key === "smtp_user")?.value || "support@securelex.ru";
+      const pass = settings.find(s => s.key === "smtp_pass")?.value || process.env.SMTP_PASSWORD;
+      
+      if (!pass) {
+        return res.status(400).json({ error: "Пароль SMTP не настроен" });
+      }
+      
+      const transportConfig: any = {
+        host,
+        port,
+        secure,
+        auth: { user, pass },
+        connectionTimeout: 10000,
+      };
+      if (!secure && requireTls) {
+        transportConfig.requireTLS = true;
+      }
+      
+      const transporter = nodemailer.default.createTransport(transportConfig);
+      await transporter.verify();
+      
+      res.json({ success: true, message: "Соединение с SMTP сервером установлено успешно" });
+    } catch (error: any) {
+      console.error("[SMTP Verify] Error:", error?.message || error);
+      res.status(500).json({ 
+        error: "Не удалось подключиться к SMTP серверу",
         details: error?.message || String(error)
       });
     }

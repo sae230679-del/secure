@@ -64,7 +64,13 @@ Preferred communication style: Simple, everyday language.
 - **OpenAI**: Alternative AI provider option.
 
 ### Email Services
-- **Nodemailer**: Configured for transactional emails (e.g., audit completion, payment confirmation, contract status changes). Intended providers: Yandex Mail, Mail.ru.
+- **Nodemailer**: Configured for transactional emails (e.g., audit completion, payment confirmation, contract status changes). Intended providers: REG.RU, Yandex Mail, Mail.ru.
+- **SMTP Configuration**: All SMTP settings including password stored in database (`system_settings` table). Password never logged or returned to API responses (only `hasPassword: boolean` flag). SuperAdmin UI at `/superadmin/email-settings` for configuration, connection testing, and test email sending.
+- **Endpoints**: 
+  - `GET /api/admin/settings/email` - Get SMTP settings with status
+  - `PUT /api/admin/settings/email` - Update settings (password saved to DB)
+  - `POST /api/admin/settings/email/verify` - Test SMTP connection
+  - `POST /api/admin/settings/email/test` - Send test email
 
 ### Frontend Libraries
 - **@radix-ui/***: Accessible UI primitives.

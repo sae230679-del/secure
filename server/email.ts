@@ -92,8 +92,9 @@ async function getSmtpSettings(): Promise<SmtpSettings | null> {
       return null;
     }
     
-    // SMTP password ONLY from secret (never from DB)
-    const pass = process.env.SMTP_PASSWORD || "";
+    // SMTP password from DB (secure storage) or env fallback
+    const smtpPass = settings.find(s => s.key === "smtp_pass")?.value;
+    const pass = smtpPass || process.env.SMTP_PASSWORD || "";
     
     // Default values for REG.RU
     const host = smtpHost || "mail.securelex.ru";
@@ -125,7 +126,8 @@ export async function getSmtpStatus(): Promise<SmtpStatus> {
     const smtpEnabled = settings.find(s => s.key === "smtp_enabled")?.value !== "false";
     const smtpHost = settings.find(s => s.key === "smtp_host")?.value;
     const smtpUser = settings.find(s => s.key === "smtp_user")?.value;
-    const hasPassword = !!process.env.SMTP_PASSWORD;
+    const smtpPass = settings.find(s => s.key === "smtp_pass")?.value;
+    const hasPassword = !!(smtpPass || process.env.SMTP_PASSWORD);
     
     if (!smtpEnabled) {
       return { configured: false, enabled: false, hasPassword, reason: "SMTP disabled" };
