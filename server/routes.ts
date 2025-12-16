@@ -199,17 +199,6 @@ export async function registerRoutes(
 
   app.post("/api/auth/register", async (req, res) => {
     try {
-      // Check if SMTP is configured before allowing registration
-      const emailConfigured = await isEmailConfigured();
-      if (!emailConfigured) {
-        console.log(`[AUTH] Registration blocked: SMTP not configured`);
-        return res.status(503).json({ 
-          error: "Регистрация временно недоступна. Email сервис не настроен.",
-          code: "SMTP_NOT_CONFIGURED",
-          message: "Регистрация временно недоступна. Email сервис не настроен."
-        });
-      }
-      
       const data = registerSchema.parse(req.body);
       
       const existingUser = await storage.getUserByEmail(data.email);
@@ -223,31 +212,12 @@ export async function registerRoutes(
 
       const user = await storage.createUser(data);
       
-      // Generate email verification token
-      const verifyToken = generateSecureToken();
-      const verifyTokenHash = hashToken(verifyToken);
-      const verifyExpiresAt = new Date(Date.now() + EMAIL_VERIFY_TTL_MS);
-      
-      // Save token hash to user
+      // Auto-verify email (email verification temporarily disabled)
       await storage.updateUser(user.id, {
-        emailVerifyTokenHash: verifyTokenHash,
-        emailVerifyTokenExpiresAt: verifyExpiresAt,
+        emailVerifiedAt: new Date(),
       });
       
-      // Send verification email (SMTP already verified at start of handler)
-      const siteUrl = process.env.SITE_URL || "https://securelex.ru";
-      const verifyLink = `${siteUrl}/verify-email?token=${verifyToken}`;
-      
-      const emailSent = await sendEmailVerificationEmail(user.email, {
-        userName: user.name,
-        verificationLink: verifyLink,
-      });
-      
-      if (emailSent) {
-        console.log(`[AUTH] Verification email sent to: ${maskEmail(user.email)}`);
-      } else {
-        console.log(`[AUTH] Failed to send verification email`);
-      }
+      console.log(`[AUTH] User registered with auto-verified email: ${maskEmail(user.email)}`);
       
       // Set user ID in session
       req.session.userId = user.id;
@@ -260,12 +230,9 @@ export async function registerRoutes(
         console.log(`[AUTH] Session saved successfully for new user: ${user.id}`);
         const { passwordHash, emailVerifyTokenHash, passwordResetTokenHash, ...safeUser } = user;
         res.json({ 
-          user: safeUser,
-          emailVerificationRequired: true,
-          emailSent,
-          message: emailSent 
-            ? "Письмо с подтверждением отправлено на ваш email" 
-            : "Регистрация завершена. Подтвердите email для полного доступа."
+          user: { ...safeUser, emailVerifiedAt: new Date() },
+          emailVerificationRequired: false,
+          message: "Регистрация завершена успешно!"
         });
       });
     } catch (error) {
