@@ -266,37 +266,47 @@ function ToolForm({
       return (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="companyName">Название компании / ФИО</Label>
+            <Label htmlFor="operatorName">Наименование оператора</Label>
             <Input
-              id="companyName"
+              id="operatorName"
               required
-              placeholder="ООО Ромашка"
-              value={formData.companyName || ""}
-              onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-              data-testid="input-company-name"
+              placeholder='ООО "Ромашка"'
+              value={formData.operatorName || ""}
+              onChange={(e) => setFormData({ ...formData, operatorName: e.target.value })}
+              data-testid="input-operator-name"
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="inn">ИНН</Label>
+            <Label htmlFor="operatorInn">ИНН (опционально)</Label>
             <Input
-              id="inn"
-              required
+              id="operatorInn"
               placeholder="1234567890"
-              value={formData.inn || ""}
-              onChange={(e) => setFormData({ ...formData, inn: e.target.value })}
-              data-testid="input-inn"
+              value={formData.operatorInn || ""}
+              onChange={(e) => setFormData({ ...formData, operatorInn: e.target.value })}
+              data-testid="input-operator-inn"
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="email">Email для обращений</Label>
+            <Label htmlFor="operatorAddress">Адрес организации</Label>
             <Input
-              id="email"
+              id="operatorAddress"
+              required
+              placeholder="г. Москва, ул. Примерная, д. 1"
+              value={formData.operatorAddress || ""}
+              onChange={(e) => setFormData({ ...formData, operatorAddress: e.target.value })}
+              data-testid="input-operator-address"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="operatorEmail">Email для обращений</Label>
+            <Input
+              id="operatorEmail"
               type="email"
               required
               placeholder="privacy@company.ru"
-              value={formData.email || ""}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              data-testid="input-email"
+              value={formData.operatorEmail || ""}
+              onChange={(e) => setFormData({ ...formData, operatorEmail: e.target.value })}
+              data-testid="input-operator-email"
             />
           </div>
           <div className="space-y-2">
@@ -310,9 +320,50 @@ function ToolForm({
               data-testid="input-website-url"
             />
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="pdnTypes">Типы персональных данных (через запятую)</Label>
+            <Textarea
+              id="pdnTypes"
+              required
+              placeholder="ФИО, email, телефон, адрес"
+              value={formData.pdnTypesStr || ""}
+              onChange={(e) => setFormData({ 
+                ...formData, 
+                pdnTypesStr: e.target.value,
+                pdnTypes: e.target.value.split(",").map(s => s.trim()).filter(Boolean)
+              })}
+              data-testid="input-pdn-types"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="purposes">Цели обработки (через запятую)</Label>
+            <Textarea
+              id="purposes"
+              required
+              placeholder="Регистрация на сайте, Обратная связь, Рассылка"
+              value={formData.purposesStr || ""}
+              onChange={(e) => setFormData({ 
+                ...formData, 
+                purposesStr: e.target.value,
+                purposes: e.target.value.split(",").map(s => s.trim()).filter(Boolean)
+              })}
+              data-testid="input-purposes"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="storagePeriod">Срок хранения данных</Label>
+            <Input
+              id="storagePeriod"
+              required
+              placeholder="3 года с момента получения"
+              value={formData.storagePeriod || ""}
+              onChange={(e) => setFormData({ ...formData, storagePeriod: e.target.value })}
+              data-testid="input-storage-period"
+            />
+          </div>
           <Button type="submit" className="w-full" disabled={isLoading} data-testid="button-submit-tool">
             {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-            Сгенерировать
+            Сгенерировать политику
           </Button>
         </form>
       );
@@ -321,39 +372,112 @@ function ToolForm({
       return (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="companyName">Название компании</Label>
+            <Label htmlFor="mode">Тип согласия</Label>
+            <Select
+              value={formData.mode || "website_checkbox"}
+              onValueChange={(value) => setFormData({ ...formData, mode: value })}
+            >
+              <SelectTrigger data-testid="select-mode">
+                <SelectValue placeholder="Выберите тип" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="website_checkbox">Чекбокс на сайте</SelectItem>
+                <SelectItem value="written">Письменное согласие</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="operatorName">Наименование оператора</Label>
             <Input
-              id="companyName"
+              id="operatorName"
               required
-              placeholder="ООО Ромашка"
-              value={formData.companyName || ""}
-              onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-              data-testid="input-company-name"
+              placeholder='ООО "Ромашка"'
+              value={formData.operatorName || ""}
+              onChange={(e) => setFormData({ ...formData, operatorName: e.target.value })}
+              data-testid="input-operator-name"
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="processingPurpose">Цель обработки данных</Label>
-            <Textarea
-              id="processingPurpose"
-              placeholder="Для регистрации на сайте и связи с пользователем"
-              value={formData.processingPurpose || ""}
-              onChange={(e) => setFormData({ ...formData, processingPurpose: e.target.value })}
-              data-testid="input-processing-purpose"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="dataCategories">Категории данных</Label>
+            <Label htmlFor="operatorAddress">Адрес оператора</Label>
             <Input
-              id="dataCategories"
+              id="operatorAddress"
+              required
+              placeholder="г. Москва, ул. Примерная, д. 1"
+              value={formData.operatorAddress || ""}
+              onChange={(e) => setFormData({ ...formData, operatorAddress: e.target.value })}
+              data-testid="input-operator-address"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="purposes">Цели обработки (через запятую)</Label>
+            <Textarea
+              id="purposes"
+              required
+              placeholder="Регистрация, Обратная связь"
+              value={formData.purposesStr || ""}
+              onChange={(e) => setFormData({ 
+                ...formData, 
+                purposesStr: e.target.value,
+                purposes: e.target.value.split(",").map(s => s.trim()).filter(Boolean)
+              })}
+              data-testid="input-purposes"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="pdnCategories">Категории ПДн (через запятую)</Label>
+            <Input
+              id="pdnCategories"
+              required
               placeholder="ФИО, email, телефон"
-              value={formData.dataCategories || ""}
-              onChange={(e) => setFormData({ ...formData, dataCategories: e.target.value })}
-              data-testid="input-data-categories"
+              value={formData.pdnCategoriesStr || ""}
+              onChange={(e) => setFormData({ 
+                ...formData, 
+                pdnCategoriesStr: e.target.value,
+                pdnCategories: e.target.value.split(",").map(s => s.trim()).filter(Boolean)
+              })}
+              data-testid="input-pdn-categories"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="processingActions">Действия с ПДн (через запятую)</Label>
+            <Input
+              id="processingActions"
+              required
+              placeholder="сбор, хранение, обработка, передача"
+              value={formData.processingActionsStr || ""}
+              onChange={(e) => setFormData({ 
+                ...formData, 
+                processingActionsStr: e.target.value,
+                processingActions: e.target.value.split(",").map(s => s.trim()).filter(Boolean)
+              })}
+              data-testid="input-processing-actions"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="storagePeriod">Срок хранения</Label>
+            <Input
+              id="storagePeriod"
+              required
+              placeholder="3 года"
+              value={formData.storagePeriod || ""}
+              onChange={(e) => setFormData({ ...formData, storagePeriod: e.target.value })}
+              data-testid="input-storage-period"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="withdrawalProcedure">Порядок отзыва согласия</Label>
+            <Textarea
+              id="withdrawalProcedure"
+              required
+              placeholder="Направить письменное заявление на адрес оператора или email privacy@company.ru"
+              value={formData.withdrawalProcedure || ""}
+              onChange={(e) => setFormData({ ...formData, withdrawalProcedure: e.target.value })}
+              data-testid="input-withdrawal-procedure"
             />
           </div>
           <Button type="submit" className="w-full" disabled={isLoading} data-testid="button-submit-tool">
             {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-            Сгенерировать
+            Сгенерировать согласие
           </Button>
         </form>
       );
@@ -362,29 +486,56 @@ function ToolForm({
       return (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="websiteUrl">URL сайта</Label>
+            <Label htmlFor="siteName">Название сайта</Label>
             <Input
-              id="websiteUrl"
+              id="siteName"
               required
-              placeholder="https://example.ru"
-              value={formData.websiteUrl || ""}
-              onChange={(e) => setFormData({ ...formData, websiteUrl: e.target.value })}
-              data-testid="input-website-url"
+              placeholder="Мой сайт"
+              value={formData.siteName || ""}
+              onChange={(e) => setFormData({ ...formData, siteName: e.target.value })}
+              data-testid="input-site-name"
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="style">Стиль баннера</Label>
+            <Label htmlFor="privacyPolicyUrl">Ссылка на политику конфиденциальности</Label>
+            <Input
+              id="privacyPolicyUrl"
+              required
+              placeholder="https://example.ru/privacy"
+              value={formData.privacyPolicyUrl || ""}
+              onChange={(e) => setFormData({ ...formData, privacyPolicyUrl: e.target.value })}
+              data-testid="input-privacy-policy-url"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="position">Расположение баннера</Label>
             <Select
-              value={formData.style || "bottom-bar"}
-              onValueChange={(value) => setFormData({ ...formData, style: value })}
+              value={formData.position || "bottom"}
+              onValueChange={(value) => setFormData({ ...formData, position: value })}
             >
-              <SelectTrigger data-testid="select-style">
-                <SelectValue placeholder="Выберите стиль" />
+              <SelectTrigger data-testid="select-position">
+                <SelectValue placeholder="Выберите расположение" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="bottom-bar">Нижняя панель</SelectItem>
-                <SelectItem value="modal">Модальное окно</SelectItem>
-                <SelectItem value="corner">Угловой блок</SelectItem>
+                <SelectItem value="bottom">Внизу страницы</SelectItem>
+                <SelectItem value="top">Вверху страницы</SelectItem>
+                <SelectItem value="center">По центру (модальное)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="theme">Тема</Label>
+            <Select
+              value={formData.theme || "auto"}
+              onValueChange={(value) => setFormData({ ...formData, theme: value })}
+            >
+              <SelectTrigger data-testid="select-theme">
+                <SelectValue placeholder="Выберите тему" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Автоматическая</SelectItem>
+                <SelectItem value="light">Светлая</SelectItem>
+                <SelectItem value="dark">Темная</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -522,40 +673,81 @@ function ToolResultDisplay({
 
   switch (tool.key) {
     case "privacy-generator":
-    case "consent-generator":
-      const htmlContent = result.html || result.policy || "";
+      const policyText = result.policy || "";
       return (
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-2">
             <Badge variant="secondary" className="gap-1">
-              <Check className="h-3 w-3" /> Готово
+              <Check className="h-3 w-3" /> Политика готова
             </Badge>
-            <Button variant="outline" size="sm" onClick={() => onCopy(htmlContent)} data-testid="button-copy-result">
+            {result.lawBasis && (
+              <Badge variant="outline" className="text-xs">{result.lawBasis}</Badge>
+            )}
+            <Button variant="outline" size="sm" onClick={() => onCopy(policyText)} data-testid="button-copy-result">
               <Copy className="h-4 w-4 mr-2" />
               Копировать
             </Button>
           </div>
-          <div className="prose prose-sm dark:prose-invert max-h-80 overflow-y-auto rounded-md border p-4 bg-muted/30">
-            <div dangerouslySetInnerHTML={{ __html: htmlContent }} />
+          <pre className="text-sm whitespace-pre-wrap max-h-80 overflow-y-auto rounded-md border p-4 bg-muted/30">
+            {policyText}
+          </pre>
+        </div>
+      );
+
+    case "consent-generator":
+      const consentContent = result.html || result.text || "";
+      const hasJs = !!result.js;
+      return (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-2">
+            <Badge variant="secondary" className="gap-1">
+              <Check className="h-3 w-3" /> Согласие готово
+            </Badge>
+            <Button variant="outline" size="sm" onClick={() => onCopy(consentContent)} data-testid="button-copy-result">
+              <Copy className="h-4 w-4 mr-2" />
+              Копировать HTML
+            </Button>
           </div>
+          {result.validation && !result.validation.isValid && (
+            <div className="p-3 rounded-md bg-yellow-500/10 border border-yellow-500/30 text-sm">
+              <p className="font-medium text-yellow-700 dark:text-yellow-400">Предупреждения:</p>
+              <ul className="mt-1 text-xs space-y-1">
+                {result.validation.errors?.map((e: string, i: number) => (
+                  <li key={i}>{e}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <pre className="text-xs whitespace-pre-wrap max-h-60 overflow-y-auto rounded-md border p-4 bg-muted/30">
+            {consentContent}
+          </pre>
+          {hasJs && (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">JavaScript код:</p>
+              <Button variant="outline" size="sm" onClick={() => onCopy(result.js)} data-testid="button-copy-js">
+                <Copy className="h-4 w-4 mr-2" />
+                Копировать JS
+              </Button>
+            </div>
+          )}
         </div>
       );
 
     case "cookie-banner":
-      const bannerCode = result.code || result.html || "";
+      const fullCode = [result.html, result.css ? `<style>\n${result.css}\n</style>` : "", result.js ? `<script>\n${result.js}\n</script>` : ""].filter(Boolean).join("\n\n");
       return (
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-2">
             <Badge variant="secondary" className="gap-1">
               <Check className="h-3 w-3" /> Код готов
             </Badge>
-            <Button variant="outline" size="sm" onClick={() => onCopy(bannerCode)} data-testid="button-copy-result">
+            <Button variant="outline" size="sm" onClick={() => onCopy(fullCode)} data-testid="button-copy-result">
               <Copy className="h-4 w-4 mr-2" />
-              Копировать
+              Копировать все
             </Button>
           </div>
-          <pre className="text-xs bg-muted/50 p-4 rounded-md overflow-x-auto max-h-80">
-            {bannerCode}
+          <pre className="text-xs bg-muted/50 p-4 rounded-md overflow-x-auto max-h-80 whitespace-pre-wrap">
+            {fullCode}
           </pre>
         </div>
       );
