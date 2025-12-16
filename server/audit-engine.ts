@@ -2,6 +2,8 @@ import OpenAI from "openai";
 import https from "https";
 import http from "http";
 import { URL } from "url";
+import { checkHosting, type HostingCheckResult } from "./hosting-checker";
+import type { BriefResults, BriefHighlight, HostingInfo } from "@shared/schema";
 
 const OPENAI_MODEL = "gpt-4o-mini";
 const isProduction = process.env.NODE_ENV === "production";
@@ -306,6 +308,8 @@ export interface AuditReport {
   processedAt: Date;
   rknCheck?: RknCheckResult;
   evidenceBundle?: EvidenceBundle;
+  hostingCheck?: HostingCheckResult;
+  briefResults?: BriefResults;
 }
 
 export type AuditAiMode = "gigachat_only" | "openai_only" | "hybrid" | "none" | "yandex_only" | "tri_hybrid";
@@ -334,11 +338,14 @@ function buildEvidenceBundle(checks: AuditCheckResult[], url: string): EvidenceB
   let counters = { policy: 0, consent: 0, cookies: 0, contacts: 0, technical: 0 };
 
   for (const check of checks) {
+    const evidenceStr = Array.isArray(check.evidence) 
+      ? check.evidence.join("; ") 
+      : (check.evidence || "");
     const item: EvidenceItem = {
       id: "",
       url: url,
       textSnippet: truncateSnippet(check.details || check.description),
-      markers: check.evidence ? [truncateSnippet(check.evidence, 200)] : [],
+      markers: evidenceStr ? [truncateSnippet(evidenceStr, 200)] : [],
       rawStatus: check.status,
       category: check.category,
     };
@@ -1039,7 +1046,7 @@ function checkTermsOfService(html: string): AuditCheckResult {
       : "Пользовательское соглашение не найдено",
     evidence,
     lawBasis: [
-      { law: "GK", article: "ст. 437", note: "Публичная оферта" },
+      { law: "149", article: "ГК РФ ст. 437", note: "Публичная оферта" },
     ],
     aggregationKey: "LEGAL_TOS",
     fixSteps: [
@@ -1424,6 +1431,89 @@ function calculateScore(checks: AuditCheckResult[]): {
   return { scorePercent: score, severity, passedCount, warningCount, failedCount };
 }
 
+function extractDomain(url: string): string {
+  try {
+    const parsed = new URL(url.startsWith("http") ? url : `https://${url}`);
+    return parsed.hostname;
+  } catch {
+    return url.replace(/^(https?:\/\/)?/, "").split("/")[0];
+  }
+}
+
+function buildBriefResults(
+  url: string,
+  checks: AuditCheckResult[],
+  scores: { scorePercent: number; severity: "low" | "medium" | "high"; passedCount: number; warningCount: number; failedCount: number },
+  hostingCheck: HostingCheckResult
+): BriefResults {
+  const domain = extractDomain(url);
+  
+  const highlights: BriefHighlight[] = checks.slice(0, 12).map(check => {
+    let status: "ok" | "warn" | "fail" | "na" = "na";
+    if (check.status === "passed") status = "ok";
+    else if (check.status === "warning") status = "warn";
+    else if (check.status === "failed") status = "fail";
+
+    let severity: "critical" | "medium" | "low" | "info" = "info";
+    if (check.status === "failed") severity = "critical";
+    else if (check.status === "warning") severity = "medium";
+    else severity = "low";
+
+    const lawRefs = check.lawBasis?.map(lb => ({
+      act: lb.law === "152" ? "152-ФЗ" : "149-ФЗ",
+      ref: lb.article + (lb.note ? ` (${lb.note})` : ""),
+    }));
+
+    return {
+      id: check.id || check.checkId || check.name.replace(/\s+/g, "_").toUpperCase(),
+      title: check.name,
+      status,
+      severity,
+      summary: check.description,
+      howToFixShort: check.fixSteps?.[0],
+      law: lawRefs,
+    };
+  });
+
+  const hostingInfo: HostingInfo = {
+    status: hostingCheck.status,
+    confidence: hostingCheck.confidence,
+    ips: hostingCheck.ips,
+    providerGuess: hostingCheck.providerGuess,
+    evidence: hostingCheck.evidence,
+    ai: hostingCheck.ai,
+  };
+
+  return {
+    version: "1.0",
+    reportType: "express",
+    generatedAt: new Date().toISOString(),
+    site: { url, domain },
+    score: {
+      percent: scores.scorePercent,
+      severity: scores.severity,
+      totals: {
+        checks: checks.length,
+        ok: scores.passedCount,
+        warn: scores.warningCount,
+        fail: scores.failedCount,
+        na: 0,
+      },
+    },
+    hosting: hostingInfo,
+    highlights,
+    cta: {
+      fullReportPriceRub: 900,
+      fullReportIncludes: [
+        "Подробная карта нарушений по 152-ФЗ и 149-ФЗ",
+        "Пошаговый план исправлений",
+        "Раздел по рискам и возможной ответственности",
+        "Приложения и ссылки на официальные источники",
+      ],
+    },
+  };
+}
+
 export async function checkWebsiteExists(url: string): Promise<{ exists: boolean; error?: string }> {
   const data = await fetchWebsite(url, 10000);
   
@@ -1480,6 +1570,8 @@ export async function runAudit(
   let summary = "";
   let recommendations: string[] = [];
 
+  const hostingCheckPromise = checkHosting(url);
+
   if (level2) {
     onProgress?.(3, level1Results);
     
@@ -1493,6 +1585,8 @@ export async function runAudit(
 
   const allChecks = [...level1Results, ...additionalChecks];
   const scores = calculateScore(allChecks);
+
+  const hostingCheck = await hostingCheckPromise;
 
   onProgress?.(5, allChecks);
 
@@ -1515,6 +1609,8 @@ export async function runAudit(
 
   onProgress?.(6, allChecks);
 
+  const briefResults = buildBriefResults(url, allChecks, scores, hostingCheck);
+
   return {
     url,
     checks: allChecks,
@@ -1529,6 +1625,8 @@ export async function runAudit(
     processedAt: new Date(),
     rknCheck,
     evidenceBundle,
+    hostingCheck,
+    briefResults,
   };
 }
 

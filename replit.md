@@ -28,6 +28,11 @@ Preferred communication style: Simple, everyday language.
     - **Cookie Consent**: GDPR/152-ФЗ compliant banner with granular preferences.
     - **Legal Pages**: Versioned /offer and /privacy pages.
 - **Audit Engine**: Expanded to 60+ criteria for premium packages, covering FZ-152, FZ-149, GDPR, cookies, technical aspects, legal, content, and security. Enhanced with structured evidence arrays and law basis references (AuditCheckResult interface).
+- **Hosting Detection**: 2-layer Russian hosting detection (`server/hosting-checker.ts`):
+  - **Layer 1 (Deterministic)**: DNS→IP→PTR lookup with dictionary matching (timeweb, beget, reg.ru, etc.)
+  - **Layer 2 (AI)**: WHOIS analysis via AI when Layer 1 is uncertain (saves API costs)
+  - Results stored in `hosting_info` jsonb column with status: russian/foreign/uncertain
+- **Brief Results**: Standardized JSON structure (`BriefResults` type) for express audit reports containing score, severity, 7-12 key highlights, hosting status, and upsell CTA. Stored in `brief_results` jsonb column.
 - **Penalty System**: Real КоАП РФ ст. 13.11 penalties in `server/penalties-map.ts` with 10+ check types, calculated totals by subject type (физлица, должностные лица, ИП, юрлица), and automatic deduplication by aggregation keys.
 - **PDF Report Generation**: Branded multi-page PDF reports with detailed criteria results, calculated penalty risk tables by subject type, law references, recommendations, and calls to action.
 - **SEO Management**: SuperAdmin controlled CRUD for SEO pages, dynamic public routes, and sitemap generation.

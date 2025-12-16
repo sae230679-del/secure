@@ -939,7 +939,7 @@ export async function registerRoutes(
             description: check.description,
             status: check.status,
             details: check.details,
-            evidence: check.evidence,
+            evidence: Array.isArray(check.evidence) ? check.evidence.join("; ") : check.evidence,
           }));
           console.log(`[AUDIT] Mapped ${criteriaResults.length} criteria results`);
 
@@ -950,6 +950,8 @@ export async function registerRoutes(
             rknCheckJson: report.rknCheck || null,
             scorePercent: report.scorePercent,
             severity: report.severity,
+            hostingInfo: report.hostingCheck || null,
+            briefResults: report.briefResults || null,
           });
           console.log(`[AUDIT] Audit result saved successfully`);
 
@@ -1294,14 +1296,17 @@ export async function registerRoutes(
             description: check.description,
             status: check.status,
             details: check.details,
-            evidence: check.evidence,
+            evidence: Array.isArray(check.evidence) ? check.evidence.join("; ") : check.evidence,
           }));
 
           await storage.createAuditResult({
             auditId: auditId,
             criteriaJson: criteriaResults,
+            rknCheckJson: report.rknCheck || null,
             scorePercent: report.scorePercent,
             severity: report.severity,
+            hostingInfo: report.hostingCheck || null,
+            briefResults: report.briefResults || null,
           });
 
           await storage.updateAuditStatus(auditId, "completed", new Date());
@@ -2541,6 +2546,8 @@ export async function registerRoutes(
             summaryJson: {
               checks: summaryResults,
               rknCheck: report.rknCheck || null,
+              hostingInfo: report.hostingCheck || null,
+              briefResults: report.briefResults || null,
             },
             completedAt: new Date(),
           });

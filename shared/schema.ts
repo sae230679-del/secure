@@ -88,6 +88,9 @@ export const auditResults = pgTable("audit_results", {
   auditId: integer("audit_id").references(() => audits.id).notNull(),
   criteriaJson: jsonb("criteria_json").notNull(),
   rknCheckJson: jsonb("rkn_check_json"),
+  hostingInfo: jsonb("hosting_info"),
+  briefResults: jsonb("brief_results"),
+  fullResults: jsonb("full_results"),
   scorePercent: integer("score_percent"),
   severity: varchar("severity", { length: 10 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -658,3 +661,148 @@ export const insertSeoPageSchema = createInsertSchema(seoPages).omit({
 
 export type InsertPdnConsentEvent = z.infer<typeof insertPdnConsentEventSchema>;
 export type InsertSeoPage = z.infer<typeof insertSeoPageSchema>;
+
+// =====================================================
+// Hosting Check Types (для проверки хостинга РФ)
+// =====================================================
+export const hostingStatusSchema = z.enum(["ru", "foreign", "unknown"]);
+
+export const hostingAiResultSchema = z.object({
+  used: z.boolean(),
+  status: hostingStatusSchema,
+  confidence: z.number().min(0).max(1),
+  evidence: z.array(z.string()),
+  note: z.string().optional(),
+});
+
+export const hostingInfoSchema = z.object({
+  status: hostingStatusSchema,
+  confidence: z.number().min(0).max(1),
+  ips: z.array(z.string()),
+  providerGuess: z.string().nullable(),
+  evidence: z.array(z.string()),
+  ai: hostingAiResultSchema,
+});
+
+export type HostingStatus = z.infer<typeof hostingStatusSchema>;
+export type HostingAiResult = z.infer<typeof hostingAiResultSchema>;
+export type HostingInfo = z.infer<typeof hostingInfoSchema>;
+
+// =====================================================
+// Brief Results (экспресс-проверка) - структурированный JSON
+// =====================================================
+export const lawRefSchema = z.object({
+  act: z.string(),
+  ref: z.string(),
+});
+
+export const briefHighlightSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  status: z.enum(["ok", "warn", "fail", "na"]),
+  severity: z.enum(["critical", "medium", "low", "info"]),
+  summary: z.string(),
+  howToFixShort: z.string().optional(),
+  law: z.array(lawRefSchema).optional(),
+});
+
+export const briefScoreSchema = z.object({
+  percent: z.number().min(0).max(100),
+  severity: z.enum(["low", "medium", "high"]),
+  totals: z.object({
+    checks: z.number(),
+    ok: z.number(),
+    warn: z.number(),
+    fail: z.number(),
+    na: z.number(),
+  }),
+});
+
+export const briefCtaSchema = z.object({
+  fullReportPriceRub: z.number(),
+  fullReportIncludes: z.array(z.string()),
+});
+
+export const briefResultsSchema = z.object({
+  version: z.string().default("1.0"),
+  reportType: z.literal("express"),
+  generatedAt: z.string(),
+  site: z.object({
+    url: z.string(),
+    domain: z.string(),
+  }),
+  score: briefScoreSchema,
+  hosting: hostingInfoSchema,
+  highlights: z.array(briefHighlightSchema),
+  cta: briefCtaSchema,
+});
+
+export type LawRef = z.infer<typeof lawRefSchema>;
+export type BriefHighlight = z.infer<typeof briefHighlightSchema>;
+export type BriefScore = z.infer<typeof briefScoreSchema>;
+export type BriefCta = z.infer<typeof briefCtaSchema>;
+export type BriefResults = z.infer<typeof briefResultsSchema>;
+
+// =====================================================
+// Full Results (полный отчёт за 900₽) - структурированный JSON
+// =====================================================
+export const possibleLiabilitySchema = z.object({
+  type: z.enum(["administrative", "civil", "criminal"]),
+  note: z.string(),
+});
+
+export const fullCheckSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  status: z.enum(["ok", "warn", "fail", "na"]),
+  severity: z.enum(["critical", "medium", "low", "info"]),
+  evidence: z.array(z.string()).optional(),
+  risk: z.string().optional(),
+  howToFix: z.array(z.string()).optional(),
+  law: z.array(lawRefSchema).optional(),
+  possibleLiability: z.array(possibleLiabilitySchema).optional(),
+  links: z.array(z.object({
+    title: z.string(),
+    url: z.string(),
+  })).optional(),
+});
+
+export const fullSectionSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  checks: z.array(fullCheckSchema),
+});
+
+export const fullRecommendationsSchema = z.object({
+  priority1: z.array(z.string()),
+  priority2: z.array(z.string()),
+  priority3: z.array(z.string()),
+});
+
+export const fullResultsSchema = z.object({
+  version: z.string().default("1.0"),
+  reportType: z.literal("full"),
+  generatedAt: z.string(),
+  site: z.object({
+    url: z.string(),
+    domain: z.string(),
+    snapshot: z.object({
+      checkedPaths: z.array(z.string()).optional(),
+      responseTimeMs: z.number().optional(),
+      statusCodes: z.array(z.object({
+        path: z.string(),
+        code: z.number(),
+      })).optional(),
+    }).optional(),
+  }),
+  score: briefScoreSchema,
+  hosting: hostingInfoSchema,
+  sections: z.array(fullSectionSchema),
+  recommendations: fullRecommendationsSchema,
+});
+
+export type PossibleLiability = z.infer<typeof possibleLiabilitySchema>;
+export type FullCheck = z.infer<typeof fullCheckSchema>;
+export type FullSection = z.infer<typeof fullSectionSchema>;
+export type FullRecommendations = z.infer<typeof fullRecommendationsSchema>;
+export type FullResults = z.infer<typeof fullResultsSchema>;

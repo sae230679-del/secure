@@ -375,7 +375,7 @@ function getUniqueViolationsFromCriteria(criteria: CriteriaResult[]): ViolationI
 
 // Calculate penalty totals from criteria results
 function calculatePenaltyTotalsFromCriteria(criteria: CriteriaResult[]): PenaltyTotals {
-  const checkResults: { checkId: string; status: string }[] = [];
+  const checkResults: { checkId: string; status: "passed" | "warning" | "failed" }[] = [];
   
   for (const c of criteria) {
     if (c.status === "passed") continue; // Skip passed checks

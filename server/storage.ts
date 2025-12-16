@@ -250,7 +250,7 @@ export class DatabaseStorage implements IStorage {
     return auditsWithDetails;
   }
 
-  async createAuditResult(data: { auditId: number; criteriaJson: CriteriaResult[]; rknCheckJson?: any; scorePercent: number; severity: string }): Promise<AuditResult> {
+  async createAuditResult(data: { auditId: number; criteriaJson: CriteriaResult[]; rknCheckJson?: any; scorePercent: number; severity: string; hostingInfo?: any; briefResults?: any }): Promise<AuditResult> {
     const [result] = await db
       .insert(schema.auditResults)
       .values({
@@ -259,6 +259,8 @@ export class DatabaseStorage implements IStorage {
         rknCheckJson: data.rknCheckJson || null,
         scorePercent: data.scorePercent,
         severity: data.severity,
+        hostingInfo: data.hostingInfo || null,
+        briefResults: data.briefResults || null,
       })
       .returning();
     return result;
