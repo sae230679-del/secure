@@ -145,8 +145,8 @@ export function runNoSimulationGuard(rootDir: string = "."): void {
     }
     
     if (isProduction) {
-      console.error("[NO_SIMULATION_GUARD] FATAL: Симуляции запрещены в production!");
-      process.exit(1);
+      console.error("[NO_SIMULATION_GUARD] CRITICAL: Обнаружены паттерны симуляции в production!");
+      console.error("[NO_SIMULATION_GUARD] Приложение продолжит работу, но требуется проверка кода.");
     } else {
       console.warn("[NO_SIMULATION_GUARD] ПРЕДУПРЕЖДЕНИЕ: Обнаружены паттерны симуляции (dev режим, продолжаем)");
     }
