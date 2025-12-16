@@ -37,7 +37,7 @@ Preferred communication style: Simple, everyday language.
 - **Penalty System**: Real КоАП РФ ст. 13.11 penalties in `server/penalties-map.ts` with 10+ check types, calculated totals by subject type (физлица, должностные лица, ИП, юрлица), and automatic deduplication by aggregation keys.
 - **PDF Report Generation**: Branded multi-page PDF reports with detailed criteria results, calculated penalty risk tables by subject type, law references, recommendations, and calls to action.
 - **SEO Management**: SuperAdmin controlled CRUD for SEO pages, dynamic public routes, and sitemap generation.
-- **Tools Service (Инструментарий)**: 10 paid tools (10₽ per use) with pay-per-use model:
+- **Tools Service (Инструментарий)**: 11 paid tools (10₽ per use) with pay-per-use model:
   - `/api/tools/catalog` - Returns all tools with pricing and payment status
   - `/api/tools/history` - User's tool usage history
   - `/api/tools/payment/create` - Create payment for tool access
@@ -45,6 +45,7 @@ Preferred communication style: Simple, everyday language.
   - Payments marked with `usedAt` timestamp after consumption (single-use tokens)
   - PII protection: sessionId never logged, emails/INN/passport masked via `redactObject()`
   - Free tool: hosting-recommendations (Russian hosting directory)
+  - **User Agreement Generator**: Modular generator for website user agreements with support for 10 site types (content, services, saas, ecommerce, marketplace, ugc, onlineSchool, servicesAggregator, classifieds, crmSaas). Output format: {html, text, blocks[], json, evidence[], limitations[]}. Generator module: `server/generators/user-agreement-generator.ts`
 
 ### Database
 - **Type**: PostgreSQL
