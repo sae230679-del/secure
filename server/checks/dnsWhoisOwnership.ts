@@ -45,7 +45,83 @@ const WHOIS_SERVERS: Record<string, string> = {
   info: "whois.afilias.net",
   biz: "whois.biz",
   io: "whois.nic.io",
+  uk: "whois.nic.uk",
+  de: "whois.denic.de",
+  fr: "whois.nic.fr",
+  nl: "whois.sidn.nl",
+  eu: "whois.eu",
+  me: "whois.nic.me",
+  cc: "ccwhois.verisign-grs.com",
+  tv: "tvwhois.verisign-grs.com",
+  co: "whois.nic.co",
+  us: "whois.nic.us",
+  ca: "whois.cira.ca",
+  au: "whois.auda.org.au",
+  jp: "whois.jprs.jp",
+  cn: "whois.cnnic.cn",
+  by: "whois.cctld.by",
+  kz: "whois.nic.kz",
+  ua: "whois.ua",
+  app: "whois.nic.google",
+  dev: "whois.nic.google",
+  xyz: "whois.nic.xyz",
+  online: "whois.nic.online",
+  site: "whois.nic.site",
+  club: "whois.nic.club",
+  shop: "whois.nic.shop",
+  tech: "whois.nic.tech",
+  pro: "whois.registrypro.pro",
+  mobi: "whois.dotmobiregistry.net",
+  name: "whois.nic.name",
+  asia: "whois.nic.asia",
 };
+
+async function lookupWhoisServerFromIana(tld: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    let data = "";
+    
+    socket.setTimeout(10000);
+    
+    socket.connect(43, "whois.iana.org", () => {
+      socket.write(tld + "\r\n");
+    });
+    
+    socket.on("data", (chunk: Buffer) => {
+      data += chunk.toString("utf8");
+    });
+    
+    socket.on("end", () => {
+      socket.destroy();
+      const match = data.match(/whois:\s*(\S+)/i);
+      resolve(match ? match[1] : null);
+    });
+    
+    socket.on("error", () => {
+      socket.destroy();
+      resolve(null);
+    });
+    
+    socket.on("timeout", () => {
+      socket.destroy();
+      resolve(null);
+    });
+  });
+}
+
+async function getWhoisServer(tld: string): Promise<string | null> {
+  const normalizedTld = tld.toLowerCase().replace(/^\./, "");
+  
+  if (WHOIS_SERVERS[normalizedTld]) {
+    return WHOIS_SERVERS[normalizedTld];
+  }
+  
+  const ianaServer = await lookupWhoisServerFromIana(normalizedTld);
+  if (ianaServer) {
+    WHOIS_SERVERS[normalizedTld] = ianaServer;
+  }
+  return ianaServer;
+}
 
 function extractDomain(url: string): string {
   try {
@@ -221,9 +297,9 @@ export async function checkDnsWhoisOwnership(urlOrDomain: string): Promise<DnsWh
   }
   
   // WHOIS check
-  const whoisServer = WHOIS_SERVERS[tld];
+  const whoisServer = await getWhoisServer(tld);
   if (!whoisServer) {
-    limitations.push(`WHOIS сервер для TLD .${tld} не настроен`);
+    limitations.push(`WHOIS сервер для TLD .${tld} не найден (включая IANA)`);
   } else {
     try {
       const rawWhois = await queryWhois(domain, whoisServer);
