@@ -10,7 +10,7 @@ import {
   sendContractStatusEmail,
   sendContractSigningEmail,
   sendPasswordResetEmail,
-  sendLoginOtpEmail,
+  sendEmailVerificationEmail,
   isEmailConfigured
 } from "./email";
 import crypto from "crypto";
@@ -100,6 +100,29 @@ function validateWebsiteUrl(rawUrl: string): string {
   return url.toString();
 }
 
+// =====================================================
+// Token Utilities for Email Verification & Password Reset
+// =====================================================
+const TOKEN_PEPPER = process.env.SECRET_KEY || "default-pepper-change-me";
+
+function generateSecureToken(): string {
+  return crypto.randomBytes(32).toString("hex");
+}
+
+function hashToken(token: string): string {
+  return crypto.createHmac("sha256", TOKEN_PEPPER).update(token).digest("hex");
+}
+
+function verifyToken(rawToken: string, storedHash: string): boolean {
+  const computedHash = hashToken(rawToken);
+  return crypto.timingSafeEqual(Buffer.from(computedHash), Buffer.from(storedHash));
+}
+
+const EMAIL_VERIFY_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000; // 1 hour
+const PASSWORD_RESET_MAX_ATTEMPTS = 3;
+const PASSWORD_RESET_WINDOW_MS = 60 * 60 * 1000; // 1 hour window for rate limiting
+
 function requireAuth(req: Request, res: Response, next: NextFunction) {
   console.log(`[AUTH] requireAuth check - path: ${req.path}, userId: ${req.session.userId}, sessionID: ${req.sessionID}`);
   if (!req.session.userId) {
@@ -159,18 +182,55 @@ export async function registerRoutes(
 
       const user = await storage.createUser(data);
       
+      // Generate email verification token
+      const verifyToken = generateSecureToken();
+      const verifyTokenHash = hashToken(verifyToken);
+      const verifyExpiresAt = new Date(Date.now() + EMAIL_VERIFY_TTL_MS);
+      
+      // Save token hash to user
+      await storage.updateUser(user.id, {
+        emailVerifyTokenHash: verifyTokenHash,
+        emailVerifyTokenExpiresAt: verifyExpiresAt,
+      });
+      
+      // Try to send verification email
+      const emailConfigured = await isEmailConfigured();
+      let emailSent = false;
+      
+      if (emailConfigured) {
+        const siteUrl = process.env.SITE_URL || "https://securelex.ru";
+        const verifyLink = `${siteUrl}/verify-email?token=${verifyToken}`;
+        
+        emailSent = await sendEmailVerificationEmail(user.email, {
+          userName: user.name,
+          verificationLink: verifyLink,
+        });
+        
+        if (emailSent) {
+          console.log(`[AUTH] Verification email sent to: ${user.email}`);
+        } else {
+          console.log(`[AUTH] Failed to send verification email to: ${user.email}`);
+        }
+      }
+      
       // Set user ID in session
       req.session.userId = user.id;
       
       req.session.save((saveErr) => {
         if (saveErr) {
           console.error("Session save error during registration:", saveErr);
-          console.error("Session save error details:", JSON.stringify(saveErr, null, 2));
           return res.status(500).json({ error: "Session error: " + (saveErr.message || "Unknown") });
         }
         console.log(`[AUTH] Session saved successfully for new user: ${user.id}`);
-        const { passwordHash, ...safeUser } = user;
-        res.json({ user: safeUser });
+        const { passwordHash, emailVerifyTokenHash, passwordResetTokenHash, ...safeUser } = user;
+        res.json({ 
+          user: safeUser,
+          emailVerificationRequired: true,
+          emailSent,
+          message: emailSent 
+            ? "Письмо с подтверждением отправлено на ваш email" 
+            : "Регистрация завершена. Подтвердите email для полного доступа."
+        });
       });
     } catch (error) {
       console.error("Registration error:", error);
@@ -199,46 +259,32 @@ export async function registerRoutes(
         return res.status(401).json({ error: "Неверный email или пароль" });
       }
       
-      console.log(`[AUTH] Password validated for: ${data.email}, userId: ${user.id}`);
-
-      // Check if email/SMTP is configured for 2FA
-      const emailConfigured = await isEmailConfigured();
+      console.log(`[AUTH] Password validated for: ${data.email}, userId: ${user.id}, role: ${user.role}`);
       
-      if (emailConfigured) {
-        // Generate 6-digit OTP code
-        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-        const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
-        
-        // Save OTP to database
-        await (storage as any).createLoginOtp(user.id, otpCode, expiresAt);
-        
-        // Send OTP via email
-        const emailSent = await sendLoginOtpEmail(user.email, otpCode, user.name);
-        
-        if (emailSent) {
-          console.log(`[AUTH] OTP sent to: ${data.email}`);
-          return res.json({ 
-            requireOtp: true, 
-            userId: user.id,
-            message: "Код подтверждения отправлен на ваш email" 
-          });
-        } else {
-          console.log(`[AUTH] Failed to send OTP, falling back to direct login`);
-        }
+      // Admin and superadmin skip email verification requirement
+      const isPrivileged = user.role === "admin" || user.role === "superadmin";
+      
+      // Check email verification status for regular users
+      if (!isPrivileged && !user.emailVerifiedAt) {
+        console.log(`[AUTH] Email not verified for: ${data.email}`);
+        return res.status(403).json({ 
+          error: "Email не подтвержден",
+          code: "EMAIL_NOT_VERIFIED",
+          message: "Пожалуйста, подтвердите ваш email. Проверьте почту или запросите повторную отправку письма."
+        });
       }
       
-      // Fallback: If email not configured or failed, login directly
-      console.log(`[AUTH] Direct login for: ${data.email}, userId: ${user.id}`);
+      // Login directly
+      console.log(`[AUTH] Login successful for: ${data.email}, userId: ${user.id}`);
       req.session.userId = user.id;
       
       req.session.save((saveErr) => {
         if (saveErr) {
           console.error("Session save error during login:", saveErr);
-          console.error("Session save error details:", JSON.stringify(saveErr, null, 2));
           return res.status(500).json({ error: "Session error: " + (saveErr.message || "Unknown") });
         }
         console.log(`[AUTH] Session saved successfully for user: ${user.id}`);
-        const { passwordHash, ...safeUser } = user;
+        const { passwordHash, emailVerifyTokenHash, passwordResetTokenHash, ...safeUser } = user;
         res.json({ user: safeUser });
       });
     } catch (error) {
@@ -259,6 +305,126 @@ export async function registerRoutes(
     });
   });
 
+  // =====================================================
+  // Email Verification Endpoints
+  // =====================================================
+  app.post("/api/auth/verify-email", async (req, res) => {
+    try {
+      const { token } = req.body;
+      
+      if (!token || typeof token !== "string") {
+        return res.status(400).json({ error: "Токен обязателен" });
+      }
+      
+      console.log(`[AUTH] Email verification attempt`);
+      
+      // Find user with matching token hash using timing-safe comparison
+      const users = await storage.getUsers();
+      const usersWithTokens = users.filter(u => u.emailVerifyTokenHash);
+      
+      let matchedUser = null;
+      for (const user of usersWithTokens) {
+        if (verifyToken(token, user.emailVerifyTokenHash!)) {
+          matchedUser = user;
+          break;
+        }
+      }
+      
+      if (!matchedUser) {
+        console.log(`[AUTH] Email verification: token not found`);
+        return res.status(400).json({ error: "Недействительная ссылка подтверждения" });
+      }
+      
+      // Check if already verified
+      if (matchedUser.emailVerifiedAt) {
+        console.log(`[AUTH] Email already verified for: ${matchedUser.email}`);
+        return res.json({ success: true, message: "Email уже подтвержден", alreadyVerified: true });
+      }
+      
+      // Check expiration
+      if (matchedUser.emailVerifyTokenExpiresAt && new Date() > new Date(matchedUser.emailVerifyTokenExpiresAt)) {
+        console.log(`[AUTH] Email verification token expired for: ${matchedUser.email}`);
+        return res.status(400).json({ error: "Ссылка истекла. Запросите повторную отправку.", code: "TOKEN_EXPIRED" });
+      }
+      
+      // Mark as verified
+      await storage.updateUser(matchedUser.id, {
+        emailVerifiedAt: new Date(),
+        emailVerifyTokenHash: null,
+        emailVerifyTokenExpiresAt: null,
+      });
+      
+      console.log(`[AUTH] Email verified successfully for: ${matchedUser.email}`);
+      
+      res.json({ success: true, message: "Email успешно подтвержден" });
+    } catch (error) {
+      console.error("[AUTH] Email verification error:", error);
+      res.status(500).json({ error: "Ошибка подтверждения email" });
+    }
+  });
+
+  app.post("/api/auth/resend-verification", async (req, res) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email || typeof email !== "string") {
+        return res.status(400).json({ error: "Email обязателен" });
+      }
+      
+      console.log(`[AUTH] Resend verification request for: ${email}`);
+      
+      const user = await storage.getUserByEmail(email);
+      
+      // Don't reveal if email exists
+      if (!user) {
+        console.log(`[AUTH] Resend verification: user not found (silent)`);
+        return res.json({ success: true, message: "Если email зарегистрирован, письмо будет отправлено" });
+      }
+      
+      // Check if already verified
+      if (user.emailVerifiedAt) {
+        return res.json({ success: true, message: "Email уже подтвержден", alreadyVerified: true });
+      }
+      
+      // Generate new token
+      const verifyToken = generateSecureToken();
+      const verifyTokenHash = hashToken(verifyToken);
+      const verifyExpiresAt = new Date(Date.now() + EMAIL_VERIFY_TTL_MS);
+      
+      await storage.updateUser(user.id, {
+        emailVerifyTokenHash: verifyTokenHash,
+        emailVerifyTokenExpiresAt: verifyExpiresAt,
+      });
+      
+      // Send verification email
+      const emailConfigured = await isEmailConfigured();
+      if (!emailConfigured) {
+        console.log(`[AUTH] SMTP not configured, cannot send verification email`);
+        return res.status(503).json({ error: "Email сервис временно недоступен" });
+      }
+      
+      const siteUrl = process.env.SITE_URL || "https://securelex.ru";
+      const verifyLink = `${siteUrl}/verify-email?token=${verifyToken}`;
+      
+      const emailSent = await sendEmailVerificationEmail(user.email, {
+        userName: user.name,
+        verificationLink: verifyLink,
+      });
+      
+      if (emailSent) {
+        console.log(`[AUTH] Verification email resent to: ${user.email}`);
+      } else {
+        console.log(`[AUTH] Failed to resend verification email to: ${user.email}`);
+      }
+      
+      res.json({ success: true, message: "Если email зарегистрирован, письмо будет отправлено" });
+    } catch (error) {
+      console.error("[AUTH] Resend verification error:", error);
+      res.status(500).json({ error: "Ошибка при отправке письма" });
+    }
+  });
+
+  // Legacy OTP endpoint (deprecated but kept for compatibility)
   app.post("/api/auth/verify-otp", async (req, res) => {
     try {
       const { userId, code } = req.body;
@@ -304,29 +470,82 @@ export async function registerRoutes(
     }
   });
 
+  // =====================================================
+  // Password Reset Endpoints (Public - for regular users only)
+  // =====================================================
   app.post("/api/auth/forgot-password", async (req, res) => {
     try {
       const { email } = req.body;
-      if (!email) {
+      if (!email || typeof email !== "string") {
         return res.status(400).json({ error: "Email обязателен" });
       }
+      
+      console.log(`[AUTH] Password reset request for: ${email}`);
 
       const user = await storage.getUserByEmail(email);
+      
+      // Don't reveal if email exists
       if (!user) {
+        console.log(`[AUTH] Password reset: user not found (silent)`);
+        return res.json({ success: true, message: "Если email существует, вы получите письмо с инструкциями" });
+      }
+      
+      // Admin/superadmin cannot use public password reset - must go through SuperAdmin
+      if (user.role === "admin" || user.role === "superadmin") {
+        console.log(`[AUTH] Password reset: privileged user ${user.email} must use SuperAdmin reset`);
+        return res.json({ success: true, message: "Если email существует, вы получите письмо с инструкциями" });
+      }
+      
+      // Rate limiting: check attempts in last hour
+      const now = Date.now();
+      const lastAttempt = user.passwordResetLastAttempt ? new Date(user.passwordResetLastAttempt).getTime() : 0;
+      const attempts = user.passwordResetAttempts || 0;
+      
+      // Reset counter if window has passed
+      let currentAttempts = attempts;
+      if (now - lastAttempt > PASSWORD_RESET_WINDOW_MS) {
+        currentAttempts = 0;
+      }
+      
+      if (currentAttempts >= PASSWORD_RESET_MAX_ATTEMPTS) {
+        console.log(`[AUTH] Password reset rate limited for: ${email}`);
+        return res.status(429).json({ 
+          error: "Слишком много запросов. Попробуйте через час.",
+          code: "RATE_LIMITED"
+        });
+      }
+      
+      // Generate token with hash
+      const resetToken = generateSecureToken();
+      const resetTokenHash = hashToken(resetToken);
+      const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
+      
+      // Save token hash and update rate limiting
+      await storage.updateUser(user.id, {
+        passwordResetTokenHash: resetTokenHash,
+        passwordResetTokenExpiresAt: expiresAt,
+        passwordResetAttempts: currentAttempts + 1,
+        passwordResetLastAttempt: new Date(),
+      });
+      
+      // Send reset email
+      const emailConfigured = await isEmailConfigured();
+      if (!emailConfigured) {
+        console.log(`[AUTH] SMTP not configured, cannot send password reset`);
         return res.json({ success: true, message: "Если email существует, вы получите письмо с инструкциями" });
       }
 
-      const token = crypto.randomBytes(32).toString("hex");
-      const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
-      
-      await (storage as any).createPasswordResetToken(user.id, token, expiresAt);
-
       const siteUrl = process.env.SITE_URL || "https://securelex.ru";
-      const resetLink = `${siteUrl}/reset-password?token=${token}`;
+      const resetLink = `${siteUrl}/reset-password?token=${resetToken}`;
 
-      await sendPasswordResetEmail(user.email, resetLink, user.name);
-
-      console.log(`[AUTH] Password reset email sent to: ${email}`);
+      const emailSent = await sendPasswordResetEmail(user.email, resetLink, user.name);
+      
+      if (emailSent) {
+        console.log(`[AUTH] Password reset email sent to: ${email}`);
+      } else {
+        console.log(`[AUTH] Failed to send password reset email to: ${email}`);
+      }
+      
       res.json({ success: true, message: "Если email существует, вы получите письмо с инструкциями" });
     } catch (error) {
       console.error("[AUTH] Forgot password error:", error);
@@ -345,23 +564,40 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Пароль должен быть не менее 6 символов" });
       }
 
-      const resetToken = await (storage as any).getPasswordResetToken(token);
-      if (!resetToken) {
+      console.log(`[AUTH] Password reset attempt`);
+      
+      // Find user with matching token hash using timing-safe comparison
+      const users = await storage.getUsers();
+      const usersWithTokens = users.filter(u => u.passwordResetTokenHash);
+      
+      let matchedUser = null;
+      for (const user of usersWithTokens) {
+        if (verifyToken(token, user.passwordResetTokenHash!)) {
+          matchedUser = user;
+          break;
+        }
+      }
+
+      if (!matchedUser) {
+        console.log(`[AUTH] Password reset: token not found`);
         return res.status(400).json({ error: "Недействительная или истекшая ссылка" });
       }
-
-      if (resetToken.usedAt) {
-        return res.status(400).json({ error: "Ссылка уже была использована" });
-      }
-
-      if (new Date() > new Date(resetToken.expiresAt)) {
+      
+      // Check expiration
+      if (matchedUser.passwordResetTokenExpiresAt && new Date() > new Date(matchedUser.passwordResetTokenExpiresAt)) {
+        console.log(`[AUTH] Password reset token expired for: ${matchedUser.email}`);
         return res.status(400).json({ error: "Ссылка истекла. Запросите новую" });
       }
 
-      await (storage as any).updateUserPassword(resetToken.userId, password);
-      await (storage as any).markPasswordResetTokenUsed(token);
+      // Update password and clear token
+      await (storage as any).updateUserPassword(matchedUser.id, password);
+      await storage.updateUser(matchedUser.id, {
+        passwordResetTokenHash: null,
+        passwordResetTokenExpiresAt: null,
+        passwordResetAttempts: 0,
+      });
 
-      console.log(`[AUTH] Password reset successful for userId: ${resetToken.userId}`);
+      console.log(`[AUTH] Password reset successful for: ${matchedUser.email}`);
       res.json({ success: true, message: "Пароль успешно изменен" });
     } catch (error) {
       console.error("[AUTH] Reset password error:", error);
@@ -380,7 +616,7 @@ export async function registerRoutes(
       return res.status(401).json({ error: "User not found" });
     }
 
-    const { passwordHash, ...safeUser } = user;
+    const { passwordHash, emailVerifyTokenHash, passwordResetTokenHash, ...safeUser } = user;
     res.json({ user: safeUser });
   });
 
@@ -2988,6 +3224,241 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("[RKN Settings PUT] Error:", error?.message || error);
       res.status(500).json({ error: "Failed to update RKN settings" });
+    }
+  });
+
+  // =====================================================
+  // SMTP / Email Settings (SuperAdmin)
+  // =====================================================
+  app.get("/api/admin/settings/email", requireSuperAdmin, async (req, res) => {
+    try {
+      const { getSmtpStatus } = await import("./email");
+      const status = await getSmtpStatus();
+      
+      // Get settings from DB (never return password)
+      const smtpEnabled = await storage.getSystemSetting("smtp_enabled");
+      const smtpHost = await storage.getSystemSetting("smtp_host");
+      const smtpPort = await storage.getSystemSetting("smtp_port");
+      const smtpSecure = await storage.getSystemSetting("smtp_secure");
+      const smtpRequireTls = await storage.getSystemSetting("smtp_require_tls");
+      const smtpUser = await storage.getSystemSetting("smtp_user");
+      const smtpFrom = await storage.getSystemSetting("smtp_from");
+      const smtpFromName = await storage.getSystemSetting("smtp_from_name");
+      const smtpReplyTo = await storage.getSystemSetting("smtp_reply_to");
+      
+      res.json({
+        status,
+        settings: {
+          enabled: smtpEnabled?.value !== "false",
+          host: smtpHost?.value || "mail.securelex.ru",
+          port: parseInt(smtpPort?.value || "465"),
+          secure: smtpSecure?.value !== "false",
+          requireTls: smtpRequireTls?.value === "true",
+          user: smtpUser?.value || "support@securelex.ru",
+          from: smtpFrom?.value || "support@securelex.ru",
+          fromName: smtpFromName?.value || "SecureLex",
+          replyTo: smtpReplyTo?.value || "",
+        },
+      });
+    } catch (error: any) {
+      console.error("[SMTP Settings GET] Error:", error?.message || error);
+      res.status(500).json({ error: "Failed to fetch email settings" });
+    }
+  });
+
+  app.put("/api/admin/settings/email", requireSuperAdmin, async (req, res) => {
+    try {
+      const { enabled, host, port, secure, requireTls, user, from, fromName, replyTo } = req.body;
+      
+      // Update settings (password is never stored in DB - use SMTP_PASSWORD secret)
+      if (enabled !== undefined) await storage.upsertSystemSetting("smtp_enabled", String(enabled));
+      if (host !== undefined) await storage.upsertSystemSetting("smtp_host", host);
+      if (port !== undefined) await storage.upsertSystemSetting("smtp_port", String(port));
+      if (secure !== undefined) await storage.upsertSystemSetting("smtp_secure", String(secure));
+      if (requireTls !== undefined) await storage.upsertSystemSetting("smtp_require_tls", String(requireTls));
+      if (user !== undefined) await storage.upsertSystemSetting("smtp_user", user);
+      if (from !== undefined) await storage.upsertSystemSetting("smtp_from", from);
+      if (fromName !== undefined) await storage.upsertSystemSetting("smtp_from_name", fromName);
+      if (replyTo !== undefined) await storage.upsertSystemSetting("smtp_reply_to", replyTo);
+      
+      // Invalidate cache
+      const { invalidateSmtpCache } = await import("./email");
+      invalidateSmtpCache();
+      
+      // Log the action
+      const userId = req.session.userId!;
+      await storage.createAuditLog({
+        userId,
+        action: "smtp_settings_updated",
+        targetType: "system",
+        details: { changedBy: userId },
+      });
+      
+      res.json({ success: true, message: "SMTP settings updated. Remember to set SMTP_PASSWORD in Secrets." });
+    } catch (error: any) {
+      console.error("[SMTP Settings PUT] Error:", error?.message || error);
+      res.status(500).json({ error: "Failed to update email settings" });
+    }
+  });
+
+  app.post("/api/admin/settings/email/test", requireSuperAdmin, async (req, res) => {
+    try {
+      const { toEmail } = req.body as { toEmail?: string };
+      
+      if (!toEmail || !toEmail.includes("@")) {
+        return res.status(400).json({ error: "Valid email address required" });
+      }
+      
+      const { getSmtpStatus, isEmailConfigured } = await import("./email");
+      const status = await getSmtpStatus();
+      
+      if (!status.configured) {
+        return res.status(400).json({ 
+          error: `SMTP not configured: ${status.reason}`,
+          status 
+        });
+      }
+      
+      // Send test email
+      const nodemailer = await import("nodemailer");
+      const settings = await storage.getSystemSettings();
+      
+      const host = settings.find(s => s.key === "smtp_host")?.value || "mail.securelex.ru";
+      const port = parseInt(settings.find(s => s.key === "smtp_port")?.value || "465");
+      const secure = settings.find(s => s.key === "smtp_secure")?.value !== "false";
+      const requireTls = settings.find(s => s.key === "smtp_require_tls")?.value === "true";
+      const user = settings.find(s => s.key === "smtp_user")?.value || "support@securelex.ru";
+      const from = settings.find(s => s.key === "smtp_from")?.value || "support@securelex.ru";
+      const fromName = settings.find(s => s.key === "smtp_from_name")?.value || "SecureLex";
+      const pass = process.env.SMTP_PASSWORD;
+      
+      if (!pass) {
+        return res.status(400).json({ error: "SMTP_PASSWORD secret not set" });
+      }
+      
+      const transportConfig: any = {
+        host,
+        port,
+        secure,
+        auth: { user, pass },
+      };
+      if (!secure && requireTls) {
+        transportConfig.requireTLS = true;
+      }
+      
+      const transporter = nodemailer.default.createTransport(transportConfig);
+      
+      await transporter.sendMail({
+        from: `"${fromName}" <${from}>`,
+        to: toEmail,
+        subject: "SecureLex SMTP Test",
+        text: "This is a test email from SecureLex.ru SMTP configuration.",
+        html: `
+          <h2>SMTP Test Successful</h2>
+          <p>This test email confirms that your SMTP settings are working correctly.</p>
+          <p><strong>Host:</strong> ${host}</p>
+          <p><strong>Port:</strong> ${port}</p>
+          <p><strong>Secure:</strong> ${secure}</p>
+          <p><strong>From:</strong> ${from}</p>
+          <p style="color: #666; font-size: 12px; margin-top: 20px;">
+            Sent at ${new Date().toISOString()}
+          </p>
+        `,
+      });
+      
+      res.json({ success: true, message: `Test email sent to ${toEmail}` });
+    } catch (error: any) {
+      console.error("[SMTP Test] Error:", error?.message || error);
+      res.status(500).json({ 
+        error: "Failed to send test email",
+        details: error?.message || String(error)
+      });
+    }
+  });
+
+  // =====================================================
+  // SuperAdmin Password Reset for Admin/SuperAdmin Users
+  // =====================================================
+  app.post("/api/admin/users/:userId/reset-password", requireSuperAdmin, async (req, res) => {
+    try {
+      const targetUserId = parseInt(req.params.userId, 10);
+      const { sendEmail } = req.body as { sendEmail?: boolean };
+      
+      if (isNaN(targetUserId)) {
+        return res.status(400).json({ error: "Invalid user ID" });
+      }
+      
+      const targetUser = await storage.getUserById(targetUserId);
+      if (!targetUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      // Only allow resetting admin or superadmin users through this endpoint
+      if (targetUser.role !== "admin" && targetUser.role !== "superadmin") {
+        return res.status(400).json({ 
+          error: "This endpoint is only for admin/superadmin users. Regular users should use public password reset."
+        });
+      }
+      
+      console.log(`[ADMIN] Password reset initiated for ${targetUser.role} user: ${targetUser.email}`);
+      
+      // Generate new temporary password
+      const tempPassword = crypto.randomBytes(8).toString("hex");
+      
+      // Update password
+      await (storage as any).updateUserPassword(targetUserId, tempPassword);
+      
+      // Clear any existing reset tokens
+      await storage.updateUser(targetUserId, {
+        passwordResetTokenHash: null,
+        passwordResetTokenExpiresAt: null,
+        passwordResetAttempts: 0,
+      });
+      
+      // Log the action
+      const adminUserId = req.session.userId!;
+      await storage.createAuditLog({
+        userId: adminUserId,
+        action: "admin_password_reset",
+        targetType: "user",
+        targetId: targetUserId,
+        details: { targetEmail: targetUser.email, targetRole: targetUser.role },
+      });
+      
+      // Optionally send email with reset link (not temp password for security)
+      let emailSent = false;
+      if (sendEmail) {
+        const emailConfigured = await isEmailConfigured();
+        if (emailConfigured) {
+          const resetToken = generateSecureToken();
+          const resetTokenHash = hashToken(resetToken);
+          const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
+          
+          await storage.updateUser(targetUserId, {
+            passwordResetTokenHash: resetTokenHash,
+            passwordResetTokenExpiresAt: expiresAt,
+          });
+          
+          const siteUrl = process.env.SITE_URL || "https://securelex.ru";
+          const resetLink = `${siteUrl}/reset-password?token=${resetToken}`;
+          
+          emailSent = await sendPasswordResetEmail(targetUser.email, resetLink, targetUser.name);
+          
+          if (emailSent) {
+            console.log(`[ADMIN] Password reset email sent to: ${targetUser.email}`);
+          }
+        }
+      }
+      
+      res.json({ 
+        success: true, 
+        tempPassword, // Return temp password for SuperAdmin to communicate securely
+        emailSent,
+        message: `Password reset for ${targetUser.email}. ${emailSent ? "Reset link sent via email." : "Temp password provided."}`
+      });
+    } catch (error: any) {
+      console.error("[ADMIN] Password reset error:", error?.message || error);
+      res.status(500).json({ error: "Failed to reset password" });
     }
   });
 

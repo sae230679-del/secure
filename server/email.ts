@@ -52,41 +52,96 @@ interface SmtpSettings {
   host: string;
   port: number;
   secure: boolean;
+  requireTls: boolean;
   user: string;
   pass: string;
   from: string;
+  fromName: string;
+  replyTo?: string;
+}
+
+export interface SmtpStatus {
+  configured: boolean;
+  enabled: boolean;
+  hasPassword: boolean;
+  reason?: string;
 }
 
 let cachedTransporter: Transporter | null = null;
 let cachedSettings: SmtpSettings | null = null;
+let cacheTimestamp: number = 0;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 async function getSmtpSettings(): Promise<SmtpSettings | null> {
   try {
-    // Dynamic import to avoid circular dependency
     const { storage } = await import("./storage");
     const settings = await storage.getSystemSettings();
     
+    const smtpEnabled = settings.find(s => s.key === "smtp_enabled")?.value;
     const smtpHost = settings.find(s => s.key === "smtp_host")?.value;
     const smtpPort = settings.find(s => s.key === "smtp_port")?.value;
+    const smtpSecure = settings.find(s => s.key === "smtp_secure")?.value;
+    const smtpRequireTls = settings.find(s => s.key === "smtp_require_tls")?.value;
     const smtpUser = settings.find(s => s.key === "smtp_user")?.value;
-    const smtpPass = settings.find(s => s.key === "smtp_pass")?.value;
     const smtpFrom = settings.find(s => s.key === "smtp_from")?.value;
+    const smtpFromName = settings.find(s => s.key === "smtp_from_name")?.value;
+    const smtpReplyTo = settings.find(s => s.key === "smtp_reply_to")?.value;
     
-    // Fallback to env variables if not in DB
-    const host = smtpHost || process.env.SMTP_HOST || "smtp.yandex.ru";
-    const port = parseInt(smtpPort || process.env.SMTP_PORT || "465");
-    const user = smtpUser || process.env.SMTP_USER || "";
-    const pass = smtpPass || process.env.SMTP_PASS || "";
-    const from = smtpFrom || process.env.SMTP_FROM || "noreply@securelex.ru";
-    
-    if (!user || !pass) {
+    // Check if SMTP is enabled
+    if (smtpEnabled === "false") {
       return null;
     }
     
-    return { host, port, secure: port === 465, user, pass, from };
+    // SMTP password ONLY from secret (never from DB)
+    const pass = process.env.SMTP_PASSWORD || "";
+    
+    // Default values for REG.RU
+    const host = smtpHost || "mail.securelex.ru";
+    const port = parseInt(smtpPort || "465");
+    const secure = smtpSecure !== "false"; // Default true for port 465
+    const requireTls = smtpRequireTls === "true"; // For port 587 STARTTLS
+    const user = smtpUser || "support@securelex.ru";
+    const from = smtpFrom || "support@securelex.ru";
+    const fromName = smtpFromName || "SecureLex";
+    const replyTo = smtpReplyTo || undefined;
+    
+    if (!user || !pass) {
+      console.log("[SMTP] Missing user or SMTP_PASSWORD secret");
+      return null;
+    }
+    
+    return { host, port, secure, requireTls, user, pass, from, fromName, replyTo };
   } catch (error) {
-    console.error("Failed to get SMTP settings:", error);
+    console.error("[SMTP] Failed to get settings:", error);
     return null;
+  }
+}
+
+export async function getSmtpStatus(): Promise<SmtpStatus> {
+  try {
+    const { storage } = await import("./storage");
+    const settings = await storage.getSystemSettings();
+    
+    const smtpEnabled = settings.find(s => s.key === "smtp_enabled")?.value !== "false";
+    const smtpHost = settings.find(s => s.key === "smtp_host")?.value;
+    const smtpUser = settings.find(s => s.key === "smtp_user")?.value;
+    const hasPassword = !!process.env.SMTP_PASSWORD;
+    
+    if (!smtpEnabled) {
+      return { configured: false, enabled: false, hasPassword, reason: "SMTP disabled" };
+    }
+    
+    if (!smtpHost || !smtpUser) {
+      return { configured: false, enabled: true, hasPassword, reason: "Missing host or user" };
+    }
+    
+    if (!hasPassword) {
+      return { configured: false, enabled: true, hasPassword, reason: "Missing SMTP_PASSWORD secret" };
+    }
+    
+    return { configured: true, enabled: true, hasPassword };
+  } catch (error) {
+    return { configured: false, enabled: false, hasPassword: false, reason: String(error) };
   }
 }
 
@@ -97,31 +152,47 @@ async function getTransporter(): Promise<Transporter | null> {
     return null;
   }
   
-  // Check if settings changed
-  if (cachedSettings && cachedTransporter) {
+  const now = Date.now();
+  
+  // Check if cached transporter is still valid (settings unchanged and not expired)
+  if (cachedSettings && cachedTransporter && (now - cacheTimestamp) < CACHE_TTL_MS) {
     if (
       cachedSettings.host === settings.host &&
       cachedSettings.port === settings.port &&
       cachedSettings.user === settings.user &&
-      cachedSettings.pass === settings.pass
+      cachedSettings.secure === settings.secure
     ) {
       return cachedTransporter;
     }
   }
   
-  // Create new transporter
-  cachedTransporter = nodemailer.createTransport({
+  // Create new transporter with proper TLS handling
+  const transportConfig: any = {
     host: settings.host,
     port: settings.port,
-    secure: settings.secure,
+    secure: settings.secure, // true for 465, false for 587
     auth: {
       user: settings.user,
       pass: settings.pass,
     },
-  });
+  };
+  
+  // For port 587 with STARTTLS
+  if (!settings.secure && settings.requireTls) {
+    transportConfig.requireTLS = true;
+  }
+  
+  cachedTransporter = nodemailer.createTransport(transportConfig);
   cachedSettings = settings;
+  cacheTimestamp = now;
   
   return cachedTransporter;
+}
+
+export function invalidateSmtpCache(): void {
+  cachedTransporter = null;
+  cachedSettings = null;
+  cacheTimestamp = 0;
 }
 
 const siteName = "SecureLex.ru";
