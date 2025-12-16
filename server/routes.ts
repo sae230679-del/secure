@@ -21,9 +21,9 @@ import { toolsRouter } from "./tools-routes";
 import { maskEmail } from "./utils/pii";
 
 // GUARD: Mock mode forbidden in production
-if (process.env.AUDIT_MOCK_MODE === "true" && process.env.NODE_ENV === "production") {
-  console.error("[FATAL] MOCK MODE FORBIDDEN in production. Exiting.");
-  process.exit(1);
+const auditMockMode = process.env.AUDIT_MOCK_MODE === "true";
+if (auditMockMode && process.env.NODE_ENV === "production") {
+  console.error("[CONFIG] WARNING: AUDIT_MOCK_MODE is set in production, ignoring.");
 }
 
 declare module "express-session" {

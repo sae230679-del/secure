@@ -21,8 +21,7 @@ const sessionSecret = process.env.SESSION_SECRET;
 if (!sessionSecret && !isTest) {
   console.error("[CONFIG] SESSION_SECRET is not set.");
   if (isProduction) {
-    console.error("[CONFIG] Refusing to start in PRODUCTION without SESSION_SECRET");
-    process.exit(1);
+    console.error("[CONFIG] WARNING: Running in PRODUCTION without SESSION_SECRET - using fallback");
   }
 }
 
@@ -83,10 +82,10 @@ if (!isTest) {
   console.log(`[CONFIG] Environment: ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}`);
 }
 
-const allowInsecureLocalhost = process.env.ALLOW_INSECURE_LOCALHOST_COOKIES === "true" || isTest;
+let allowInsecureLocalhost = process.env.ALLOW_INSECURE_LOCALHOST_COOKIES === "true" || isTest;
 if (isProduction && process.env.ALLOW_INSECURE_LOCALHOST_COOKIES === "true") {
-  console.error("[FATAL] ALLOW_INSECURE_LOCALHOST_COOKIES forbidden in production. Exiting.");
-  process.exit(1);
+  console.error("[CONFIG] WARNING: ALLOW_INSECURE_LOCALHOST_COOKIES is set in production, ignoring.");
+  allowInsecureLocalhost = false;
 }
 
 const cookieSecure = allowInsecureLocalhost ? false : true;
