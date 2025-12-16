@@ -79,6 +79,7 @@ const toolIcons: Record<string, any> = {
   "rkn-check": AlertTriangle,
   "font-localizer": Type,
   "hosting-recommendations": Server,
+  "user-agreement-generator": FileText,
 };
 
 export default function ToolsPage() {
@@ -655,6 +656,297 @@ function ToolForm({
         </div>
       );
 
+    case "user-agreement-generator":
+      return (
+        <form onSubmit={handleSubmit} className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="siteUrl">URL сайта *</Label>
+              <Input
+                id="siteUrl"
+                required
+                placeholder="https://example.ru"
+                value={formData.siteUrl || ""}
+                onChange={(e) => setFormData({ ...formData, siteUrl: e.target.value })}
+                data-testid="input-site-url"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="siteType">Тип сайта *</Label>
+              <Select
+                value={formData.siteType || ""}
+                onValueChange={(v) => setFormData({ ...formData, siteType: v })}
+              >
+                <SelectTrigger data-testid="select-site-type">
+                  <SelectValue placeholder="Выберите тип" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="content">Контентный сайт</SelectItem>
+                  <SelectItem value="services">Сайт услуг</SelectItem>
+                  <SelectItem value="saas">SaaS-сервис</SelectItem>
+                  <SelectItem value="ecommerce">Интернет-магазин</SelectItem>
+                  <SelectItem value="marketplace">Маркетплейс</SelectItem>
+                  <SelectItem value="ugc">UGC-платформа</SelectItem>
+                  <SelectItem value="onlineSchool">Онлайн-школа</SelectItem>
+                  <SelectItem value="servicesAggregator">Агрегатор услуг</SelectItem>
+                  <SelectItem value="classifieds">Доска объявлений</SelectItem>
+                  <SelectItem value="crmSaas">CRM/SaaS система</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="operatorType">Тип оператора *</Label>
+              <Select
+                value={formData.operatorType || ""}
+                onValueChange={(v) => setFormData({ ...formData, operatorType: v })}
+              >
+                <SelectTrigger data-testid="select-operator-type">
+                  <SelectValue placeholder="Выберите тип" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ooo">ООО</SelectItem>
+                  <SelectItem value="ip">ИП</SelectItem>
+                  <SelectItem value="selfEmployed">Самозанятый</SelectItem>
+                  <SelectItem value="individual">Физическое лицо</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="jurisdictionCity">Город юрисдикции *</Label>
+              <Input
+                id="jurisdictionCity"
+                required
+                placeholder="Москва"
+                value={formData.jurisdictionCity || ""}
+                onChange={(e) => setFormData({ ...formData, jurisdictionCity: e.target.value })}
+                data-testid="input-jurisdiction-city"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="operatorNameFull">Полное наименование оператора *</Label>
+            <Input
+              id="operatorNameFull"
+              required
+              placeholder='ООО "Ромашка" или ИП Иванов Иван Иванович'
+              value={formData.operatorNameFull || ""}
+              onChange={(e) => setFormData({ ...formData, operatorNameFull: e.target.value })}
+              data-testid="input-operator-name-full"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="supportEmail">Email для связи *</Label>
+              <Input
+                id="supportEmail"
+                type="email"
+                required
+                placeholder="info@company.ru"
+                value={formData.supportEmail || ""}
+                onChange={(e) => setFormData({ ...formData, supportEmail: e.target.value })}
+                data-testid="input-support-email"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="supportPhone">Телефон (опционально)</Label>
+              <Input
+                id="supportPhone"
+                placeholder="+7 999 123-45-67"
+                value={formData.supportPhone || ""}
+                onChange={(e) => setFormData({ ...formData, supportPhone: e.target.value })}
+                data-testid="input-support-phone"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="operatorInn">ИНН (опционально)</Label>
+              <Input
+                id="operatorInn"
+                placeholder="1234567890"
+                value={formData.operatorInn || ""}
+                onChange={(e) => setFormData({ ...formData, operatorInn: e.target.value })}
+                data-testid="input-operator-inn"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="operatorOgrnOrOgrnip">ОГРН/ОГРНИП (опционально)</Label>
+              <Input
+                id="operatorOgrnOrOgrnip"
+                placeholder="1234567890123"
+                value={formData.operatorOgrnOrOgrnip || ""}
+                onChange={(e) => setFormData({ ...formData, operatorOgrnOrOgrnip: e.target.value })}
+                data-testid="input-operator-ogrn"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="operatorAddress">Адрес (опционально)</Label>
+            <Input
+              id="operatorAddress"
+              placeholder="г. Москва, ул. Примерная, д. 1"
+              value={formData.operatorAddress || ""}
+              onChange={(e) => setFormData({ ...formData, operatorAddress: e.target.value })}
+              data-testid="input-operator-address"
+            />
+          </div>
+
+          <div className="border-t pt-4 mt-4">
+            <p className="text-sm font-medium mb-3">Функции сайта</p>
+            <div className="grid grid-cols-2 gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.hasRegistration || false}
+                  onChange={(e) => setFormData({ ...formData, hasRegistration: e.target.checked })}
+                  className="rounded"
+                  data-testid="checkbox-has-registration"
+                />
+                <span className="text-sm">Регистрация пользователей</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.hasPayments || false}
+                  onChange={(e) => setFormData({ ...formData, hasPayments: e.target.checked })}
+                  className="rounded"
+                  data-testid="checkbox-has-payments"
+                />
+                <span className="text-sm">Платные услуги/товары</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.ugcAllowed || false}
+                  onChange={(e) => setFormData({ ...formData, ugcAllowed: e.target.checked })}
+                  className="rounded"
+                  data-testid="checkbox-ugc-allowed"
+                />
+                <span className="text-sm">Пользовательский контент</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.analyticsUsed || false}
+                  onChange={(e) => setFormData({ ...formData, analyticsUsed: e.target.checked })}
+                  className="rounded"
+                  data-testid="checkbox-analytics-used"
+                />
+                <span className="text-sm">Аналитика/cookies</span>
+              </label>
+            </div>
+          </div>
+
+          {formData.hasPayments && (
+            <div className="border-t pt-4 space-y-4">
+              <p className="text-sm font-medium">Настройки оплаты</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Модель оплаты</Label>
+                  <Select
+                    value={formData.billingModel || ""}
+                    onValueChange={(v) => setFormData({ ...formData, billingModel: v })}
+                  >
+                    <SelectTrigger data-testid="select-billing-model">
+                      <SelectValue placeholder="Выберите модель" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="oneTime">Разовая оплата</SelectItem>
+                      <SelectItem value="subscription">Подписка</SelectItem>
+                      <SelectItem value="payg">Pay-as-you-go</SelectItem>
+                      <SelectItem value="mixed">Смешанная</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Тип доставки</Label>
+                  <Select
+                    value={formData.deliveryType || "none"}
+                    onValueChange={(v) => setFormData({ ...formData, deliveryType: v })}
+                  >
+                    <SelectTrigger data-testid="select-delivery-type">
+                      <SelectValue placeholder="Выберите тип" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Нет доставки</SelectItem>
+                      <SelectItem value="digital">Цифровой контент</SelectItem>
+                      <SelectItem value="physical">Физическая доставка</SelectItem>
+                      <SelectItem value="mixed">Смешанная</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Политика возвратов</Label>
+                <Select
+                  value={formData.refundPolicy || "standard"}
+                  onValueChange={(v) => setFormData({ ...formData, refundPolicy: v })}
+                >
+                  <SelectTrigger data-testid="select-refund-policy">
+                    <SelectValue placeholder="Выберите политику" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="standard">Стандартная (по закону)</SelectItem>
+                    <SelectItem value="custom">Кастомная</SelectItem>
+                    <SelectItem value="none">Без возвратов</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+
+          {formData.ugcAllowed && (
+            <div className="border-t pt-4 space-y-4">
+              <p className="text-sm font-medium">Настройки модерации</p>
+              <div className="space-y-2">
+                <Label>Режим модерации</Label>
+                <Select
+                  value={formData.moderationMode || "post"}
+                  onValueChange={(v) => setFormData({ ...formData, moderationMode: v })}
+                >
+                  <SelectTrigger data-testid="select-moderation-mode">
+                    <SelectValue placeholder="Выберите режим" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pre">Премодерация</SelectItem>
+                    <SelectItem value="post">Постмодерация</SelectItem>
+                    <SelectItem value="mixed">Смешанная</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label>Возрастное ограничение</Label>
+            <Select
+              value={formData.ageRestriction || "none"}
+              onValueChange={(v) => setFormData({ ...formData, ageRestriction: v })}
+            >
+              <SelectTrigger data-testid="select-age-restriction">
+                <SelectValue placeholder="Выберите" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Без ограничений</SelectItem>
+                <SelectItem value="18plus">18+</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <Button type="submit" className="w-full" disabled={isLoading || !formData.siteType || !formData.operatorType} data-testid="button-submit-tool">
+            {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+            Сгенерировать соглашение
+          </Button>
+        </form>
+      );
+
     default:
       return (
         <div className="text-center text-muted-foreground py-4">
@@ -974,6 +1266,103 @@ function ToolResultDisplay({
           )}
           {result.recommendation && (
             <p className="text-sm text-muted-foreground">{result.recommendation}</p>
+          )}
+        </div>
+      );
+
+    case "user-agreement-generator":
+      const agreementHtml = result.format?.html || "";
+      const agreementText = result.format?.text || "";
+      const blocks = result.format?.blocks || [];
+      const evidence = result.evidence || [];
+      const limitations = result.limitations || [];
+      
+      return (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Badge className="gap-1 bg-green-600">
+              <Check className="h-3 w-3" /> Соглашение готово
+            </Badge>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => onCopy(agreementText)} data-testid="button-copy-text">
+                <Copy className="h-4 w-4 mr-2" />
+                Текст
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => onCopy(agreementHtml)} data-testid="button-copy-html">
+                <Copy className="h-4 w-4 mr-2" />
+                HTML
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  const blob = new Blob([agreementHtml], { type: "text/html;charset=utf-8" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = "user-agreement.html";
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                data-testid="button-download-html"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Скачать
+              </Button>
+            </div>
+          </div>
+
+          {/* Оглавление */}
+          <div className="border rounded-md p-3 bg-muted/30">
+            <p className="text-sm font-medium mb-2">Содержание документа:</p>
+            <div className="grid grid-cols-2 gap-1 text-xs">
+              {blocks.map((block: any) => (
+                <span key={block.id} className="text-muted-foreground">{block.title}</span>
+              ))}
+            </div>
+          </div>
+
+          {/* Превью */}
+          <div className="border rounded-md max-h-60 overflow-y-auto">
+            <div 
+              className="p-4 text-sm prose prose-sm dark:prose-invert max-w-none"
+              dangerouslySetInnerHTML={{ __html: agreementHtml }}
+            />
+          </div>
+
+          {/* Что включено */}
+          {evidence.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Включённые разделы:</p>
+              <ul className="text-xs space-y-1 text-muted-foreground">
+                {evidence.slice(0, 8).map((e: string, i: number) => (
+                  <li key={i} className="flex items-start gap-1">
+                    <Check className="h-3 w-3 mt-0.5 text-green-600 shrink-0" />
+                    {e}
+                  </li>
+                ))}
+                {evidence.length > 8 && (
+                  <li className="text-muted-foreground">...и ещё {evidence.length - 8} пунктов</li>
+                )}
+              </ul>
+            </div>
+          )}
+
+          {/* Ограничения */}
+          {limitations.length > 0 && (
+            <div className="p-3 rounded-md bg-yellow-500/10 border border-yellow-500/30">
+              <p className="text-sm font-medium text-yellow-700 dark:text-yellow-400 mb-2">
+                Рекомендации для юриста:
+              </p>
+              <ul className="text-xs space-y-1">
+                {limitations.map((l: string, i: number) => (
+                  <li key={i} className="flex items-start gap-1">
+                    <AlertTriangle className="h-3 w-3 mt-0.5 text-yellow-600 shrink-0" />
+                    {l}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
       );
