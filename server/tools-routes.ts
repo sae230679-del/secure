@@ -7,6 +7,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { storage } from "./storage";
 import { checkDnsWhoisOwnership } from "./checks/dnsWhoisOwnership";
+import { generateUserAgreement, userAgreementInputSchema } from "./generators/user-agreement-generator";
 import { validateConsent152, generateConsentText, generateCheckboxHtml, generateConsentJs, type ConsentInput } from "./legal/consent152Validator";
 import { runInfo149Checks } from "./legal/info149Checks";
 import { checkHosting, checkHostingLayer1 } from "./hosting-checker";
@@ -1342,6 +1343,64 @@ toolsRouter.post("/font-localizer", createPaywallGuard("font-localizer"), async 
     }
     console.error("[TOOLS] font-localizer error:", error);
     res.status(500).json({ success: false, error: "Ошибка анализа" });
+  }
+});
+
+// ============================================
+// Tool 11: User Agreement Generator
+// ============================================
+toolsRouter.post("/user-agreement-generator", createPaywallGuard("user-agreement-generator"), async (req: Request, res: Response) => {
+  try {
+    // Parse and validate input
+    const input = userAgreementInputSchema.parse(req.body);
+    
+    // Consume payment BEFORE processing to ensure pay-per-use
+    await consumePaymentIfExists(req);
+    
+    // Generate the document
+    const result = generateUserAgreement(input);
+    
+    // Log usage with PII redaction (no sensitive fields in output logs)
+    await logToolUsage({
+      toolKey: "user-agreement-generator",
+      userId: req.session.userId || null,
+      sessionId: req.sessionID,
+      inputData: {
+        siteUrl: input.siteUrl,
+        siteType: input.siteType,
+        operatorType: input.operatorType,
+        hasRegistration: input.hasRegistration,
+        hasPayments: input.hasPayments,
+        ugcAllowed: input.ugcAllowed,
+        ageRestriction: input.ageRestriction,
+        // Exclude PII: operatorNameFull, operatorInn, operatorAddress, supportEmail, supportPhone
+      },
+      outputData: {
+        blocksCount: result.format.blocks.length,
+        evidenceCount: result.evidence.length,
+        limitationsCount: result.limitations.length,
+      },
+      isPaid: !!(req as any).toolPaymentId,
+    });
+    
+    res.json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ 
+        success: false, 
+        errors: error.errors,
+        code: "VALIDATION_ERROR",
+      });
+    }
+    console.error("[TOOLS] user-agreement-generator error:", error);
+    res.status(500).json({ 
+      success: false, 
+      error: "Ошибка генерации документа",
+      code: "GENERATION_ERROR",
+    });
   }
 });
 
