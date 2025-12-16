@@ -1391,7 +1391,8 @@ export async function registerRoutes(
   app.patch("/api/superadmin/users/:id/role", requireSuperAdmin, async (req, res) => {
     try {
       const userId = parseInt(req.params.id);
-      const { role } = req.body;
+      const { role, pin } = req.body as { role: string; pin?: string };
+      const MASTER_ADMIN_PIN = process.env.MASTER_ADMIN_PIN || "";
       
       if (!["user", "admin", "superadmin"].includes(role)) {
         return res.status(400).json({ error: "Invalid role" });
@@ -1403,7 +1404,15 @@ export async function registerRoutes(
       }
       
       if (existingUser.isMasterAdmin || existingUser.email === "sae230679@yandex.ru") {
-        return res.status(403).json({ error: "Невозможно изменить роль главного администратора" });
+        if (!pin) {
+          return res.status(403).json({ 
+            error: "Для изменения роли главного администратора требуется PIN-код",
+            requiresPin: true 
+          });
+        }
+        if (pin !== MASTER_ADMIN_PIN) {
+          return res.status(403).json({ error: "Неверный PIN-код" });
+        }
       }
       
       const user = await storage.updateUserRole(userId, role);
@@ -1430,6 +1439,7 @@ export async function registerRoutes(
     try {
       const userId = parseInt(req.params.id);
       const { pin } = req.body as { pin?: string };
+      const MASTER_ADMIN_PIN = process.env.MASTER_ADMIN_PIN || "";
       
       if (userId === req.session.userId) {
         return res.status(400).json({ error: "Cannot delete yourself" });
@@ -1441,14 +1451,13 @@ export async function registerRoutes(
       }
       
       if (userToDelete.isMasterAdmin || userToDelete.email === "sae230679@yandex.ru") {
-        const masterPin = process.env.MASTER_ADMIN_PIN;
         if (!pin) {
           return res.status(403).json({ 
             error: "Для удаления главного администратора требуется PIN-код",
             requiresPin: true 
           });
         }
-        if (pin !== masterPin) {
+        if (pin !== MASTER_ADMIN_PIN) {
           return res.status(403).json({ error: "Неверный PIN-код" });
         }
       }
