@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -7,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ColorModeToggle } from "@/components/color-mode-toggle";
 import { ExpressCheck } from "@/components/express-check";
 import { Footer } from "@/components/footer";
-import { FULL_AUDIT_PACKAGES, EXPRESS_PACKAGE, PACKAGES_DATA, formatPrice, formatDuration, type PackageType } from "@/lib/packages-data";
+import { EXPRESS_PACKAGE, formatPrice } from "@/lib/packages-data";
 import { useAuth } from "@/lib/auth-context";
 import {
   Shield,
@@ -20,18 +19,7 @@ import {
   ArrowRight,
   Star,
   Zap,
-  ChevronDown,
-  ChevronUp,
   FileCode,
-  Building2,
-  ShoppingCart,
-  Cloud,
-  UsersRound,
-  Store,
-  Newspaper,
-  Stethoscope,
-  Baby,
-  HelpCircle,
 } from "lucide-react";
 import {
   Accordion,
@@ -67,7 +55,6 @@ type PublicSettings = {
 
 export default function LandingPage() {
   const { isAuthenticated } = useAuth();
-  const [showAllPackages, setShowAllPackages] = useState(false);
   
   const { data: publicSettings } = useQuery<PublicSettings>({
     queryKey: ["/api/settings/public"],
@@ -403,7 +390,7 @@ export default function LandingPage() {
                         10+ инструментов для самостоятельной работы
                       </p>
                     </div>
-                    <Button className="w-full" size="lg" variant="outline" asChild>
+                    <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white" size="lg" asChild>
                       <Link href="/tools">
                         Открыть инструменты
                         <ArrowRight className="ml-2 h-4 w-4" />
@@ -472,10 +459,10 @@ export default function LandingPage() {
                       </p>
                     </div>
                     <Button className="w-full" size="lg" variant="default" asChild>
-                      <a href="#packages">
+                      <Link href="/full-audit">
                         Выбрать тип сайта
                         <ArrowRight className="ml-2 h-4 w-4" />
-                      </a>
+                      </Link>
                     </Button>
                   </div>
                 </CardContent>
@@ -483,70 +470,6 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div id="packages" className="pt-8">
-            <div className="text-center mb-8">
-              <h3 className="text-2xl font-bold mb-2">Полный аудит по типу сайта</h3>
-              <p className="text-muted-foreground">Выберите тип вашего сайта для точной проверки</p>
-            </div>
-            
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {(showAllPackages ? Object.entries(FULL_AUDIT_PACKAGES) : Object.entries(FULL_AUDIT_PACKAGES).slice(0, 8)).map(([key, pkg]) => {
-                const siteTypeInfo: Record<string, { icon: typeof FileCode; subtitle: string }> = {
-                  landing: { icon: FileCode, subtitle: "до 3 страниц" },
-                  biometry: { icon: Users, subtitle: "фото сотрудников" },
-                  corporate: { icon: Building2, subtitle: "6-50 страниц" },
-                  ecommerce: { icon: ShoppingCart, subtitle: "с оплатой" },
-                  saas: { icon: Cloud, subtitle: "онлайн-сервисы" },
-                  portal: { icon: UsersRound, subtitle: "с регистрацией" },
-                  marketplace: { icon: Store, subtitle: "с продавцами" },
-                  media: { icon: Newspaper, subtitle: "контент/блог" },
-                  medical: { icon: Stethoscope, subtitle: "клиники" },
-                  children: { icon: Baby, subtitle: "для детей" },
-                  forum: { icon: UsersRound, subtitle: "форум/соцсеть" },
-                  premium: { icon: Star, subtitle: ">50 страниц" },
-                };
-                const info = siteTypeInfo[key] || { icon: FileCode, subtitle: "" };
-                const IconComponent = info.icon;
-                
-                return (
-                  <Card key={key} className="transition-all duration-200 hover:ring-2 hover:ring-primary group">
-                    <CardContent className="pt-4 space-y-3">
-                      <div className="flex items-center gap-2">
-                        <IconComponent className="h-5 w-5 text-primary flex-shrink-0" />
-                        <div>
-                          <div className="font-semibold text-sm">{pkg.name}</div>
-                          <div className="text-xs text-muted-foreground">{info.subtitle}</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xl font-bold">{formatPrice(pkg.price)}</span>
-                        <span className="text-xs text-muted-foreground">{pkg.criteriaCount} критериев</span>
-                      </div>
-                      <Button className="w-full" size="sm" variant="outline" asChild>
-                        <Link href={isAuthenticated ? "/dashboard" : "/auth"}>
-                          Выбрать
-                        </Link>
-                      </Button>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-            <div className="text-center mt-6">
-              <Button 
-                variant="ghost" 
-                onClick={() => setShowAllPackages(!showAllPackages)}
-                data-testid="button-toggle-packages"
-              >
-                {showAllPackages ? "Скрыть" : "Смотреть все типы сайтов"}
-                {showAllPackages ? (
-                  <ChevronUp className="ml-1 h-4 w-4" />
-                ) : (
-                  <ChevronDown className="ml-1 h-4 w-4" />
-                )}
-              </Button>
-            </div>
-          </div>
         </div>
       </section>
 
