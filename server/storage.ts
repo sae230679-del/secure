@@ -360,6 +360,40 @@ export class DatabaseStorage implements IStorage {
     await this.ensureDefaultPackages();
   }
 
+  async seedServicesAndTools(): Promise<void> {
+    // Seed service_configs
+    const existingServices = await db.select().from(schema.serviceConfigs);
+    if (existingServices.length === 0) {
+      console.log("[SEED] Creating default services...");
+      await db.insert(schema.serviceConfigs).values([
+        { serviceKey: "express_check", displayName: "Экспресс-проверка", description: "Быстрая проверка сайта на соответствие 152-ФЗ и 149-ФЗ с PDF-отчетом", basePrice: 900, isEnabled: true, config: {}, sortOrder: 1 },
+        { serviceKey: "tools", displayName: "Инструментарий", description: "10 платных инструментов для анализа сайтов", basePrice: 10, isEnabled: true, config: { description: "10 платных инструментов для анализа сайтов" }, sortOrder: 2 },
+        { serviceKey: "full_audit", displayName: "Полный аудит", description: "Комплексный аудит сайта с рекомендациями по устранению нарушений", basePrice: 25000, isEnabled: true, config: { prices: { webapp: 100000, landing: 25000, corporate: 75000, ecommerce: 50000 } }, sortOrder: 3 },
+      ]);
+      console.log("[SEED] Services created");
+    }
+
+    // Seed tool_configs
+    const existingTools = await db.select().from(schema.toolConfigs);
+    if (existingTools.length === 0) {
+      console.log("[SEED] Creating default tools...");
+      await db.insert(schema.toolConfigs).values([
+        { toolKey: "privacy-generator", displayName: "Генератор политики конфиденциальности", description: "Создание политики обработки ПДн по ФЗ-152", price: 10, isFree: false, isEnabled: true, usageCount: 0, sortOrder: 1 },
+        { toolKey: "consent-generator", displayName: "Генератор согласий 152-ФЗ", description: "Генерация текста согласия на обработку ПДн", price: 10, isFree: false, isEnabled: true, usageCount: 0, sortOrder: 2 },
+        { toolKey: "cookie-banner", displayName: "Проверка cookie-баннера", description: "Анализ соответствия cookie-уведомления требованиям", price: 10, isFree: false, isEnabled: true, usageCount: 0, sortOrder: 3 },
+        { toolKey: "seo-audit", displayName: "SEO-аудит", description: "Проверка технических SEO-параметров сайта", price: 10, isFree: false, isEnabled: true, usageCount: 0, sortOrder: 4 },
+        { toolKey: "cms-detector", displayName: "Детектор CMS", description: "Определение CMS и технологического стека", price: 10, isFree: false, isEnabled: true, usageCount: 0, sortOrder: 5 },
+        { toolKey: "whois-lookup", displayName: "WHOIS-проверка", description: "Информация о домене и владельце", price: 10, isFree: false, isEnabled: true, usageCount: 0, sortOrder: 6 },
+        { toolKey: "ssl-checker", displayName: "Проверка SSL", description: "Анализ SSL-сертификата сайта", price: 10, isFree: false, isEnabled: true, usageCount: 0, sortOrder: 7 },
+        { toolKey: "rkn-check", displayName: "Проверка в РКН", description: "Проверка наличия в реестрах Роскомнадзора", price: 10, isFree: false, isEnabled: true, usageCount: 0, sortOrder: 8 },
+        { toolKey: "font-localizer", displayName: "Локализатор шрифтов", description: "Анализ подключения Google Fonts", price: 10, isFree: false, isEnabled: true, usageCount: 0, sortOrder: 9 },
+        { toolKey: "hosting-recommendations", displayName: "Рекомендации по хостингу", description: "Каталог российских хостинг-провайдеров", price: 0, isFree: true, isEnabled: true, usageCount: 0, sortOrder: 10 },
+        { toolKey: "user-agreement-generator", displayName: "Генератор пользовательского соглашения", description: "Создайте юридически грамотное пользовательское соглашение для вашего сайта", price: 10, isFree: false, isEnabled: true, usageCount: 0, sortOrder: 11 },
+      ]);
+      console.log("[SEED] Tools created");
+    }
+  }
+
   async ensureDefaultPackages(): Promise<void> {
     const defaultPackages = [
       { type: "rkn_check", name: "Проверка РКН", price: 10, criteriaCount: 1, durationMin: 1, durationMax: 2, description: "Быстрая проверка наличия сайта в реестре РКН (Роскомнадзор)", features: ["Проверка в реестре РКН", "Мгновенный результат"], category: "rkn_check", sortOrder: -1 },
