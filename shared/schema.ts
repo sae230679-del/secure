@@ -806,3 +806,87 @@ export type FullCheck = z.infer<typeof fullCheckSchema>;
 export type FullSection = z.infer<typeof fullSectionSchema>;
 export type FullRecommendations = z.infer<typeof fullRecommendationsSchema>;
 export type FullResults = z.infer<typeof fullResultsSchema>;
+
+// =====================================================
+// Payment Gateways (v2.1)
+// =====================================================
+export const paymentGateways = pgTable("payment_gateways", {
+  id: serial("id").primaryKey(),
+  provider: varchar("provider", { length: 50 }).notNull().unique(),
+  displayName: varchar("display_name", { length: 100 }).notNull(),
+  isEnabled: boolean("is_enabled").default(false).notNull(),
+  isDefault: boolean("is_default").default(false),
+  config: jsonb("config"),
+  commissionPercent: integer("commission_percent").default(0),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertPaymentGatewaySchema = createInsertSchema(paymentGateways).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertPaymentGateway = z.infer<typeof insertPaymentGatewaySchema>;
+export type PaymentGateway = typeof paymentGateways.$inferSelect;
+
+// =====================================================
+// Service Configs (v2.1) - 3 main services
+// =====================================================
+export const serviceConfigs = pgTable("service_configs", {
+  id: serial("id").primaryKey(),
+  serviceKey: varchar("service_key", { length: 50 }).notNull().unique(),
+  displayName: varchar("display_name", { length: 255 }).notNull(),
+  description: text("description"),
+  basePrice: integer("base_price").notNull(),
+  isEnabled: boolean("is_enabled").default(true).notNull(),
+  config: jsonb("config"),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertServiceConfigSchema = createInsertSchema(serviceConfigs).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertServiceConfig = z.infer<typeof insertServiceConfigSchema>;
+export type ServiceConfig = typeof serviceConfigs.$inferSelect;
+
+// =====================================================
+// Tool Configs (v2.1) - 10 tools
+// =====================================================
+export const toolConfigs = pgTable("tool_configs", {
+  id: serial("id").primaryKey(),
+  toolKey: varchar("tool_key", { length: 50 }).notNull().unique(),
+  displayName: varchar("display_name", { length: 255 }).notNull(),
+  description: text("description"),
+  price: integer("price").default(10).notNull(),
+  isFree: boolean("is_free").default(false),
+  isEnabled: boolean("is_enabled").default(true).notNull(),
+  usageCount: integer("usage_count").default(0),
+  config: jsonb("config"),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertToolConfigSchema = createInsertSchema(toolConfigs).omit({ id: true, createdAt: true, updatedAt: true, usageCount: true });
+export type InsertToolConfig = z.infer<typeof insertToolConfigSchema>;
+export type ToolConfig = typeof toolConfigs.$inferSelect;
+
+// =====================================================
+// Tool Usage (v2.1) - history of tool usage
+// =====================================================
+export const toolUsage = pgTable("tool_usage", {
+  id: serial("id").primaryKey(),
+  toolKey: varchar("tool_key", { length: 50 }).notNull(),
+  userId: integer("user_id").references(() => users.id),
+  sessionId: varchar("session_id", { length: 255 }),
+  inputData: jsonb("input_data"),
+  outputData: jsonb("output_data"),
+  paymentId: integer("payment_id").references(() => payments.id),
+  isPaid: boolean("is_paid").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("tool_usage_tool_key_idx").on(table.toolKey),
+  index("tool_usage_user_id_idx").on(table.userId),
+]);
+
+export const insertToolUsageSchema = createInsertSchema(toolUsage).omit({ id: true, createdAt: true });
+export type InsertToolUsage = z.infer<typeof insertToolUsageSchema>;
+export type ToolUsage = typeof toolUsage.$inferSelect;
