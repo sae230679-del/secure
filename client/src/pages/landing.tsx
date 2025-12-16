@@ -278,13 +278,13 @@ export default function LandingPage() {
       <section id="pricing" className="py-12 sm:py-16 bg-muted/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-8 lg:px-12">
           <div className="text-center mb-8 sm:mb-12">
-            <h2 className="text-2xl sm:text-3xl font-bold mb-3 sm:mb-4">Два сервиса на выбор</h2>
+            <h2 className="text-2xl sm:text-3xl font-bold mb-3 sm:mb-4">Три сервиса на выбор</h2>
             <p className="text-sm sm:text-base text-muted-foreground max-w-2xl mx-auto">
-              Быстрая проверка для понимания ситуации или полный аудит с готовыми документами
+              Быстрая проверка, набор инструментов или полный аудит с готовыми документами
             </p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 mb-12 items-stretch">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 mb-12 items-stretch">
             <div className="relative flex flex-col">
               <Badge variant="secondary" className="gap-2 text-sm py-1.5 px-3 shadow-lg absolute -top-4 left-1/2 -translate-x-1/2 lg:left-4 lg:translate-x-0 z-10">
                 <Zap className="h-4 w-4" />
@@ -351,11 +351,75 @@ export default function LandingPage() {
             </div>
 
             <div className="relative flex flex-col">
+              <Badge variant="secondary" className="gap-2 text-sm py-1.5 px-3 shadow-lg absolute -top-4 left-1/2 -translate-x-1/2 lg:left-4 lg:translate-x-0 z-10">
+                <FileCode className="h-4 w-4" />
+                <span className="lg:hidden">Сервис 2: Инструменты</span>
+                <span className="hidden lg:inline">Сервис 2</span>
+              </Badge>
+              <Card className="border-2 border-primary/20 flex-1 flex flex-col pt-6">
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-xl sm:text-2xl">Инструментарий</CardTitle>
+                  <CardDescription className="text-sm">Генераторы документов и проверки для вашего сайта</CardDescription>
+                </CardHeader>
+                <CardContent className="flex-1 flex flex-col space-y-4">
+                  <div className="space-y-3 flex-1">
+                    <div className="p-3 sm:p-4 rounded-md bg-muted">
+                      <div className="flex items-center justify-between gap-2 sm:gap-4 mb-2">
+                        <span className="font-semibold text-sm sm:text-base">Цена за инструмент</span>
+                        <span className="text-xl sm:text-2xl font-bold">10 ₽</span>
+                      </div>
+                      <ul className="space-y-1 text-xs sm:text-sm text-muted-foreground">
+                        <li className="flex items-start gap-2">
+                          <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0 mt-0.5" />
+                          Генератор политики ПДн
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0 mt-0.5" />
+                          Генератор согласий
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0 mt-0.5" />
+                          Cookie-баннер
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0 mt-0.5" />
+                          SEO-аудит, SSL-чекер
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0 mt-0.5" />
+                          WHOIS, CMS-детектор
+                        </li>
+                      </ul>
+                    </div>
+                    <div className="p-3 sm:p-4 rounded-md bg-green-500/10 border border-green-500/20">
+                      <div className="text-center">
+                        <Badge variant="outline" className="bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30 text-xs">Рекомендации по хостингу — бесплатно</Badge>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-auto space-y-4">
+                    <div className="p-3 rounded-md bg-blue-500/10 border border-blue-500/20">
+                      <p className="text-xs sm:text-sm text-blue-700 dark:text-blue-400 text-center font-medium">
+                        10+ инструментов для самостоятельной работы
+                      </p>
+                    </div>
+                    <Button className="w-full" size="lg" variant="outline" asChild>
+                      <Link href="/tools">
+                        Открыть инструменты
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Link>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="relative flex flex-col">
               <div className="absolute -top-4 left-1/2 -translate-x-1/2 lg:left-4 lg:translate-x-0 z-10 flex items-center gap-2">
                 <Badge className="gap-2 text-sm py-1.5 px-3 shadow-lg">
                   <Star className="h-4 w-4" />
-                  <span className="lg:hidden">Сервис 2: Полный аудит</span>
-                  <span className="hidden lg:inline">Сервис 2</span>
+                  <span className="lg:hidden">Сервис 3: Полный аудит</span>
+                  <span className="hidden lg:inline">Сервис 3</span>
                 </Badge>
                 <span className="px-2 py-1 text-xs font-bold rounded-full text-white animate-traffic-light shadow-lg">
                   ТОП
