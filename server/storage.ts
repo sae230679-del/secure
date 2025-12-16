@@ -1517,6 +1517,41 @@ export class DatabaseStorage implements IStorage {
   }
 
   // =====================================================
+  // Service Configs Methods
+  // =====================================================
+  async getAllServiceConfigs(): Promise<schema.ServiceConfig[]> {
+    return db.select().from(schema.serviceConfigs).orderBy(schema.serviceConfigs.sortOrder);
+  }
+
+  async getServiceConfigByKey(serviceKey: string): Promise<schema.ServiceConfig | undefined> {
+    const [service] = await db.select().from(schema.serviceConfigs).where(eq(schema.serviceConfigs.serviceKey, serviceKey));
+    return service;
+  }
+
+  async updateServiceConfig(id: number, data: Partial<schema.ServiceConfig>): Promise<schema.ServiceConfig | undefined> {
+    const [service] = await db
+      .update(schema.serviceConfigs)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(schema.serviceConfigs.id, id))
+      .returning();
+    return service;
+  }
+
+  async upsertServiceConfig(data: schema.InsertServiceConfig): Promise<schema.ServiceConfig> {
+    const existing = await this.getServiceConfigByKey(data.serviceKey);
+    if (existing) {
+      const [updated] = await db
+        .update(schema.serviceConfigs)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(schema.serviceConfigs.id, existing.id))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(schema.serviceConfigs).values(data).returning();
+    return created;
+  }
+
+  // =====================================================
   // Tools Methods
   // =====================================================
   async logToolUsage(data: {

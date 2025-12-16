@@ -3752,6 +3752,98 @@ export async function registerRoutes(
   });
 
   // =====================================================
+  // Service Configs Admin Endpoints (requireSuperAdmin)
+  // =====================================================
+  app.get("/api/admin/services", requireSuperAdmin, async (req, res) => {
+    try {
+      const services = await storage.getAllServiceConfigs();
+      res.json({ success: true, services });
+    } catch (error: any) {
+      console.error("[Admin Services GET] Error:", error?.message || error);
+      res.status(500).json({ error: "Failed to fetch services" });
+    }
+  });
+
+  app.put("/api/admin/services/:id", requireSuperAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid service ID" });
+      }
+      const { displayName, description, basePrice, isEnabled, config } = req.body;
+      const updated = await storage.updateServiceConfig(id, {
+        displayName,
+        description,
+        basePrice,
+        isEnabled,
+        config
+      });
+      if (!updated) {
+        return res.status(404).json({ error: "Service not found" });
+      }
+      res.json({ success: true, service: updated });
+    } catch (error: any) {
+      console.error("[Admin Services PUT] Error:", error?.message || error);
+      res.status(500).json({ error: "Failed to update service" });
+    }
+  });
+
+  // =====================================================
+  // Tool Configs Admin Endpoints (requireSuperAdmin)
+  // =====================================================
+  app.get("/api/admin/tools", requireSuperAdmin, async (req, res) => {
+    try {
+      const tools = await storage.getAllToolConfigs();
+      res.json({ success: true, tools });
+    } catch (error: any) {
+      console.error("[Admin Tools GET] Error:", error?.message || error);
+      res.status(500).json({ error: "Failed to fetch tools" });
+    }
+  });
+
+  app.patch("/api/admin/tools/:id", requireSuperAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid tool ID" });
+      }
+      const { displayName, description, price, isFree, isEnabled } = req.body;
+      const updated = await storage.updateToolConfig(id, {
+        displayName,
+        description,
+        price,
+        isFree,
+        isEnabled
+      });
+      if (!updated) {
+        return res.status(404).json({ error: "Tool not found" });
+      }
+      res.json({ success: true, tool: updated });
+    } catch (error: any) {
+      console.error("[Admin Tools PATCH] Error:", error?.message || error);
+      res.status(500).json({ error: "Failed to update tool" });
+    }
+  });
+
+  app.patch("/api/admin/tools/:id/toggle", requireSuperAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid tool ID" });
+      }
+      const { isEnabled } = req.body;
+      const updated = await storage.updateToolConfig(id, { isEnabled });
+      if (!updated) {
+        return res.status(404).json({ error: "Tool not found" });
+      }
+      res.json({ success: true, tool: updated });
+    } catch (error: any) {
+      console.error("[Admin Tools Toggle] Error:", error?.message || error);
+      res.status(500).json({ error: "Failed to toggle tool" });
+    }
+  });
+
+  // =====================================================
   // PDN Admin Endpoints (requireSuperAdmin)
   // =====================================================
   app.get("/api/admin/pdn/consents", requireSuperAdmin, async (req, res) => {
