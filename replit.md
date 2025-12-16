@@ -37,12 +37,20 @@ Preferred communication style: Simple, everyday language.
 - **Penalty System**: Real КоАП РФ ст. 13.11 penalties in `server/penalties-map.ts` with 10+ check types, calculated totals by subject type (физлица, должностные лица, ИП, юрлица), and automatic deduplication by aggregation keys.
 - **PDF Report Generation**: Branded multi-page PDF reports with detailed criteria results, calculated penalty risk tables by subject type, law references, recommendations, and calls to action.
 - **SEO Management**: SuperAdmin controlled CRUD for SEO pages, dynamic public routes, and sitemap generation.
+- **Tools Service (Инструментарий)**: 10 paid tools (10₽ per use) with pay-per-use model:
+  - `/api/tools/catalog` - Returns all tools with pricing and payment status
+  - `/api/tools/history` - User's tool usage history
+  - `/api/tools/payment/create` - Create payment for tool access
+  - Paywall guard middleware (`createPaywallGuard`) checks: service enabled → tool enabled → auth → unused payment
+  - Payments marked with `usedAt` timestamp after consumption (single-use tokens)
+  - PII protection: sessionId never logged, emails/INN/passport masked via `redactObject()`
+  - Free tool: hosting-recommendations (Russian hosting directory)
 
 ### Database
 - **Type**: PostgreSQL
 - **ORM**: Drizzle ORM with drizzle-zod for schema validation
 - **Schema**: Defined in `shared/schema.ts`
-- **Key Tables**: users, audit_packages, audits, audit_results, payments, reports, contracts, referrals, promo_codes, themes, audit_logs, pdn_consent_events, pdn_destruction_tasks, pdn_destruction_acts, seo_pages, express_audit_limits.
+- **Key Tables**: users, audit_packages, audits, audit_results, payments, reports, contracts, referrals, promo_codes, themes, audit_logs, pdn_consent_events, pdn_destruction_tasks, pdn_destruction_acts, seo_pages, express_audit_limits, tool_configs, tool_usage, service_configs.
 
 ### Role-Based Access Control
 - **user**: Create audits, view own data, update profile.

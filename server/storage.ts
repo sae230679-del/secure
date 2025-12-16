@@ -1608,10 +1608,10 @@ export class DatabaseStorage implements IStorage {
       .limit(limit);
   }
 
-  async checkToolPayment(userId: number, toolKey: string): Promise<boolean> {
+  async checkToolPayment(userId: number, toolKey: string): Promise<{ hasPaid: boolean; paymentId?: number }> {
     const tool = await this.getToolConfigByKey(toolKey);
-    if (!tool) return false;
-    if (tool.isFree) return true;
+    if (!tool) return { hasPaid: false };
+    if (tool.isFree) return { hasPaid: true };
 
     const [payment] = await db
       .select()
@@ -1624,11 +1624,21 @@ export class DatabaseStorage implements IStorage {
           or(
             eq(schema.payments.status, "succeeded"),
             eq(schema.payments.status, "paid")
-          )
+          ),
+          sql`${schema.payments.usedAt} IS NULL`
         )
       )
+      .orderBy(schema.payments.createdAt)
       .limit(1);
-    return !!payment;
+    
+    return payment ? { hasPaid: true, paymentId: payment.id } : { hasPaid: false };
+  }
+
+  async consumeToolPayment(paymentId: number): Promise<void> {
+    await db
+      .update(schema.payments)
+      .set({ usedAt: new Date() })
+      .where(eq(schema.payments.id, paymentId));
   }
 
   async createToolPayment(userId: number, toolKey: string): Promise<schema.Payment | undefined> {

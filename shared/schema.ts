@@ -114,6 +114,7 @@ export const payments = pgTable("payments", {
   yandexPaymentId: varchar("yandex_payment_id", { length: 255 }),
   status: varchar("status", { length: 50 }).default("pending").notNull(),
   description: text("description"),
+  usedAt: timestamp("used_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

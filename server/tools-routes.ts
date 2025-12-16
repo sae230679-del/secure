@@ -50,7 +50,18 @@ async function logToolUsage(record: ToolUsageRecord): Promise<void> {
   }
 }
 
-// Paywall guard middleware factory for paid tools
+async function consumePaymentIfExists(req: Request): Promise<void> {
+  const paymentId = (req as any).toolPaymentId;
+  if (paymentId) {
+    try {
+      await storage.consumeToolPayment(paymentId);
+    } catch (e) {
+      console.warn("[TOOLS] Failed to consume payment:", paymentId);
+    }
+  }
+}
+
+// Paywall guard middleware factory for paid tools (pay-per-use model)
 function createPaywallGuard(toolKey: string) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     // 1. Check if tools service is enabled
@@ -101,9 +112,9 @@ function createPaywallGuard(toolKey: string) {
       return;
     }
 
-    // 5. Check payment
-    const hasPaid = await storage.checkToolPayment(userId, toolKey);
-    if (!hasPaid) {
+    // 5. Check for unused payment (pay-per-use model)
+    const paymentCheck = await storage.checkToolPayment(userId, toolKey);
+    if (!paymentCheck.hasPaid) {
       res.status(402).json({
         success: false,
         error: `Требуется оплата: ${tool.price}₽`,
@@ -115,6 +126,8 @@ function createPaywallGuard(toolKey: string) {
       return;
     }
 
+    // Store paymentId in request for consumption after successful execution
+    (req as any).toolPaymentId = paymentCheck.paymentId;
     next();
   };
 }
@@ -138,7 +151,7 @@ toolsRouter.get("/catalog", async (req: Request, res: Response) => {
 
     const catalogItems = await Promise.all(
       tools.map(async (t) => {
-        const hasPaid = userId ? await storage.checkToolPayment(userId, t.toolKey) : false;
+        const paymentCheck = userId ? await storage.checkToolPayment(userId, t.toolKey) : { hasPaid: false };
         return {
           id: t.id,
           slug: t.toolKey,
@@ -149,7 +162,7 @@ toolsRouter.get("/catalog", async (req: Request, res: Response) => {
           isFree: t.isFree,
           enabled: t.isEnabled,
           usageCount: t.usageCount,
-          hasPaid: hasPaid || t.isFree,
+          hasPaid: paymentCheck.hasPaid || t.isFree,
         };
       })
     );
@@ -223,10 +236,10 @@ toolsRouter.post("/payment/create", async (req: Request, res: Response) => {
       return res.json({ success: true, isFree: true, message: "Инструмент бесплатный" });
     }
 
-    // Check if already paid
-    const hasPaid = await storage.checkToolPayment(userId, toolKey);
-    if (hasPaid) {
-      return res.json({ success: true, alreadyPaid: true, message: "Уже оплачено" });
+    // Check if user already has an unused payment
+    const paymentCheck = await storage.checkToolPayment(userId, toolKey);
+    if (paymentCheck.hasPaid) {
+      return res.json({ success: true, alreadyPaid: true, message: "У вас уже есть неиспользованный платёж" });
     }
 
     const payment = await storage.createToolPayment(userId, toolKey);
@@ -419,13 +432,15 @@ ${input.crossBorder ? "11" : input.thirdParties?.length ? "10" : "9"}. Закл�
 
 Основание: Федеральный закон от 27.07.2006 № 152-ФЗ "О персональных данных"`;
 
+    await consumePaymentIfExists(req);
+    
     await logToolUsage({
       toolKey: "privacy-generator",
       userId: req.session.userId || null,
       sessionId: req.sessionID,
       inputData: input,
       outputData: { length: policy.length },
-      isPaid: false, // TODO: integrate payment
+      isPaid: !!(req as any).toolPaymentId,
     });
 
     res.json({ 
@@ -505,13 +520,15 @@ toolsRouter.post("/consent-generator", createPaywallGuard("consent-generator"), 
       result.text = generateConsentText(consentInput);
     }
     
+    await consumePaymentIfExists(req);
+    
     await logToolUsage({
       toolKey: "consent-generator",
       userId: req.session.userId || null,
       sessionId: req.sessionID,
       inputData: input,
       outputData: { mode: input.mode, valid: validation.isValid },
-      isPaid: false,
+      isPaid: !!(req as any).toolPaymentId,
     });
     
     res.json(result);
@@ -680,13 +697,15 @@ toolsRouter.post("/cookie-banner", createPaywallGuard("cookie-banner"), async (r
   };
 })();`;
 
+    await consumePaymentIfExists(req);
+    
     await logToolUsage({
       toolKey: "cookie-banner",
       userId: req.session.userId || null,
       sessionId: req.sessionID,
       inputData: input,
       outputData: { generated: true },
-      isPaid: false,
+      isPaid: !!(req as any).toolPaymentId,
     });
 
     res.json({ 
@@ -817,13 +836,15 @@ toolsRouter.post("/seo-audit", createPaywallGuard("seo-audit"), async (req: Requ
     
     const score = Math.round((checks.filter(c => c.status === "ok").length / checks.length) * 100);
     
+    await consumePaymentIfExists(req);
+    
     await logToolUsage({
       toolKey: "seo-audit",
       userId: req.session.userId || null,
       sessionId: req.sessionID,
       inputData: input,
       outputData: { score, checksCount: checks.length },
-      isPaid: false,
+      isPaid: !!(req as any).toolPaymentId,
     });
     
     res.json({
@@ -959,13 +980,15 @@ toolsRouter.post("/cms-detector", createPaywallGuard("cms-detector"), async (req
     // Sort by confidence
     detected.sort((a, b) => b.confidence - a.confidence);
     
+    await consumePaymentIfExists(req);
+    
     await logToolUsage({
       toolKey: "cms-detector",
       userId: req.session.userId || null,
       sessionId: req.sessionID,
       inputData: input,
       outputData: { detected: detected.map(d => d.name) },
-      isPaid: false,
+      isPaid: !!(req as any).toolPaymentId,
     });
     
     res.json({
@@ -998,13 +1021,15 @@ toolsRouter.post("/whois-lookup", createPaywallGuard("whois-lookup"), async (req
     
     const result = await checkDnsWhoisOwnership(domain);
     
+    await consumePaymentIfExists(req);
+    
     await logToolUsage({
       toolKey: "whois-lookup",
       userId: req.session.userId || null,
       sessionId: req.sessionID,
       inputData: input,
       outputData: { status: result.status },
-      isPaid: false,
+      isPaid: !!(req as any).toolPaymentId,
     });
     
     res.json({
@@ -1131,13 +1156,15 @@ toolsRouter.post("/ssl-checker", createPaywallGuard("ssl-checker"), async (req: 
     
     const sslInfo = await checkSSL(hostname);
     
+    await consumePaymentIfExists(req);
+    
     await logToolUsage({
       toolKey: "ssl-checker",
       userId: req.session.userId || null,
       sessionId: req.sessionID,
       inputData: input,
       outputData: { valid: sslInfo.valid, daysRemaining: sslInfo.daysRemaining },
-      isPaid: false,
+      isPaid: !!(req as any).toolPaymentId,
     });
     
     res.json({
@@ -1197,13 +1224,15 @@ toolsRouter.post("/rkn-check", createPaywallGuard("rkn-check"), async (req: Requ
       };
     }
     
+    await consumePaymentIfExists(req);
+    
     await logToolUsage({
       toolKey: "rkn-check",
       userId: req.session.userId || null,
       sessionId: req.sessionID,
       inputData: input,
       outputData: { found: result.found },
-      isPaid: false,
+      isPaid: !!(req as any).toolPaymentId,
     });
     
     res.json({
@@ -1285,13 +1314,15 @@ toolsRouter.post("/font-localizer", createPaywallGuard("font-localizer"), async 
       });
     }
     
+    await consumePaymentIfExists(req);
+    
     await logToolUsage({
       toolKey: "font-localizer",
       userId: req.session.userId || null,
       sessionId: req.sessionID,
       inputData: input,
       outputData: { foreignCount: foreignFonts.length },
-      isPaid: false,
+      isPaid: !!(req as any).toolPaymentId,
     });
     
     res.json({
