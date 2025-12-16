@@ -895,12 +895,65 @@ export type InsertToolUsage = z.infer<typeof insertToolUsageSchema>;
 export type ToolUsage = typeof toolUsage.$inferSelect;
 
 // =====================================================
+// Guide Sections - разделы справочника (9 секций)
+// =====================================================
+export const guideSections = pgTable("guide_sections", {
+  id: serial("id").primaryKey(),
+  slug: varchar("slug", { length: 100 }).notNull().unique(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  icon: varchar("icon", { length: 50 }), // Lucide icon name
+  isPublished: boolean("is_published").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("guide_sections_slug_idx").on(table.slug),
+]);
+
+export const insertGuideSectionSchema = createInsertSchema(guideSections).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type GuideSection = typeof guideSections.$inferSelect;
+export type InsertGuideSection = z.infer<typeof insertGuideSectionSchema>;
+
+// =====================================================
+// Guide Topics - темы внутри разделов
+// =====================================================
+export const guideTopics = pgTable("guide_topics", {
+  id: serial("id").primaryKey(),
+  sectionId: integer("section_id").references(() => guideSections.id).notNull(),
+  slug: varchar("slug", { length: 255 }).notNull().unique(),
+  title: varchar("title", { length: 500 }).notNull(),
+  description: text("description"),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  isPublished: boolean("is_published").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("guide_topics_section_idx").on(table.sectionId),
+  index("guide_topics_slug_idx").on(table.slug),
+]);
+
+export const insertGuideTopicSchema = createInsertSchema(guideTopics).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type GuideTopic = typeof guideTopics.$inferSelect;
+export type InsertGuideTopic = z.infer<typeof insertGuideTopicSchema>;
+
+// =====================================================
 // Guide Articles - SEO справочник
 // =====================================================
 export const guideArticleStatusEnum = pgEnum("guide_article_status", ["draft", "published", "archived"]);
 
 export const guideArticles = pgTable("guide_articles", {
   id: serial("id").primaryKey(),
+  topicId: integer("topic_id").references(() => guideTopics.id), // FK to topic (nullable for migration)
   slug: varchar("slug", { length: 255 }).notNull().unique(),
   status: guideArticleStatusEnum("status").default("draft").notNull(),
   title: varchar("title", { length: 500 }).notNull(),
@@ -921,6 +974,7 @@ export const guideArticles = pgTable("guide_articles", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   publishedAt: timestamp("published_at"),
 }, (table) => [
+  index("guide_articles_topic_idx").on(table.topicId),
   index("guide_articles_status_idx").on(table.status),
   index("guide_articles_published_idx").on(table.publishedAt),
 ]);

@@ -4214,7 +4214,110 @@ export async function registerRoutes(
   });
 
   // =====================================================
-  // Guide Справочник - Public API
+  // Guide Справочник - Public API (v2 - hierarchical)
+  // =====================================================
+
+  // Get guide home data with sections and counters
+  app.get("/api/guide/home", async (req, res) => {
+    try {
+      const data = await storage.getGuideHomeData();
+      res.json(data);
+    } catch (error: any) {
+      console.error("[Guide] Error fetching home data:", error?.message);
+      res.status(500).json({ error: "Ошибка загрузки справочника" });
+    }
+  });
+
+  // Search guide (articles, topics, sections)
+  app.get("/api/guide/search", async (req, res) => {
+    try {
+      const query = (req.query.q as string) || "";
+      const limit = parseInt(req.query.limit as string) || 10;
+      const results = await storage.searchGuide(query, limit);
+      res.json(results);
+    } catch (error: any) {
+      console.error("[Guide] Error searching:", error?.message);
+      res.status(500).json({ error: "Ошибка поиска" });
+    }
+  });
+
+  // Get section with topics
+  app.get("/api/guide/sections/:sectionSlug", async (req, res) => {
+    try {
+      const { sectionSlug } = req.params;
+      const section = await storage.getGuideSectionBySlug(sectionSlug);
+      if (!section || !section.isPublished) {
+        return res.status(404).json({ error: "Раздел не найден" });
+      }
+      
+      const topics = await storage.getGuideTopics(section.id, true);
+      const topicsWithCounts = await Promise.all(
+        topics.map(async (topic) => {
+          const articles = await storage.getGuideArticlesByTopic(topic.id, true);
+          return { ...topic, articlesCount: articles.length };
+        })
+      );
+      
+      res.json({ section, topics: topicsWithCounts });
+    } catch (error: any) {
+      console.error("[Guide] Error fetching section:", error?.message);
+      res.status(500).json({ error: "Ошибка загрузки раздела" });
+    }
+  });
+
+  // Get topic with articles
+  app.get("/api/guide/topics/:topicSlug", async (req, res) => {
+    try {
+      const { topicSlug } = req.params;
+      const topic = await storage.getGuideTopicBySlug(topicSlug);
+      if (!topic || !topic.isPublished) {
+        return res.status(404).json({ error: "Тема не найдена" });
+      }
+      
+      const section = await storage.getGuideSectionById(topic.sectionId);
+      const articles = await storage.getGuideArticlesByTopic(topic.id, true);
+      
+      res.json({ 
+        topic, 
+        section: section ? { slug: section.slug, title: section.title } : null,
+        articles 
+      });
+    } catch (error: any) {
+      console.error("[Guide] Error fetching topic:", error?.message);
+      res.status(500).json({ error: "Ошибка загрузки темы" });
+    }
+  });
+
+  // Get article with breadcrumbs
+  app.get("/api/guide/article/:articleSlug", async (req, res) => {
+    try {
+      const { articleSlug } = req.params;
+      const article = await storage.getGuideArticleBySlug(articleSlug);
+      if (!article || article.status !== "published") {
+        return res.status(404).json({ error: "Статья не найдена" });
+      }
+      
+      let breadcrumbs = { section: null as any, topic: null as any };
+      if (article.topicId) {
+        const topic = await storage.getGuideTopicById(article.topicId);
+        if (topic) {
+          const section = await storage.getGuideSectionById(topic.sectionId);
+          breadcrumbs = {
+            section: section ? { slug: section.slug, title: section.title } : null,
+            topic: { slug: topic.slug, title: topic.title }
+          };
+        }
+      }
+      
+      res.json({ article, breadcrumbs });
+    } catch (error: any) {
+      console.error("[Guide] Error fetching article:", error?.message);
+      res.status(500).json({ error: "Ошибка загрузки статьи" });
+    }
+  });
+
+  // =====================================================
+  // Guide Справочник - Public API (legacy)
   // =====================================================
   
   // Get published articles (public)
@@ -4425,6 +4528,126 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("[Guide Admin] Error importing articles:", error?.message);
       res.status(500).json({ error: "Ошибка импорта статей" });
+    }
+  });
+
+  // =====================================================
+  // Guide Home Config - SuperAdmin API
+  // =====================================================
+
+  // Get guide home config (superadmin)
+  app.get("/api/admin/guide/home-config", requireSuperAdmin, async (req, res) => {
+    try {
+      const configStr = await storage.getSystemSetting("guide.home");
+      const sections = await storage.getGuideSections();
+      const config = configStr ? JSON.parse(configStr as string) : null;
+      res.json({ config, sections });
+    } catch (error: any) {
+      console.error("[Guide Admin] Error fetching home config:", error?.message);
+      res.status(500).json({ error: "Ошибка загрузки конфигурации" });
+    }
+  });
+
+  // Update guide home config (superadmin)
+  app.put("/api/admin/guide/home-config", requireSuperAdmin, async (req, res) => {
+    try {
+      const { sections } = req.body as { 
+        sections: Array<{ 
+          slug: string; 
+          enabled: boolean; 
+          order: number;
+          titleOverride?: string | null;
+          descriptionOverride?: string | null;
+          iconOverride?: string | null;
+        }> 
+      };
+      
+      if (!Array.isArray(sections)) {
+        return res.status(400).json({ error: "Ожидается массив секций" });
+      }
+      
+      const config = { sections };
+      await storage.upsertSystemSetting("guide.home", JSON.stringify(config));
+      res.json({ success: true, config });
+    } catch (error: any) {
+      console.error("[Guide Admin] Error updating home config:", error?.message);
+      res.status(500).json({ error: "Ошибка обновления конфигурации" });
+    }
+  });
+
+  // Get all sections (superadmin)
+  app.get("/api/admin/guide/sections", requireSuperAdmin, async (req, res) => {
+    try {
+      const sections = await storage.getGuideSections();
+      res.json(sections);
+    } catch (error: any) {
+      console.error("[Guide Admin] Error fetching sections:", error?.message);
+      res.status(500).json({ error: "Ошибка загрузки разделов" });
+    }
+  });
+
+  // Update section (superadmin)
+  app.patch("/api/admin/guide/sections/:id", requireSuperAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const section = await storage.updateGuideSection(id, req.body);
+      if (!section) {
+        return res.status(404).json({ error: "Раздел не найден" });
+      }
+      res.json(section);
+    } catch (error: any) {
+      console.error("[Guide Admin] Error updating section:", error?.message);
+      res.status(500).json({ error: "Ошибка обновления раздела" });
+    }
+  });
+
+  // Get all topics (superadmin)
+  app.get("/api/admin/guide/topics", requireSuperAdmin, async (req, res) => {
+    try {
+      const sectionId = req.query.sectionId ? parseInt(req.query.sectionId as string) : undefined;
+      const topics = await storage.getGuideTopics(sectionId);
+      res.json(topics);
+    } catch (error: any) {
+      console.error("[Guide Admin] Error fetching topics:", error?.message);
+      res.status(500).json({ error: "Ошибка загрузки тем" });
+    }
+  });
+
+  // Create topic (superadmin)
+  app.post("/api/admin/guide/topics", requireSuperAdmin, async (req, res) => {
+    try {
+      const topic = await storage.createGuideTopic(req.body);
+      res.json(topic);
+    } catch (error: any) {
+      console.error("[Guide Admin] Error creating topic:", error?.message);
+      res.status(500).json({ error: "Ошибка создания темы" });
+    }
+  });
+
+  // Update topic (superadmin)
+  app.patch("/api/admin/guide/topics/:id", requireSuperAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const topic = await storage.updateGuideTopic(id, req.body);
+      if (!topic) {
+        return res.status(404).json({ error: "Тема не найдена" });
+      }
+      res.json(topic);
+    } catch (error: any) {
+      console.error("[Guide Admin] Error updating topic:", error?.message);
+      res.status(500).json({ error: "Ошибка обновления темы" });
+    }
+  });
+
+  // Delete topic (superadmin)
+  app.delete("/api/admin/guide/topics/:id", requireSuperAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteGuideTopic(id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("[Guide Admin] Error deleting topic:", error?.message);
+      res.status(500).json({ error: "Ошибка удаления темы" });
     }
   });
 

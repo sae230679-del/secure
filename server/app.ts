@@ -200,6 +200,7 @@ export async function initializeApp() {
   
   await storage.ensureSuperAdmin();
   await storage.seedServicesAndTools();
+  await storage.seedGuideSections();
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

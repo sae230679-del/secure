@@ -1892,6 +1892,318 @@ export class DatabaseStorage implements IStorage {
       .returning();
     return created;
   }
+
+  // =====================================================
+  // Guide Sections Methods
+  // =====================================================
+  async getGuideSections(publishedOnly = false): Promise<schema.GuideSection[]> {
+    if (publishedOnly) {
+      return db
+        .select()
+        .from(schema.guideSections)
+        .where(eq(schema.guideSections.isPublished, true))
+        .orderBy(schema.guideSections.id);
+    }
+    return db.select().from(schema.guideSections).orderBy(schema.guideSections.id);
+  }
+
+  async getGuideSectionBySlug(slug: string): Promise<schema.GuideSection | undefined> {
+    const [section] = await db
+      .select()
+      .from(schema.guideSections)
+      .where(eq(schema.guideSections.slug, slug));
+    return section;
+  }
+
+  async getGuideSectionById(id: number): Promise<schema.GuideSection | undefined> {
+    const [section] = await db
+      .select()
+      .from(schema.guideSections)
+      .where(eq(schema.guideSections.id, id));
+    return section;
+  }
+
+  async createGuideSection(data: schema.InsertGuideSection): Promise<schema.GuideSection> {
+    const [section] = await db.insert(schema.guideSections).values(data).returning();
+    return section;
+  }
+
+  async updateGuideSection(id: number, data: Partial<schema.InsertGuideSection>): Promise<schema.GuideSection | undefined> {
+    const [section] = await db
+      .update(schema.guideSections)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(schema.guideSections.id, id))
+      .returning();
+    return section;
+  }
+
+  // =====================================================
+  // Guide Topics Methods
+  // =====================================================
+  async getGuideTopics(sectionId?: number, publishedOnly = false): Promise<schema.GuideTopic[]> {
+    let query = db.select().from(schema.guideTopics);
+    
+    if (sectionId && publishedOnly) {
+      return db
+        .select()
+        .from(schema.guideTopics)
+        .where(and(
+          eq(schema.guideTopics.sectionId, sectionId),
+          eq(schema.guideTopics.isPublished, true)
+        ))
+        .orderBy(schema.guideTopics.sortOrder);
+    } else if (sectionId) {
+      return db
+        .select()
+        .from(schema.guideTopics)
+        .where(eq(schema.guideTopics.sectionId, sectionId))
+        .orderBy(schema.guideTopics.sortOrder);
+    } else if (publishedOnly) {
+      return db
+        .select()
+        .from(schema.guideTopics)
+        .where(eq(schema.guideTopics.isPublished, true))
+        .orderBy(schema.guideTopics.sortOrder);
+    }
+    return db.select().from(schema.guideTopics).orderBy(schema.guideTopics.sortOrder);
+  }
+
+  async getGuideTopicBySlug(slug: string): Promise<schema.GuideTopic | undefined> {
+    const [topic] = await db
+      .select()
+      .from(schema.guideTopics)
+      .where(eq(schema.guideTopics.slug, slug));
+    return topic;
+  }
+
+  async getGuideTopicById(id: number): Promise<schema.GuideTopic | undefined> {
+    const [topic] = await db
+      .select()
+      .from(schema.guideTopics)
+      .where(eq(schema.guideTopics.id, id));
+    return topic;
+  }
+
+  async createGuideTopic(data: schema.InsertGuideTopic): Promise<schema.GuideTopic> {
+    const [topic] = await db.insert(schema.guideTopics).values(data).returning();
+    return topic;
+  }
+
+  async updateGuideTopic(id: number, data: Partial<schema.InsertGuideTopic>): Promise<schema.GuideTopic | undefined> {
+    const [topic] = await db
+      .update(schema.guideTopics)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(schema.guideTopics.id, id))
+      .returning();
+    return topic;
+  }
+
+  async deleteGuideTopic(id: number): Promise<boolean> {
+    await db.delete(schema.guideTopics).where(eq(schema.guideTopics.id, id));
+    return true;
+  }
+
+  // =====================================================
+  // Guide Home API Methods (with counters)
+  // =====================================================
+  async getGuideHomeData(): Promise<{
+    sections: Array<schema.GuideSection & { topicsCount: number; articlesCount: number }>;
+    totals: { topics: number; articles: number };
+  }> {
+    const sections = await this.getGuideSections(true);
+    const homeConfig = await this.getSystemSetting("guide.home");
+    
+    const sectionsWithCounts = await Promise.all(
+      sections.map(async (section) => {
+        const topics = await db
+          .select()
+          .from(schema.guideTopics)
+          .where(and(
+            eq(schema.guideTopics.sectionId, section.id),
+            eq(schema.guideTopics.isPublished, true)
+          ));
+        
+        const topicsCount = topics.length;
+        
+        let articlesCount = 0;
+        for (const topic of topics) {
+          const [result] = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(schema.guideArticles)
+            .where(and(
+              eq(schema.guideArticles.topicId, topic.id),
+              eq(schema.guideArticles.status, "published")
+            ));
+          articlesCount += Number(result?.count || 0);
+        }
+        
+        return { ...section, topicsCount, articlesCount };
+      })
+    );
+
+    // Apply ordering from config if available
+    let orderedSections = sectionsWithCounts;
+    if (homeConfig) {
+      const config = homeConfig as { sections?: Array<{ slug: string; enabled: boolean; order: number }> };
+      if (config.sections) {
+        const enabledSlugs = config.sections
+          .filter(s => s.enabled)
+          .sort((a, b) => a.order - b.order)
+          .map(s => s.slug);
+        
+        orderedSections = enabledSlugs
+          .map(slug => sectionsWithCounts.find(s => s.slug === slug))
+          .filter(Boolean) as typeof sectionsWithCounts;
+      }
+    }
+
+    const totals = orderedSections.reduce(
+      (acc, s) => ({
+        topics: acc.topics + s.topicsCount,
+        articles: acc.articles + s.articlesCount,
+      }),
+      { topics: 0, articles: 0 }
+    );
+
+    return { sections: orderedSections, totals };
+  }
+
+  async searchGuide(query: string, limit = 10): Promise<{
+    q: string;
+    sections: Array<{ slug: string; title: string }>;
+    topics: Array<{ slug: string; title: string; sectionSlug: string }>;
+    articles: Array<{ slug: string; title: string; summary: string | null; sectionSlug: string; topicSlug: string }>;
+  }> {
+    if (query.length < 2) {
+      return { q: query, sections: [], topics: [], articles: [] };
+    }
+
+    const searchPattern = `%${query}%`;
+
+    // Search sections
+    const sections = await db
+      .select({ slug: schema.guideSections.slug, title: schema.guideSections.title })
+      .from(schema.guideSections)
+      .where(and(
+        eq(schema.guideSections.isPublished, true),
+        sql`${schema.guideSections.title} ILIKE ${searchPattern}`
+      ))
+      .limit(3);
+
+    // Search topics with section slug
+    const topicsRaw = await db
+      .select({
+        slug: schema.guideTopics.slug,
+        title: schema.guideTopics.title,
+        sectionId: schema.guideTopics.sectionId,
+      })
+      .from(schema.guideTopics)
+      .where(and(
+        eq(schema.guideTopics.isPublished, true),
+        sql`${schema.guideTopics.title} ILIKE ${searchPattern}`
+      ))
+      .limit(6);
+
+    const topics = await Promise.all(
+      topicsRaw.map(async (t) => {
+        const section = await this.getGuideSectionById(t.sectionId);
+        return { slug: t.slug, title: t.title, sectionSlug: section?.slug || "" };
+      })
+    );
+
+    // Search articles with topic and section slugs
+    const articlesRaw = await db
+      .select({
+        slug: schema.guideArticles.slug,
+        title: schema.guideArticles.title,
+        summary: schema.guideArticles.summary,
+        topicId: schema.guideArticles.topicId,
+      })
+      .from(schema.guideArticles)
+      .where(and(
+        eq(schema.guideArticles.status, "published"),
+        sql`(${schema.guideArticles.title} ILIKE ${searchPattern} OR ${schema.guideArticles.summary} ILIKE ${searchPattern})`
+      ))
+      .limit(limit);
+
+    const articles = await Promise.all(
+      articlesRaw.map(async (a) => {
+        const topic = a.topicId ? await this.getGuideTopicById(a.topicId) : null;
+        const section = topic ? await this.getGuideSectionById(topic.sectionId) : null;
+        return {
+          slug: a.slug,
+          title: a.title,
+          summary: a.summary,
+          sectionSlug: section?.slug || "",
+          topicSlug: topic?.slug || "",
+        };
+      })
+    );
+
+    return { q: query, sections, topics, articles };
+  }
+
+  // =====================================================
+  // Seed Guide Sections (9 default sections)
+  // =====================================================
+  async seedGuideSections(): Promise<void> {
+    const existing = await db.select().from(schema.guideSections).limit(1);
+    if (existing.length > 0) {
+      console.log("[SEED] Guide sections already exist, skipping...");
+      return;
+    }
+
+    console.log("[SEED] Creating default guide sections...");
+    
+    const defaultSections: schema.InsertGuideSection[] = [
+      { slug: "documents", title: "Документы и шаблоны", description: "Политики, согласия, акты и прочие документы для работы с ПДн", icon: "FileText", isPublished: true },
+      { slug: "cookies", title: "Cookies и трекинг", description: "Правила использования cookies, баннеры и согласия", icon: "Cookie", isPublished: true },
+      { slug: "rkn", title: "РКН и обязанности оператора", description: "Уведомления, реестр операторов, проверки Роскомнадзора", icon: "Shield", isPublished: true },
+      { slug: "forms-consent", title: "Формы и согласия", description: "Формы сбора данных, согласия на обработку ПДн", icon: "ClipboardCheck", isPublished: true },
+      { slug: "registry-processes", title: "Реестр и процессы", description: "Реестр обработки данных, внутренние процессы", icon: "Database", isPublished: true },
+      { slug: "processors-transfers", title: "Обработчики и передачи", description: "Поручения обработки, трансграничная передача", icon: "Users", isPublished: true },
+      { slug: "retention-deletion", title: "Сроки и удаление", description: "Сроки хранения, уничтожение персональных данных", icon: "Clock", isPublished: true },
+      { slug: "security-access", title: "Безопасность и доступы", description: "Защита ПДн, контроль доступа, инциденты", icon: "Lock", isPublished: true },
+      { slug: "content-149", title: "Контент и 149-ФЗ", description: "Информационное законодательство, обязательная маркировка", icon: "Newspaper", isPublished: true },
+    ];
+
+    for (const section of defaultSections) {
+      await db.insert(schema.guideSections).values(section);
+    }
+
+    // Seed guide.home config in system settings
+    const homeConfig = {
+      sections: defaultSections.map((s, i) => ({
+        slug: s.slug,
+        enabled: true,
+        order: (i + 1) * 10,
+        titleOverride: null,
+        descriptionOverride: null,
+        iconOverride: null,
+      })),
+    };
+    
+    await this.upsertSystemSetting("guide.home", JSON.stringify(homeConfig));
+    console.log("[SEED] Guide sections created");
+  }
+
+  async getGuideArticlesByTopic(topicId: number, publishedOnly = false): Promise<schema.GuideArticle[]> {
+    if (publishedOnly) {
+      return db
+        .select()
+        .from(schema.guideArticles)
+        .where(and(
+          eq(schema.guideArticles.topicId, topicId),
+          eq(schema.guideArticles.status, "published")
+        ))
+        .orderBy(desc(schema.guideArticles.publishedAt));
+    }
+    return db
+      .select()
+      .from(schema.guideArticles)
+      .where(eq(schema.guideArticles.topicId, topicId))
+      .orderBy(desc(schema.guideArticles.createdAt));
+  }
 }
 
 export const storage = new DatabaseStorage();
