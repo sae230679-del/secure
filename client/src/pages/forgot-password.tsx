@@ -23,12 +23,8 @@ export default function ForgotPasswordPage() {
     onSuccess: () => {
       setSubmitted(true);
     },
-    onError: (error: Error) => {
-      toast({
-        title: "Ошибка",
-        description: error.message || "Не удалось отправить письмо.",
-        variant: "destructive",
-      });
+    onError: () => {
+      setSubmitted(true);
     },
   });
 
@@ -54,7 +50,7 @@ export default function ForgotPasswordPage() {
                 <CheckCircle className="h-16 w-16 text-green-500 mx-auto" />
                 <h2 className="text-xl font-semibold">Проверьте почту</h2>
                 <p className="text-muted-foreground">
-                  Если аккаунт с email <strong>{email}</strong> существует, мы отправили письмо с инструкциями по сбросу пароля.
+                  Если указанный email зарегистрирован в системе, вы получите письмо с инструкциями по сбросу пароля.
                 </p>
                 <p className="text-sm text-muted-foreground">
                   Не получили письмо? Проверьте папку "Спам" или попробуйте снова через несколько минут.

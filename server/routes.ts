@@ -580,13 +580,19 @@ export async function registerRoutes(
 
       if (!matchedUser) {
         console.log(`[AUTH] Password reset: token not found`);
-        return res.status(400).json({ error: "Недействительная или истекшая ссылка" });
+        return res.status(400).json({ 
+          error: "Недействительная или истекшая ссылка", 
+          code: "TOKEN_INVALID" 
+        });
       }
       
       // Check expiration
       if (matchedUser.passwordResetTokenExpiresAt && new Date() > new Date(matchedUser.passwordResetTokenExpiresAt)) {
-        console.log(`[AUTH] Password reset token expired for: ${matchedUser.email}`);
-        return res.status(400).json({ error: "Ссылка истекла. Запросите новую" });
+        console.log(`[AUTH] Password reset token expired`);
+        return res.status(400).json({ 
+          error: "Ссылка истекла. Запросите новую", 
+          code: "TOKEN_EXPIRED" 
+        });
       }
 
       // Update password and clear token
