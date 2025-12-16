@@ -50,77 +50,73 @@ async function logToolUsage(record: ToolUsageRecord): Promise<void> {
   }
 }
 
-// Paywall guard middleware for paid tools
-async function toolPaywallGuard(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-  toolKey: string,
-  skipPaymentCheck = false
-): Promise<void> {
-  // 1. Check if tools service is enabled
-  const serviceEnabled = await storage.getToolsServiceEnabled();
-  if (!serviceEnabled) {
-    res.status(503).json({
-      success: false,
-      error: "Сервис инструментов временно недоступен",
-      code: "SERVICE_DISABLED",
-    });
-    return;
-  }
+// Paywall guard middleware factory for paid tools
+function createPaywallGuard(toolKey: string) {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    // 1. Check if tools service is enabled
+    const serviceEnabled = await storage.getToolsServiceEnabled();
+    if (!serviceEnabled) {
+      res.status(503).json({
+        success: false,
+        error: "Сервис инструментов временно недоступен",
+        code: "SERVICE_DISABLED",
+      });
+      return;
+    }
 
-  // 2. Check if tool is enabled
-  const tool = await storage.getToolConfigByKey(toolKey);
-  if (!tool) {
-    res.status(404).json({
-      success: false,
-      error: "Инструмент не найден",
-      code: "TOOL_NOT_FOUND",
-    });
-    return;
-  }
+    // 2. Check if tool is enabled
+    const tool = await storage.getToolConfigByKey(toolKey);
+    if (!tool) {
+      res.status(404).json({
+        success: false,
+        error: "Инструмент не найден",
+        code: "TOOL_NOT_FOUND",
+      });
+      return;
+    }
 
-  if (!tool.isEnabled) {
-    res.status(503).json({
-      success: false,
-      error: "Инструмент временно недоступен",
-      code: "TOOL_DISABLED",
-    });
-    return;
-  }
+    if (!tool.isEnabled) {
+      res.status(503).json({
+        success: false,
+        error: "Инструмент временно недоступен",
+        code: "TOOL_DISABLED",
+      });
+      return;
+    }
 
-  // 3. Skip payment check for free tools
-  if (tool.isFree || skipPaymentCheck) {
+    // 3. Skip payment check for free tools
+    if (tool.isFree) {
+      next();
+      return;
+    }
+
+    // 4. Check authentication
+    const userId = req.session.userId;
+    if (!userId) {
+      res.status(401).json({
+        success: false,
+        error: "Требуется авторизация",
+        code: "AUTH_REQUIRED",
+      });
+      return;
+    }
+
+    // 5. Check payment
+    const hasPaid = await storage.checkToolPayment(userId, toolKey);
+    if (!hasPaid) {
+      res.status(402).json({
+        success: false,
+        error: `Требуется оплата: ${tool.price}₽`,
+        code: "PAYMENT_REQUIRED",
+        price: tool.price,
+        toolKey: tool.toolKey,
+        toolName: tool.displayName,
+      });
+      return;
+    }
+
     next();
-    return;
-  }
-
-  // 4. Check authentication
-  const userId = req.session.userId;
-  if (!userId) {
-    res.status(401).json({
-      success: false,
-      error: "Требуется авторизация",
-      code: "AUTH_REQUIRED",
-    });
-    return;
-  }
-
-  // 5. Check payment
-  const hasPaid = await storage.checkToolPayment(userId, toolKey);
-  if (!hasPaid) {
-    res.status(402).json({
-      success: false,
-      error: `Требуется оплата: ${tool.price}₽`,
-      code: "PAYMENT_REQUIRED",
-      price: tool.price,
-      toolKey: tool.toolKey,
-      toolName: tool.displayName,
-    });
-    return;
-  }
-
-  next();
+  };
 }
 
 // ============================================
@@ -348,7 +344,7 @@ const privacyGeneratorSchema = z.object({
   crossBorder: z.boolean().optional(),
 });
 
-toolsRouter.post("/privacy-generator", async (req: Request, res: Response) => {
+toolsRouter.post("/privacy-generator", createPaywallGuard("privacy-generator"), async (req: Request, res: Response) => {
   try {
     const input = privacyGeneratorSchema.parse(req.body);
     
@@ -468,7 +464,7 @@ const consentGeneratorSchema = z.object({
   hasSignature: z.boolean().optional(),
 });
 
-toolsRouter.post("/consent-generator", async (req: Request, res: Response) => {
+toolsRouter.post("/consent-generator", createPaywallGuard("consent-generator"), async (req: Request, res: Response) => {
   try {
     const input = consentGeneratorSchema.parse(req.body);
     
@@ -541,7 +537,7 @@ const cookieBannerSchema = z.object({
   theme: z.enum(["light", "dark", "auto"]).default("auto"),
 });
 
-toolsRouter.post("/cookie-banner", async (req: Request, res: Response) => {
+toolsRouter.post("/cookie-banner", createPaywallGuard("cookie-banner"), async (req: Request, res: Response) => {
   try {
     const input = cookieBannerSchema.parse(req.body);
     
@@ -716,7 +712,7 @@ const seoAuditSchema = z.object({
   url: z.string().min(3),
 });
 
-toolsRouter.post("/seo-audit", async (req: Request, res: Response) => {
+toolsRouter.post("/seo-audit", createPaywallGuard("seo-audit"), async (req: Request, res: Response) => {
   try {
     const input = seoAuditSchema.parse(req.body);
     const url = normalizeUrl(input.url);
@@ -912,7 +908,7 @@ const CMS_SIGNATURES: Array<{ name: string; patterns: RegExp[]; generator?: RegE
   },
 ];
 
-toolsRouter.post("/cms-detector", async (req: Request, res: Response) => {
+toolsRouter.post("/cms-detector", createPaywallGuard("cms-detector"), async (req: Request, res: Response) => {
   try {
     const input = cmsDetectorSchema.parse(req.body);
     const url = normalizeUrl(input.url);
@@ -995,7 +991,7 @@ const whoisLookupSchema = z.object({
   domain: z.string().min(3),
 });
 
-toolsRouter.post("/whois-lookup", async (req: Request, res: Response) => {
+toolsRouter.post("/whois-lookup", createPaywallGuard("whois-lookup"), async (req: Request, res: Response) => {
   try {
     const input = whoisLookupSchema.parse(req.body);
     const domain = extractDomain(input.domain);
@@ -1128,7 +1124,7 @@ async function checkSSL(hostname: string): Promise<SSLInfo> {
   });
 }
 
-toolsRouter.post("/ssl-checker", async (req: Request, res: Response) => {
+toolsRouter.post("/ssl-checker", createPaywallGuard("ssl-checker"), async (req: Request, res: Response) => {
   try {
     const input = sslCheckerSchema.parse(req.body);
     const hostname = extractDomain(input.url);
@@ -1165,7 +1161,7 @@ const rknCheckSchema = z.object({
   inn: z.string().regex(/^\d{10}|\d{12}$/, "ИНН должен содержать 10 или 12 цифр"),
 });
 
-toolsRouter.post("/rkn-check", async (req: Request, res: Response) => {
+toolsRouter.post("/rkn-check", createPaywallGuard("rkn-check"), async (req: Request, res: Response) => {
   try {
     const input = rknCheckSchema.parse(req.body);
     
@@ -1251,7 +1247,7 @@ const RUSSIAN_FONT_ALTERNATIVES = [
   { category: "Системные", fonts: ["system-ui", "-apple-system", "Segoe UI", "sans-serif"] },
 ];
 
-toolsRouter.post("/font-localizer", async (req: Request, res: Response) => {
+toolsRouter.post("/font-localizer", createPaywallGuard("font-localizer"), async (req: Request, res: Response) => {
   try {
     const input = fontLocalizerSchema.parse(req.body);
     const url = normalizeUrl(input.url);
@@ -1423,7 +1419,7 @@ toolsRouter.get("/hosting-recommendations", async (req: Request, res: Response) 
 });
 
 // Check hosting for a specific URL
-toolsRouter.post("/hosting-check", async (req: Request, res: Response) => {
+toolsRouter.post("/hosting-check", createPaywallGuard("hosting-recommendations"), async (req: Request, res: Response) => {
   try {
     const { url } = z.object({ url: z.string().min(3) }).parse(req.body);
     
