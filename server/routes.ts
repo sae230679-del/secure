@@ -2604,6 +2604,8 @@ export async function registerRoutes(
       const summaryData = audit.summaryJson as any;
       const checks = Array.isArray(summaryData) ? summaryData : (summaryData?.checks || []);
       const rknCheck = summaryData?.rknCheck || null;
+      const briefResults = summaryData?.briefResults || null;
+      const hostingInfo = summaryData?.hostingInfo || null;
 
       res.json({
         token: audit.token,
@@ -2618,6 +2620,8 @@ export async function registerRoutes(
         severity: audit.severity,
         summary: checks,
         rknCheck: rknCheck,
+        briefResults: briefResults,
+        hostingInfo: hostingInfo,
         createdAt: audit.createdAt,
         completedAt: audit.completedAt,
       });

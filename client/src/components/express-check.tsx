@@ -9,10 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Shield, ArrowRight, Loader2, AlertTriangle, CheckCircle2, XCircle, FileText, CreditCard, Zap, FileCheck, Building2, HelpCircle, Search } from "lucide-react";
 import { ScoreIndicator, FineEstimate, ResultsSummary } from "@/components/score-indicator";
+import { AuditResultsView } from "@/components/audit/AuditResultsView";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import type { BriefResults } from "@shared/schema";
 
 type CheckCategory = 
   | "landing"
@@ -67,6 +69,8 @@ type ExpressResult = {
   failedCount: number;
   summary: any[];
   rknCheck?: RknCheckResult | null;
+  briefResults?: BriefResults | null;
+  hostingInfo?: any | null;
 };
 
 function ExpressProgressBar({ 
@@ -276,6 +280,8 @@ export function ExpressCheck() {
             failedCount: data.failedCount || 0,
             summary: data.summary || [],
             rknCheck: data.rknCheck || null,
+            briefResults: data.briefResults || null,
+            hostingInfo: data.hostingInfo || null,
           });
           setIsChecking(false);
           if (pollingRef.current) {
@@ -435,6 +441,14 @@ export function ExpressCheck() {
             </p>
           </div>
         ) : result ? (
+          result.briefResults ? (
+            <AuditResultsView
+              results={result.briefResults}
+              isExpress={true}
+              onPurchaseFullReport={handlePurchaseReport}
+              isPurchasing={isPurchasing}
+            />
+          ) : (
           <div className="space-y-5">
             <div className="text-center">
               <h3 className="text-sm font-medium text-muted-foreground mb-3">
@@ -583,7 +597,7 @@ export function ExpressCheck() {
               </Button>
             </div>
           </div>
-        ) : (
+        )) : (
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "quick" | "full")} className="w-full">
             <TabsList className="grid w-full grid-cols-2 mb-4 relative">
               <TabsTrigger value="quick" className="flex items-center gap-1.5" data-testid="tab-quick-check">
