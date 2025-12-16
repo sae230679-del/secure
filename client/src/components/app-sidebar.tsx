@@ -76,6 +76,7 @@ export function AppSidebar() {
   const superAdminMenuItems = [
     { title: "Панель супер-админа", url: "/superadmin", icon: Crown },
     { title: "Пользователи", url: "/superadmin/users", icon: Users },
+    { title: "Услуги и инструменты", url: "/superadmin/services", icon: Package },
     { title: "Настройки сайта", url: "/superadmin/settings", icon: Settings },
     { title: "Email / SMTP", url: "/superadmin/email-settings", icon: Mail },
     { title: "Платежи / ЮKassa", url: "/superadmin/payment-settings", icon: Wallet },

@@ -30,6 +30,7 @@ import SuperAdminLogsPage from "@/pages/superadmin-logs";
 import SuperAdminPromoCodesPage from "@/pages/superadmin-promo-codes";
 import SuperAdminEmailSettingsPage from "@/pages/superadmin-email-settings";
 import SuperAdminPaymentSettingsPage from "@/pages/superadmin-payment-settings";
+import SuperAdminServicesPage from "@/pages/superadmin-services";
 import PdnManagementPage from "@/pages/superadmin/pdn-management";
 import SeoManagementPage from "@/pages/superadmin/seo-pages";
 import ReferralPage from "@/pages/referral";
@@ -416,6 +417,16 @@ function Router() {
           <SuperAdminRoute>
             <DashboardLayout>
               <SuperAdminPaymentSettingsPage />
+            </DashboardLayout>
+          </SuperAdminRoute>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/superadmin/services">
+        <ProtectedRoute>
+          <SuperAdminRoute>
+            <DashboardLayout>
+              <SuperAdminServicesPage />
             </DashboardLayout>
           </SuperAdminRoute>
         </ProtectedRoute>
