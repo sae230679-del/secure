@@ -893,3 +893,86 @@ export const toolUsage = pgTable("tool_usage", {
 export const insertToolUsageSchema = createInsertSchema(toolUsage).omit({ id: true, createdAt: true });
 export type InsertToolUsage = z.infer<typeof insertToolUsageSchema>;
 export type ToolUsage = typeof toolUsage.$inferSelect;
+
+// =====================================================
+// Guide Articles - SEO справочник
+// =====================================================
+export const guideArticleStatusEnum = pgEnum("guide_article_status", ["draft", "published", "archived"]);
+
+export const guideArticles = pgTable("guide_articles", {
+  id: serial("id").primaryKey(),
+  slug: varchar("slug", { length: 255 }).notNull().unique(),
+  status: guideArticleStatusEnum("status").default("draft").notNull(),
+  title: varchar("title", { length: 500 }).notNull(),
+  summary: text("summary"),
+  lawTags: jsonb("law_tags").default([]).$type<string[]>(),
+  topicTags: jsonb("topic_tags").default([]).$type<string[]>(),
+  audienceTags: jsonb("audience_tags").default([]).$type<string[]>(),
+  applicability: jsonb("applicability").default([]).$type<string[]>(),
+  bodyBaseMd: text("body_base_md"),
+  bodyRegsMd: text("body_regs_md"),
+  regsData: jsonb("regs_data"),
+  sources: jsonb("sources").default([]).$type<{title: string; url: string}[]>(),
+  media: jsonb("media").default({}).$type<{coverImageUrl?: string; gallery?: string[]; videoLinks?: string[]}>(),
+  relatedTools: jsonb("related_tools").default([]).$type<number[]>(),
+  relatedServices: jsonb("related_services").default([]).$type<string[]>(),
+  seo: jsonb("seo").default({}).$type<{title?: string; description?: string; keywords?: string[]; canonical?: string; noindex?: boolean}>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  publishedAt: timestamp("published_at"),
+}, (table) => [
+  index("guide_articles_status_idx").on(table.status),
+  index("guide_articles_published_idx").on(table.publishedAt),
+]);
+
+export const insertGuideArticleSchema = createInsertSchema(guideArticles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type GuideArticle = typeof guideArticles.$inferSelect;
+export type InsertGuideArticle = z.infer<typeof insertGuideArticleSchema>;
+
+// =====================================================
+// Guide Events - аналитика справочника
+// =====================================================
+export const guideEventTypeEnum = pgEnum("guide_event_type", [
+  "page_view", "scroll_25", "scroll_50", "scroll_75", "scroll_90", 
+  "read_end", "cta_click", "source_click", "mode_switch"
+]);
+
+export const guideEvents = pgTable("guide_events", {
+  id: serial("id").primaryKey(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  visitorId: varchar("visitor_id", { length: 100 }),
+  slug: varchar("slug", { length: 255 }).notNull(),
+  mode: varchar("mode", { length: 10 }),
+  eventType: guideEventTypeEnum("event_type").notNull(),
+  eventValue: jsonb("event_value").default({}),
+}, (table) => [
+  index("guide_events_slug_idx").on(table.slug),
+  index("guide_events_type_idx").on(table.eventType),
+  index("guide_events_created_idx").on(table.createdAt),
+]);
+
+export const insertGuideEventSchema = createInsertSchema(guideEvents).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type GuideEvent = typeof guideEvents.$inferSelect;
+export type InsertGuideEvent = z.infer<typeof insertGuideEventSchema>;
+
+// =====================================================
+// Guide Settings - настройки справочника
+// =====================================================
+export const guideSettings = pgTable("guide_settings", {
+  id: serial("id").primaryKey(),
+  featuredSlugs: jsonb("featured_slugs").default([]).$type<string[]>(),
+  topicsOrder: jsonb("topics_order").default([]).$type<string[]>(),
+  enableIndexing: boolean("enable_indexing").default(true).notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type GuideSettings = typeof guideSettings.$inferSelect;
