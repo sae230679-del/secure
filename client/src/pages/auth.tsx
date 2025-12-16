@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,7 @@ export default function AuthPage() {
   const [mode, setMode] = useState<AuthMode>("login");
   const [loginStep, setLoginStep] = useState<LoginStep>("credentials");
   const [, navigate] = useLocation();
+  const searchString = useSearch();
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   
@@ -28,6 +29,25 @@ export default function AuthPage() {
       navigate("/dashboard");
     }
   }, [authLoading, isAuthenticated, navigate]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchString);
+    const state = params.get("state");
+    
+    if (state === "verified") {
+      toast({
+        title: "Email подтвержден",
+        description: "Теперь вы можете войти в систему.",
+      });
+      window.history.replaceState({}, "", "/auth");
+    } else if (state === "password_reset") {
+      toast({
+        title: "Пароль изменен",
+        description: "Теперь вы можете войти с новым паролем.",
+      });
+      window.history.replaceState({}, "", "/auth");
+    }
+  }, [searchString, toast]);
 
   const [loginData, setLoginData] = useState({ email: "", password: "" });
   const [otpData, setOtpData] = useState({ userId: 0, code: "" });

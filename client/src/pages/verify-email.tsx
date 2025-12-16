@@ -28,19 +28,14 @@ export default function VerifyEmailPage() {
       return response.json();
     },
     onSuccess: (data) => {
-      if (data.alreadyVerified) {
-        setPageState("success");
-        toast({
-          title: "Email уже подтвержден",
-          description: "Вы можете войти в систему.",
-        });
-      } else {
-        setPageState("success");
-        toast({
-          title: "Email подтвержден",
-          description: "Теперь вы можете войти в систему.",
-        });
-      }
+      setPageState("success");
+      toast({
+        title: data.alreadyVerified ? "Email уже подтвержден" : "Email подтвержден",
+        description: "Перенаправляем на страницу входа...",
+      });
+      setTimeout(() => {
+        navigate("/auth?state=verified");
+      }, 2000);
     },
     onError: (error: Error) => {
       const apiError = error as ApiError;

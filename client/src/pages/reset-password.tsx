@@ -39,8 +39,11 @@ export default function ResetPasswordPage() {
       setPageState("success");
       toast({
         title: "Пароль изменен",
-        description: "Теперь вы можете войти с новым паролем.",
+        description: "Перенаправляем на страницу входа...",
       });
+      setTimeout(() => {
+        navigate("/auth?state=password_reset");
+      }, 2000);
     },
     onError: (err: Error) => {
       const apiError = err as ApiError;

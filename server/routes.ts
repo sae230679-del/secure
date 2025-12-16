@@ -177,7 +177,11 @@ export async function registerRoutes(
       
       const existingUser = await storage.getUserByEmail(data.email);
       if (existingUser) {
-        return res.status(400).json({ error: "Пользователь с таким email уже существует" });
+        return res.status(400).json({ 
+          error: "Пользователь с таким email уже существует",
+          code: "EMAIL_EXISTS",
+          message: "Пользователь с таким email уже существует"
+        });
       }
 
       const user = await storage.createUser(data);
@@ -250,13 +254,21 @@ export async function registerRoutes(
       const existingUser = await storage.getUserByEmail(data.email);
       if (!existingUser) {
         console.log(`[AUTH] User not found: ${data.email}`);
-        return res.status(401).json({ error: "Неверный email или пароль" });
+        return res.status(401).json({ 
+          error: "Неверный email или пароль",
+          code: "INVALID_CREDENTIALS",
+          message: "Неверный email или пароль"
+        });
       }
       
       const user = await (storage as any).validatePassword(data.email, data.password);
       if (!user) {
         console.log(`[AUTH] Invalid password for: ${data.email}`);
-        return res.status(401).json({ error: "Неверный email или пароль" });
+        return res.status(401).json({ 
+          error: "Неверный email или пароль",
+          code: "INVALID_CREDENTIALS",
+          message: "Неверный email или пароль"
+        });
       }
       
       console.log(`[AUTH] Password validated for: ${data.email}, userId: ${user.id}, role: ${user.role}`);
