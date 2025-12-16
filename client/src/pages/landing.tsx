@@ -198,6 +198,15 @@ export default function LandingPage() {
                   </Link>
                 </Button>
               </div>
+              <div className="pt-2">
+                <Link href="/tools">
+                  <Button variant="link" className="text-muted-foreground p-0 h-auto" data-testid="link-tools">
+                    <FileCode className="h-4 w-4 mr-1" />
+                    Бесплатные инструменты и генераторы
+                    <ArrowRight className="ml-1 h-3 w-3" />
+                  </Button>
+                </Link>
+              </div>
               <div className="flex items-center gap-6 pt-4 text-sm text-muted-foreground flex-wrap">
                 <div className="flex items-center gap-1">
                   <CheckCircle2 className="h-4 w-4 text-green-500" />

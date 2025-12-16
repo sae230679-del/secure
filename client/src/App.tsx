@@ -47,6 +47,7 @@ import PersonalDataPage from "@/pages/personal-data";
 import PrivacyPage from "@/pages/dashboard/privacy";
 import SeoPageView from "@/pages/seo-page";
 import OfferPage from "@/pages/offer";
+import ToolsPage from "@/pages/tools";
 import { CookieConsent } from "@/components/cookie-consent";
 import { Loader2, LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -221,6 +222,7 @@ function Router() {
       <Route path="/cookies-policy" component={CookiesPolicyPage} />
       <Route path="/user-agreement" component={UserAgreementPage} />
       <Route path="/offer" component={OfferPage} />
+      <Route path="/tools" component={ToolsPage} />
       <Route path="/seo/:slug" component={SeoPageView} />
       
       <Route path="/dashboard">

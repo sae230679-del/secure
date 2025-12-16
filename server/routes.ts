@@ -17,6 +17,7 @@ import crypto from "crypto";
 import fs from "fs";
 import { runExpressAudit, runAudit, checkWebsiteExists, runDebugAudit } from "./audit-engine";
 import { generatePdfReport } from "./pdf-generator";
+import { toolsRouter } from "./tools-routes";
 
 // GUARD: Mock mode forbidden in production
 if (process.env.AUDIT_MOCK_MODE === "true" && process.env.NODE_ENV === "production") {
@@ -193,6 +194,9 @@ export async function registerRoutes(
       timestamp: new Date().toISOString(),
     });
   });
+
+  // Tools API router (10 paid tools for compliance checking)
+  app.use("/api/tools", toolsRouter);
 
   app.post("/api/auth/register", async (req, res) => {
     try {

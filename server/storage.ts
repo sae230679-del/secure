@@ -1515,6 +1515,97 @@ export class DatabaseStorage implements IStorage {
       .set({ isActive: false, updatedAt: new Date() })
       .where(eq(schema.seoPages.id, id));
   }
+
+  // =====================================================
+  // Tools Methods
+  // =====================================================
+  async logToolUsage(data: {
+    toolKey: string;
+    userId: number | null;
+    sessionId: string | null;
+    inputData: any;
+    outputData: any;
+    isPaid: boolean;
+    paymentId?: number | null;
+  }): Promise<void> {
+    await db.insert(schema.toolUsage).values({
+      toolKey: data.toolKey,
+      userId: data.userId,
+      sessionId: data.sessionId,
+      inputData: data.inputData,
+      outputData: data.outputData,
+      isPaid: data.isPaid,
+      paymentId: data.paymentId || null,
+    });
+  }
+
+  async getAllToolConfigs(): Promise<schema.ToolConfig[]> {
+    return db.select().from(schema.toolConfigs).orderBy(schema.toolConfigs.sortOrder);
+  }
+
+  async getToolConfigByKey(toolKey: string): Promise<schema.ToolConfig | undefined> {
+    const [tool] = await db.select().from(schema.toolConfigs).where(eq(schema.toolConfigs.toolKey, toolKey));
+    return tool;
+  }
+
+  async updateToolConfig(id: number, data: Partial<schema.ToolConfig>): Promise<schema.ToolConfig | undefined> {
+    const [tool] = await db
+      .update(schema.toolConfigs)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(schema.toolConfigs.id, id))
+      .returning();
+    return tool;
+  }
+
+  async incrementToolUsageCount(toolKey: string): Promise<void> {
+    await db
+      .update(schema.toolConfigs)
+      .set({ usageCount: sql`${schema.toolConfigs.usageCount} + 1` })
+      .where(eq(schema.toolConfigs.toolKey, toolKey));
+  }
+
+  // =====================================================
+  // RKN Cache Methods
+  // =====================================================
+  async getRknCacheByInn(inn: string): Promise<schema.RknRegistryEntry | undefined> {
+    const [entry] = await db.select().from(schema.rknRegistryCache).where(eq(schema.rknRegistryCache.inn, inn));
+    return entry;
+  }
+
+  async upsertRknCache(data: {
+    inn: string;
+    companyName?: string | null;
+    registrationNumber?: string | null;
+    registrationDate?: string | null;
+    isRegistered?: boolean;
+  }): Promise<schema.RknRegistryEntry> {
+    const existing = await this.getRknCacheByInn(data.inn);
+    if (existing) {
+      const [updated] = await db
+        .update(schema.rknRegistryCache)
+        .set({ 
+          companyName: data.companyName,
+          registrationNumber: data.registrationNumber,
+          registrationDate: data.registrationDate,
+          isRegistered: data.isRegistered ?? false,
+          lastCheckedAt: new Date() 
+        })
+        .where(eq(schema.rknRegistryCache.inn, data.inn))
+        .returning();
+      return updated;
+    }
+    const [created] = await db
+      .insert(schema.rknRegistryCache)
+      .values({
+        inn: data.inn,
+        companyName: data.companyName || null,
+        registrationNumber: data.registrationNumber || null,
+        registrationDate: data.registrationDate || null,
+        isRegistered: data.isRegistered ?? false,
+      })
+      .returning();
+    return created;
+  }
 }
 
 export const storage = new DatabaseStorage();
