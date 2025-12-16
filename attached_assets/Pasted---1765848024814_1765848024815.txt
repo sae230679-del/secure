@@ -1,0 +1,47 @@
+Ок — делаем “жёстко”: полное удаление симуляций из репозитория (не только из прод‑пути). В текущем коде (по историческим вставкам) встречаются getRandomStatus, getStatusByCategory, simulateAuditResults и массивы критериев, которые используют getRandomStatus (fz152/fz149/cookies/technical/legalPages и т.п.).​
+
+План удаления (что именно сделать)
+Удалить функции:
+
+getRandomStatus
+
+getStatusByCategory
+
+simulateAuditResults​
+
+Удалить/переписать все места, где критерии собираются через status: getRandomStatus() (включая “fz152Criteria”, “technicalCriteria”, “legalPagesCriteria”, “cookieCriteria” и пр.).​
+
+Оставить единственный источник статусов: результаты реальных проверок (HTTP headers/HTML pattern matching) + evidence[].​
+
+Готовый промт для Replit Agent (одним коммитом)
+Скопируй и отправь агенту:
+
+TASK: Полностью удалить любой mock/simulation код из audit engine и связанных файлов.
+SCOPE: весь репозиторий, без исключений (даже “demo”).
+MUST DELETE: getRandomStatus, getStatusByCategory, simulateAuditResults, и любые критерии/проверки, где status получается из рандома.​
+
+DO:
+
+Глобально найти в проекте строки/символы: getRandomStatus, simulateAuditResults, getStatusByCategory, Math.random() в контексте аудита.​
+
+Удалить функции и удалить/заменить все их использования на реальные check‑функции (которые формируют status только на основании WebsiteData.headers/html/statusCode/sslInfo).​
+
+Если где-то эти “рандомные критерии” использовались как заглушка для пакетов (fz152/fz149/cookies/technical/legal):
+
+либо реализовать реальные проверки (минимально: заголовки, политика, контакты/реквизиты, cookie/consent, trackers),
+
+либо убрать эти пункты из результата целиком (лучше убрать, чем врать).​
+
+Добавить защитный CI/self-check (или простую runtime-проверку при старте): если в коде остались упоминания getRandomStatus/simulateAuditResults — падать сборкой/стартом.​
+
+Прогнать 3 URL (sberbank.ru, yandex.ru, example.com) и подтвердить, что у каждого чека warning|failed есть evidence.length > 0. ​
+
+ACCEPTANCE CRITERIA:
+
+Поиск по репозиторию возвращает 0 совпадений: getRandomStatus, simulateAuditResults, getStatusByCategory.​
+
+В коде аудита нет Math.random() (кроме нерелевантных мест вне аудита).​
+
+/api/audits и PDF формируются только из реальных проверок и evidence.​
+
+END.
