@@ -29,6 +29,12 @@ import {
   FolderOpen,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import type { GuideSection } from "@shared/schema";
 
 type SectionWithCounts = GuideSection & { topicsCount: number; articlesCount: number };
@@ -496,61 +502,132 @@ export default function LandingPage() {
           </div>
 
           {guideLoading ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(i => (
-                <Card key={i}>
-                  <CardHeader>
-                    <Skeleton className="h-8 w-8 rounded mb-2" />
-                    <Skeleton className="h-6 w-3/4" />
-                    <Skeleton className="h-4 w-full mt-2" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex gap-2">
-                      <Skeleton className="h-5 w-16" />
-                      <Skeleton className="h-5 w-20" />
+            <>
+              {/* Desktop/Tablet skeleton */}
+              <div className="hidden sm:grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(i => (
+                  <Card key={i}>
+                    <CardHeader>
+                      <Skeleton className="h-8 w-8 rounded mb-2" />
+                      <Skeleton className="h-6 w-3/4" />
+                      <Skeleton className="h-4 w-full mt-2" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex gap-2">
+                        <Skeleton className="h-5 w-16" />
+                        <Skeleton className="h-5 w-20" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+              {/* Mobile skeleton */}
+              <div className="sm:hidden space-y-2">
+                {[1, 2, 3, 4, 5].map(i => (
+                  <div key={i} className="p-4 border rounded-md">
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="h-10 w-10 rounded-md" />
+                      <div className="flex-1">
+                        <Skeleton className="h-5 w-3/4 mb-2" />
+                        <Skeleton className="h-4 w-1/2" />
+                      </div>
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                  </div>
+                ))}
+              </div>
+            </>
           ) : guideData && guideData.sections.length > 0 ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {guideData.sections.map(section => {
-                const Icon = getIcon(section.icon);
-                return (
-                  <Link key={section.id} href={`/guide/section/${section.slug}`}>
-                    <Card className="h-full hover-elevate cursor-pointer transition-all" data-testid={`card-section-${section.slug}`}>
-                      <CardHeader>
-                        <div className="flex items-start gap-3">
-                          <div className="p-2 bg-primary/10 rounded-md">
-                            <Icon className="h-5 w-5 text-primary" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-2">
-                              <CardTitle className="text-lg line-clamp-2">{section.title}</CardTitle>
-                              <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+            <>
+              {/* Desktop/Tablet: Grid layout */}
+              <div className="hidden sm:grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {guideData.sections.map(section => {
+                  const Icon = getIcon(section.icon);
+                  return (
+                    <Link key={section.id} href={`/guide/section/${section.slug}`}>
+                      <Card className="h-full hover-elevate cursor-pointer transition-all" data-testid={`card-section-${section.slug}`}>
+                        <CardHeader>
+                          <div className="flex items-start gap-3">
+                            <div className="p-2 bg-primary/10 rounded-md">
+                              <Icon className="h-5 w-5 text-primary" />
                             </div>
-                            {section.description && (
-                              <CardDescription className="line-clamp-2 mt-1">{section.description}</CardDescription>
-                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-2">
+                                <CardTitle className="text-lg line-clamp-2">{section.title}</CardTitle>
+                                <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                              </div>
+                              {section.description && (
+                                <CardDescription className="line-clamp-2 mt-1">{section.description}</CardDescription>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="flex flex-wrap gap-2">
-                          <Badge variant="secondary">
-                            Тем: {section.topicsCount}
-                          </Badge>
-                          <Badge variant="outline">
-                            Статей: {section.articlesCount}
-                          </Badge>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                );
-              })}
-            </div>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="flex flex-wrap gap-2">
+                            <Badge variant="secondary">
+                              Тем: {section.topicsCount}
+                            </Badge>
+                            <Badge variant="outline">
+                              Статей: {section.articlesCount}
+                            </Badge>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </Link>
+                  );
+                })}
+              </div>
+
+              {/* Mobile: Accordion layout */}
+              <div className="sm:hidden">
+                <Accordion type="single" collapsible className="space-y-2">
+                  {guideData.sections.map(section => {
+                    const Icon = getIcon(section.icon);
+                    return (
+                      <AccordionItem 
+                        key={section.id} 
+                        value={`section-${section.id}`}
+                        className="border rounded-md px-4 bg-card"
+                        data-testid={`accordion-section-${section.slug}`}
+                      >
+                        <AccordionTrigger className="hover:no-underline py-3">
+                          <div className="flex items-center gap-3 text-left">
+                            <div className="p-2 bg-primary/10 rounded-md flex-shrink-0">
+                              <Icon className="h-5 w-5 text-primary" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-medium text-base">{section.title}</div>
+                              <div className="flex items-center gap-2 mt-1">
+                                <Badge variant="secondary" className="text-xs">
+                                  {section.topicsCount} тем
+                                </Badge>
+                                <Badge variant="outline" className="text-xs">
+                                  {section.articlesCount} статей
+                                </Badge>
+                              </div>
+                            </div>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="pb-4">
+                          {section.description && (
+                            <p className="text-sm text-muted-foreground mb-4 pl-14">
+                              {section.description}
+                            </p>
+                          )}
+                          <div className="pl-14">
+                            <Button variant="default" size="sm" asChild>
+                              <Link href={`/guide/section/${section.slug}`}>
+                                Открыть раздел
+                                <ArrowRight className="ml-2 h-4 w-4" />
+                              </Link>
+                            </Button>
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    );
+                  })}
+                </Accordion>
+              </div>
+            </>
           ) : (
             <Card className="text-center py-12">
               <CardContent className="flex flex-col items-center gap-4">
