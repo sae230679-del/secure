@@ -39,6 +39,7 @@ import AdminCompanySettingsPage from "@/pages/admin-company-settings";
 import CriteriaPage from "@/pages/criteria";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
+import VerifyEmailPage from "@/pages/verify-email";
 import PrivacyPolicyPage from "@/pages/privacy-policy";
 import CookiesPolicyPage from "@/pages/cookies-policy";
 import UserAgreementPage from "@/pages/user-agreement";
@@ -214,6 +215,7 @@ function Router() {
       <Route path="/auth" component={AuthPage} />
       <Route path="/forgot-password" component={ForgotPasswordPage} />
       <Route path="/reset-password" component={ResetPasswordPage} />
+      <Route path="/verify-email" component={VerifyEmailPage} />
       <Route path="/criteria" component={CriteriaPage} />
       <Route path="/privacy-policy" component={PrivacyPolicyPage} />
       <Route path="/cookies-policy" component={CookiesPolicyPage} />

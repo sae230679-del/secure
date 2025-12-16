@@ -8,13 +8,13 @@ import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
-import { Shield, Loader2, Mail, User, Phone, KeyRound, ArrowLeft } from "lucide-react";
+import { apiRequest, ApiError } from "@/lib/queryClient";
+import { Shield, Loader2, Mail, User, Phone, KeyRound, ArrowLeft, CheckCircle, RefreshCw } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Link } from "wouter";
 
 type AuthMode = "login" | "register";
-type LoginStep = "credentials" | "otp";
+type LoginStep = "credentials" | "otp" | "email_not_verified" | "registration_pending";
 
 export default function AuthPage() {
   const [mode, setMode] = useState<AuthMode>("login");
@@ -39,6 +39,8 @@ export default function AuthPage() {
     pdnConsent: false,
     marketingConsent: false,
   });
+  const [pendingVerifyEmail, setPendingVerifyEmail] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   const loginMutation = useMutation({
     mutationFn: async (data: { email: string; password: string }) => {
@@ -63,11 +65,21 @@ export default function AuthPage() {
       }
     },
     onError: (error: Error) => {
-      toast({
-        title: "Ошибка входа",
-        description: error.message || "Неверный email или пароль.",
-        variant: "destructive",
-      });
+      const apiError = error as ApiError;
+      if (apiError.code === "EMAIL_NOT_VERIFIED") {
+        setPendingVerifyEmail(loginData.email);
+        setLoginStep("email_not_verified");
+        toast({
+          title: "Email не подтвержден",
+          description: "Проверьте почту для подтверждения.",
+        });
+      } else {
+        toast({
+          title: "Ошибка входа",
+          description: error.message || "Неверный email или пароль.",
+          variant: "destructive",
+        });
+      }
     },
   });
 
@@ -99,17 +111,47 @@ export default function AuthPage() {
       return response.json();
     },
     onSuccess: (data) => {
-      login(data.user);
-      toast({
-        title: "Регистрация успешна!",
-        description: "Ваш аккаунт создан.",
-      });
-      navigate("/dashboard");
+      if (data.emailVerificationRequired) {
+        setPendingVerifyEmail(registerData.email);
+        setLoginStep("registration_pending");
+        toast({
+          title: "Проверьте почту",
+          description: data.message || "Мы отправили письмо для подтверждения email.",
+        });
+      } else {
+        login(data.user);
+        toast({
+          title: "Регистрация успешна!",
+          description: "Ваш аккаунт создан.",
+        });
+        navigate("/dashboard");
+      }
     },
     onError: (error: Error) => {
       toast({
         title: "Ошибка регистрации",
         description: error.message || "Не удалось создать аккаунт.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const resendVerificationMutation = useMutation({
+    mutationFn: async (email: string) => {
+      const response = await apiRequest("POST", "/api/auth/resend-verification", { email });
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Письмо отправлено",
+        description: "Проверьте вашу почту для подтверждения.",
+      });
+      setResendCooldown(60);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Ошибка",
+        description: error.message || "Не удалось отправить письмо.",
         variant: "destructive",
       });
     },
@@ -128,6 +170,7 @@ export default function AuthPage() {
   const handleBackToCredentials = () => {
     setLoginStep("credentials");
     setOtpData({ userId: 0, code: "" });
+    setPendingVerifyEmail("");
   };
 
   const handleRegisterSubmit = (e: React.FormEvent) => {
@@ -135,7 +178,21 @@ export default function AuthPage() {
     registerMutation.mutate(registerData);
   };
 
-  const isLoading = loginMutation.isPending || registerMutation.isPending || verifyOtpMutation.isPending;
+  const handleResendVerification = () => {
+    if (pendingVerifyEmail && resendCooldown === 0) {
+      resendVerificationMutation.mutate(pendingVerifyEmail);
+    }
+  };
+
+  // Resend cooldown timer
+  useEffect(() => {
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendCooldown]);
+
+  const isLoading = loginMutation.isPending || registerMutation.isPending || verifyOtpMutation.isPending || resendVerificationMutation.isPending;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -151,24 +208,89 @@ export default function AuthPage() {
         </div>
 
         <Card>
-          <CardHeader>
-            <CardTitle>
-              {loginStep === "otp" 
-                ? "Подтверждение входа" 
-                : mode === "login" 
-                  ? "Вход в систему" 
-                  : "Регистрация"}
-            </CardTitle>
-            <CardDescription>
-              {loginStep === "otp"
-                ? "Введите код из письма"
-                : mode === "login"
-                  ? "Введите ваши данные для входа"
-                  : "Создайте аккаунт для начала работы"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loginStep === "otp" ? (
+          {(loginStep === "email_not_verified" || loginStep === "registration_pending") ? (
+            <CardContent className="pt-6">
+              <div className="text-center space-y-4">
+                {loginStep === "registration_pending" ? (
+                  <>
+                    <CheckCircle className="h-16 w-16 text-green-500 mx-auto" />
+                    <h2 className="text-xl font-semibold">Проверьте почту</h2>
+                    <p className="text-muted-foreground">
+                      Мы отправили письмо для подтверждения на <strong>{pendingVerifyEmail}</strong>
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Нажмите на ссылку в письме, чтобы активировать аккаунт.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <Mail className="h-16 w-16 text-amber-500 mx-auto" />
+                    <h2 className="text-xl font-semibold">Email не подтвержден</h2>
+                    <p className="text-muted-foreground">
+                      Для входа необходимо подтвердить email <strong>{pendingVerifyEmail}</strong>
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Проверьте почту или запросите новое письмо.
+                    </p>
+                  </>
+                )}
+                
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleResendVerification}
+                  disabled={isLoading || resendCooldown > 0}
+                  data-testid="button-resend-verification"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Отправка...
+                    </>
+                  ) : resendCooldown > 0 ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Повторить через {resendCooldown} сек
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Отправить письмо ещё раз
+                    </>
+                  )}
+                </Button>
+                
+                <Button
+                  variant="ghost"
+                  className="w-full"
+                  onClick={handleBackToCredentials}
+                  data-testid="button-back-to-login-from-verify"
+                >
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Назад к входу
+                </Button>
+              </div>
+            </CardContent>
+          ) : (
+            <>
+              <CardHeader>
+                <CardTitle>
+                  {loginStep === "otp" 
+                    ? "Подтверждение входа" 
+                    : mode === "login" 
+                      ? "Вход в систему" 
+                      : "Регистрация"}
+                </CardTitle>
+                <CardDescription>
+                  {loginStep === "otp"
+                    ? "Введите код из письма"
+                    : mode === "login"
+                      ? "Введите ваши данные для входа"
+                      : "Создайте аккаунт для начала работы"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loginStep === "otp" ? (
               <form onSubmit={handleOtpSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="otp-code">Код подтверждения</Label>
@@ -428,26 +550,28 @@ export default function AuthPage() {
             )}
 
             {loginStep !== "otp" && (
-              <div className="mt-6 text-center">
-                <button
-                  type="button"
-                  onClick={() => setMode(mode === "login" ? "register" : "login")}
-                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                  data-testid="button-toggle-auth-mode"
-                >
-                  {mode === "login" ? (
-                    <>
-                      Нет аккаунта? <span className="text-primary font-medium">Зарегистрируйтесь</span>
-                    </>
-                  ) : (
-                    <>
-                      Уже есть аккаунт? <span className="text-primary font-medium">Войдите</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
-          </CardContent>
+                  <div className="mt-6 text-center">
+                    <button
+                      type="button"
+                      onClick={() => setMode(mode === "login" ? "register" : "login")}
+                      className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                      data-testid="button-toggle-auth-mode"
+                    >
+                      {mode === "login" ? (
+                        <>
+                          Нет аккаунта? <span className="text-primary font-medium">Зарегистрируйтесь</span>
+                        </>
+                      ) : (
+                        <>
+                          Уже есть аккаунт? <span className="text-primary font-medium">Войдите</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </CardContent>
+            </>
+          )}
         </Card>
 
         <p className="text-center text-xs text-muted-foreground mt-6">
