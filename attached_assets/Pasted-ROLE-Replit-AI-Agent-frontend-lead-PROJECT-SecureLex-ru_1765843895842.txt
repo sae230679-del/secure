@@ -1,0 +1,147 @@
+ROLE: Replit AI Agent (frontend lead).
+PROJECT: SecureLex.ru (React + Vite + wouter/Router, shadcn/ui, существующие auth API).​
+GOAL: Сделать production‑UI для:
+
+Email verification (подтверждение email после регистрации)
+
+Password reset (ввод нового пароля по токену)
+
+Улучшения login/register UX под новые правила безопасности (emailVerified обязателен только для обычных users; admin/superadmin пропускают).​
+
+1) Страницы и роуты
+1.1 Verify Email page
+Создать страницу: client/src/pages/verify-email.tsx (или аналог по структуре проекта).​
+
+Поведение:
+
+Берёт token из query ?token=...
+
+Если token отсутствует → показать “Неверная ссылка” и кнопку “На главную/Войти”
+
+Если token есть → сразу вызвать backend:
+
+GET /api/auth/verify-email?token=...
+
+UI состояния:
+
+loading: “Подтверждаем email…”
+
+success: “Email подтверждён” + кнопка “Перейти в кабинет / Войти”
+
+error:
+
+token expired/invalid → “Ссылка истекла/недействительна” + кнопка “Отправить письмо ещё раз”
+
+Кнопка вызывает POST /api/auth/resend-verify-email (см. ниже, как именно)
+
+прочее → “Ошибка подтверждения” + краткое сообщение
+
+Важно:
+
+Никаких подробных причин, которые могут утечь злоумышленнику (кроме “истекло/недействительно”).
+
+Не логировать token в console.
+
+1.2 Reset Password page
+Создать страницу: client/src/pages/reset-password.tsx.​
+
+Поведение:
+
+Берёт token из query ?token=...
+
+Показывает форму:
+
+новый пароль
+
+повтор пароля
+
+Валидации:
+
+min length (например 10–12)
+
+совпадение паролей
+
+Submit вызывает:
+
+POST /api/auth/reset-password body { token, newPassword }
+
+UI состояния:
+
+success: “Пароль обновлён” + кнопка “Войти”
+
+error:
+
+token invalid/expired → “Ссылка истекла/недействительна” + кнопка “Запросить восстановление ещё раз” (ведёт на forgot-password форму/модал)
+
+rate limit → “Слишком много попыток, попробуйте позже”
+
+1.3 Forgot Password (форма запроса письма)
+Если отдельной страницы нет — создать минимальную:
+
+client/src/pages/forgot-password.tsx
+
+Поле email
+
+Submit: POST /api/auth/forgot-password body { email }
+
+Ответ всегда показывать одинаково: “Если аккаунт существует, письмо отправлено”.
+
+2) Login/Register UX под новые правила
+2.1 Register
+После успешной регистрации:
+
+показать экран “Проверьте почту, письмо отправлено”
+
+кнопка “Отправить письмо ещё раз”:
+
+вызывает POST /api/auth/resend-verify-email
+
+если эндпоинт требует авторизации и её ещё нет — сделай flow:
+
+пользователь вводит email+password повторно в “Resend verify” форме
+
+(или попросить backend вернуть временный registrationSession — но если этого нет, делай простую форму email+password для resend)
+
+Важно: если backend возвращает 503 “SMTP не настроен”, показать жёсткий текст “Регистрация временно недоступна”.
+
+2.2 Login
+Если POST /api/auth/login вернул { error: "EMAIL_NOT_VERIFIED" }:
+
+показать предупреждение “Email не подтверждён”
+
+показать кнопку “Отправить письмо ещё раз”
+
+дать ссылку “Изменить email/зарегистрироваться заново” (опционально)
+
+3) Интеграция в существующий роутинг/навигацию
+Добавить маршруты:
+
+/verify-email
+
+/reset-password
+
+/forgot-password
+
+В письмах backend ссылки должны вести на эти маршруты (убедись, что фронт‑пути совпадают).
+
+4) Безопасность фронта (обязательно)
+Никогда не писать token в логи/console.
+
+Любые ошибки — показывать без раскрытия “существует ли email”.
+
+Никаких автозапросов resend без действия пользователя (чтобы не спамить).
+
+5) Deliverables
+Список файлов, которые изменены/добавлены.
+
+Скрин/видео или описание ручного прогона:
+
+register → письмо → /verify-email?token=... success
+
+login без verify → блок + resend
+
+forgot → письмо → /reset-password?token=... success
+
+Подтверждение, что UI не раскрывает существование email и не логирует токены.
+
+END PROMPT.
