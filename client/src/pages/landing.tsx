@@ -20,13 +20,32 @@ import {
   Star,
   Zap,
   FileCode,
+  BookOpen,
+  ChevronRight,
+  Cookie,
+  ClipboardCheck,
+  Database,
+  Newspaper,
+  FolderOpen,
 } from "lucide-react";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { GuideSection } from "@shared/schema";
+
+type SectionWithCounts = GuideSection & { topicsCount: number; articlesCount: number };
+
+type GuideHomeData = {
+  sections: SectionWithCounts[];
+  totals: { topics: number; articles: number };
+};
+
+const iconMap: Record<string, typeof FileText> = {
+  FileText, Cookie, Shield, ClipboardCheck, Database, Users, Clock, Lock, Newspaper, FolderOpen, BookOpen
+};
+
+function getIcon(iconName: string | null) {
+  if (!iconName) return FolderOpen;
+  return iconMap[iconName] || FolderOpen;
+}
 
 type PublicSettings = {
   siteName: string;
@@ -58,6 +77,10 @@ export default function LandingPage() {
   
   const { data: publicSettings } = useQuery<PublicSettings>({
     queryKey: ["/api/settings/public"],
+  });
+
+  const { data: guideData, isLoading: guideLoading } = useQuery<GuideHomeData>({
+    queryKey: ["/api/guide/home"],
   });
 
   const contacts = publicSettings?.contacts;
@@ -102,25 +125,6 @@ export default function LandingPage() {
       icon: Users,
       title: "Экспертная поддержка",
       description: "Консультации юристов по вопросам compliance",
-    },
-  ];
-
-  const faq = [
-    {
-      q: "Какие законы проверяются?",
-      a: "Мы проверяем соответствие ФЗ-152 (защита персональных данных), ФЗ-149 (информация в интернете) и другим требованиям законодательства РФ.",
-    },
-    {
-      q: "Сколько времени занимает проверка?",
-      a: "В зависимости от типа сайта и выбранного пакета, проверка занимает от 15 минут до 4 часов для Premium Audit.",
-    },
-    {
-      q: "Что включено в отчет?",
-      a: "Краткий отчет показывает основные результаты. Полный отчет (900₽) включает детальный анализ, скриншоты, код для исправления и пошаговые инструкции.",
-    },
-    {
-      q: "Как оплатить проверку?",
-      a: "Мы принимаем оплату через ЮKassa: СБП (0% комиссия), SberPay, T-Pay, Mir Pay, ЮMoney и карты Мир. Для юридических лиц доступен СберБизнес.",
     },
   ];
 
@@ -473,21 +477,102 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="py-16">
-        <div className="max-w-3xl mx-auto px-4 sm:px-8 lg:px-12">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold mb-4">Часто задаваемые вопросы</h2>
+      <section className="py-16 bg-muted/30">
+        <div className="container mx-auto px-4 max-w-6xl">
+          <div className="text-center mb-8">
+            <div className="flex items-center justify-center gap-2 mb-4">
+              <BookOpen className="h-8 w-8 text-primary" />
+              <h2 className="text-3xl font-bold" data-testid="text-guide-section-title">Справочник</h2>
+            </div>
+            <p className="text-muted-foreground max-w-2xl mx-auto">
+              Статьи и материалы о законодательстве РФ в области персональных данных, требованиях к сайтам и практические рекомендации.
+            </p>
+            {guideData && (
+              <div className="flex items-center justify-center gap-4 mt-4 text-sm text-muted-foreground">
+                <span>Всего тем: {guideData.totals.topics}</span>
+                <span>Статей: {guideData.totals.articles}</span>
+              </div>
+            )}
           </div>
-          <Accordion type="single" collapsible className="w-full">
-            {faq.map((item, index) => (
-              <AccordionItem key={index} value={`item-${index}`}>
-                <AccordionTrigger className="text-left">{item.q}</AccordionTrigger>
-                <AccordionContent className="text-muted-foreground">
-                  {item.a}
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
+
+          {guideLoading ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(i => (
+                <Card key={i}>
+                  <CardHeader>
+                    <Skeleton className="h-8 w-8 rounded mb-2" />
+                    <Skeleton className="h-6 w-3/4" />
+                    <Skeleton className="h-4 w-full mt-2" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex gap-2">
+                      <Skeleton className="h-5 w-16" />
+                      <Skeleton className="h-5 w-20" />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : guideData && guideData.sections.length > 0 ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {guideData.sections.map(section => {
+                const Icon = getIcon(section.icon);
+                return (
+                  <Link key={section.id} href={`/guide/section/${section.slug}`}>
+                    <Card className="h-full hover-elevate cursor-pointer transition-all" data-testid={`card-section-${section.slug}`}>
+                      <CardHeader>
+                        <div className="flex items-start gap-3">
+                          <div className="p-2 bg-primary/10 rounded-md">
+                            <Icon className="h-5 w-5 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <CardTitle className="text-lg line-clamp-2">{section.title}</CardTitle>
+                              <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                            </div>
+                            {section.description && (
+                              <CardDescription className="line-clamp-2 mt-1">{section.description}</CardDescription>
+                            )}
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex flex-wrap gap-2">
+                          <Badge variant="secondary">
+                            Тем: {section.topicsCount}
+                          </Badge>
+                          <Badge variant="outline">
+                            Статей: {section.articlesCount}
+                          </Badge>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                );
+              })}
+            </div>
+          ) : (
+            <Card className="text-center py-12">
+              <CardContent className="flex flex-col items-center gap-4">
+                <BookOpen className="h-12 w-12 text-muted-foreground" />
+                <div>
+                  <h3 className="font-medium mb-1">Справочник пуст</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Разделы справочника пока не настроены
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="text-center mt-8">
+            <Button variant="outline" asChild>
+              <Link href="/guide">
+                Открыть справочник
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
         </div>
       </section>
 
