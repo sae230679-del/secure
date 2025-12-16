@@ -4213,5 +4213,220 @@ export async function registerRoutes(
     }
   });
 
+  // =====================================================
+  // Guide Справочник - Public API
+  // =====================================================
+  
+  // Get published articles (public)
+  app.get("/api/guide/articles", async (req, res) => {
+    try {
+      const articles = await storage.getGuideArticles("published");
+      res.json(articles);
+    } catch (error: any) {
+      console.error("[Guide] Error fetching articles:", error?.message);
+      res.status(500).json({ error: "Ошибка загрузки статей" });
+    }
+  });
+
+  // Get single article by slug (public)
+  app.get("/api/guide/articles/:slug", async (req, res) => {
+    try {
+      const { slug } = req.params;
+      const article = await storage.getGuideArticleBySlug(slug);
+      if (!article || article.status !== "published") {
+        return res.status(404).json({ error: "Статья не найдена" });
+      }
+      res.json(article);
+    } catch (error: any) {
+      console.error("[Guide] Error fetching article:", error?.message);
+      res.status(500).json({ error: "Ошибка загрузки статьи" });
+    }
+  });
+
+  // Get guide settings (public)
+  app.get("/api/guide/settings", async (req, res) => {
+    try {
+      const settings = await storage.getGuideSettings();
+      res.json(settings || { featuredSlugs: [], topicsOrder: [], enableIndexing: true });
+    } catch (error: any) {
+      console.error("[Guide] Error fetching settings:", error?.message);
+      res.status(500).json({ error: "Ошибка загрузки настроек" });
+    }
+  });
+
+  // Record analytics event (public)
+  app.post("/api/guide/event", async (req, res) => {
+    try {
+      const { visitorId, slug, mode, eventType, eventValue } = req.body;
+      if (!slug || !eventType) {
+        return res.status(400).json({ error: "Slug and eventType required" });
+      }
+      await storage.createGuideEvent({ visitorId, slug, mode, eventType, eventValue });
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("[Guide] Error recording event:", error?.message);
+      res.status(500).json({ error: "Ошибка записи события" });
+    }
+  });
+
+  // =====================================================
+  // Guide Справочник - Admin API
+  // =====================================================
+  
+  // Get all articles (admin)
+  app.get("/api/admin/guide/articles", requireAdmin, async (req, res) => {
+    try {
+      const status = req.query.status as string | undefined;
+      const articles = await storage.getGuideArticles(status);
+      res.json(articles);
+    } catch (error: any) {
+      console.error("[Guide Admin] Error fetching articles:", error?.message);
+      res.status(500).json({ error: "Ошибка загрузки статей" });
+    }
+  });
+
+  // Get single article by ID (admin)
+  app.get("/api/admin/guide/articles/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const article = await storage.getGuideArticleById(id);
+      if (!article) {
+        return res.status(404).json({ error: "Статья не найдена" });
+      }
+      res.json(article);
+    } catch (error: any) {
+      console.error("[Guide Admin] Error fetching article:", error?.message);
+      res.status(500).json({ error: "Ошибка загрузки статьи" });
+    }
+  });
+
+  // Create article (admin)
+  app.post("/api/admin/guide/articles", requireAdmin, async (req, res) => {
+    try {
+      const article = await storage.createGuideArticle(req.body);
+      res.json(article);
+    } catch (error: any) {
+      console.error("[Guide Admin] Error creating article:", error?.message);
+      res.status(500).json({ error: "Ошибка создания статьи" });
+    }
+  });
+
+  // Update article (admin)
+  app.patch("/api/admin/guide/articles/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const article = await storage.updateGuideArticle(id, req.body);
+      if (!article) {
+        return res.status(404).json({ error: "Статья не найдена" });
+      }
+      res.json(article);
+    } catch (error: any) {
+      console.error("[Guide Admin] Error updating article:", error?.message);
+      res.status(500).json({ error: "Ошибка обновления статьи" });
+    }
+  });
+
+  // Delete article (admin)
+  app.delete("/api/admin/guide/articles/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteGuideArticle(id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("[Guide Admin] Error deleting article:", error?.message);
+      res.status(500).json({ error: "Ошибка удаления статьи" });
+    }
+  });
+
+  // Publish article (admin)
+  app.post("/api/admin/guide/articles/:id/publish", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const article = await storage.publishGuideArticle(id);
+      if (!article) {
+        return res.status(404).json({ error: "Статья не найдена" });
+      }
+      res.json(article);
+    } catch (error: any) {
+      console.error("[Guide Admin] Error publishing article:", error?.message);
+      res.status(500).json({ error: "Ошибка публикации статьи" });
+    }
+  });
+
+  // Unpublish article (admin)
+  app.post("/api/admin/guide/articles/:id/unpublish", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const article = await storage.unpublishGuideArticle(id);
+      if (!article) {
+        return res.status(404).json({ error: "Статья не найдена" });
+      }
+      res.json(article);
+    } catch (error: any) {
+      console.error("[Guide Admin] Error unpublishing article:", error?.message);
+      res.status(500).json({ error: "Ошибка снятия с публикации" });
+    }
+  });
+
+  // Get guide stats (admin)
+  app.get("/api/admin/guide/stats", requireAdmin, async (req, res) => {
+    try {
+      const slug = req.query.slug as string | undefined;
+      const stats = await storage.getGuideStats(slug);
+      res.json(stats);
+    } catch (error: any) {
+      console.error("[Guide Admin] Error fetching stats:", error?.message);
+      res.status(500).json({ error: "Ошибка загрузки статистики" });
+    }
+  });
+
+  // Get guide settings (admin)
+  app.get("/api/admin/guide/settings", requireAdmin, async (req, res) => {
+    try {
+      const settings = await storage.getGuideSettings();
+      res.json(settings || { featuredSlugs: [], topicsOrder: [], enableIndexing: true });
+    } catch (error: any) {
+      console.error("[Guide Admin] Error fetching settings:", error?.message);
+      res.status(500).json({ error: "Ошибка загрузки настроек" });
+    }
+  });
+
+  // Update guide settings (admin)
+  app.patch("/api/admin/guide/settings", requireAdmin, async (req, res) => {
+    try {
+      const settings = await storage.updateGuideSettings(req.body);
+      res.json(settings);
+    } catch (error: any) {
+      console.error("[Guide Admin] Error updating settings:", error?.message);
+      res.status(500).json({ error: "Ошибка обновления настроек" });
+    }
+  });
+
+  // Import articles from markdown pack (admin)
+  app.post("/api/admin/guide/import", requireAdmin, async (req, res) => {
+    try {
+      const { articles } = req.body as { articles: any[] };
+      if (!Array.isArray(articles)) {
+        return res.status(400).json({ error: "Ожидается массив статей" });
+      }
+      const results: { success: number; failed: number; errors: string[] } = { success: 0, failed: 0, errors: [] };
+      
+      for (const articleData of articles) {
+        try {
+          await storage.createGuideArticle(articleData);
+          results.success++;
+        } catch (err: any) {
+          results.failed++;
+          results.errors.push(`${articleData.slug}: ${err.message}`);
+        }
+      }
+      
+      res.json(results);
+    } catch (error: any) {
+      console.error("[Guide Admin] Error importing articles:", error?.message);
+      res.status(500).json({ error: "Ошибка импорта статей" });
+    }
+  });
+
   return httpServer;
 }

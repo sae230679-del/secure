@@ -112,6 +112,23 @@ export interface IStorage {
   updatePublicAuditProgress(token: string, data: Partial<PublicAudit>): Promise<PublicAudit | undefined>;
   getRecentPublicAuditsByIp(ipAddress: string, hoursAgo?: number): Promise<PublicAudit[]>;
 
+  // Guide справочник
+  getGuideArticles(status?: string): Promise<schema.GuideArticle[]>;
+  getGuideArticleBySlug(slug: string): Promise<schema.GuideArticle | undefined>;
+  getGuideArticleById(id: number): Promise<schema.GuideArticle | undefined>;
+  createGuideArticle(data: schema.InsertGuideArticle): Promise<schema.GuideArticle>;
+  updateGuideArticle(id: number, data: Partial<schema.InsertGuideArticle>): Promise<schema.GuideArticle | undefined>;
+  deleteGuideArticle(id: number): Promise<boolean>;
+  publishGuideArticle(id: number): Promise<schema.GuideArticle | undefined>;
+  unpublishGuideArticle(id: number): Promise<schema.GuideArticle | undefined>;
+
+  createGuideEvent(data: schema.InsertGuideEvent): Promise<schema.GuideEvent>;
+  getGuideEventsBySlug(slug: string, limit?: number): Promise<schema.GuideEvent[]>;
+  getGuideStats(slug?: string): Promise<{ pageViews: number; readEnd: number; ctaClicks: number }>;
+
+  getGuideSettings(): Promise<schema.GuideSettings | undefined>;
+  updateGuideSettings(data: Partial<schema.GuideSettings>): Promise<schema.GuideSettings | undefined>;
+
   seedPackages(): Promise<void>;
 }
 
@@ -1703,6 +1720,140 @@ export class DatabaseStorage implements IStorage {
         registrationNumber: data.registrationNumber || null,
         registrationDate: data.registrationDate || null,
         isRegistered: data.isRegistered ?? false,
+      })
+      .returning();
+    return created;
+  }
+
+  // =====================================================
+  // Guide Methods
+  // =====================================================
+  async getGuideArticles(status?: string): Promise<schema.GuideArticle[]> {
+    if (status) {
+      return db
+        .select()
+        .from(schema.guideArticles)
+        .where(eq(schema.guideArticles.status, status as any))
+        .orderBy(desc(schema.guideArticles.publishedAt));
+    }
+    return db.select().from(schema.guideArticles).orderBy(desc(schema.guideArticles.createdAt));
+  }
+
+  async getGuideArticleBySlug(slug: string): Promise<schema.GuideArticle | undefined> {
+    const [article] = await db
+      .select()
+      .from(schema.guideArticles)
+      .where(eq(schema.guideArticles.slug, slug));
+    return article;
+  }
+
+  async getGuideArticleById(id: number): Promise<schema.GuideArticle | undefined> {
+    const [article] = await db
+      .select()
+      .from(schema.guideArticles)
+      .where(eq(schema.guideArticles.id, id));
+    return article;
+  }
+
+  async createGuideArticle(data: schema.InsertGuideArticle): Promise<schema.GuideArticle> {
+    const [article] = await db.insert(schema.guideArticles).values(data).returning();
+    return article;
+  }
+
+  async updateGuideArticle(id: number, data: Partial<schema.InsertGuideArticle>): Promise<schema.GuideArticle | undefined> {
+    const [article] = await db
+      .update(schema.guideArticles)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(schema.guideArticles.id, id))
+      .returning();
+    return article;
+  }
+
+  async deleteGuideArticle(id: number): Promise<boolean> {
+    const result = await db.delete(schema.guideArticles).where(eq(schema.guideArticles.id, id));
+    return true;
+  }
+
+  async publishGuideArticle(id: number): Promise<schema.GuideArticle | undefined> {
+    const [article] = await db
+      .update(schema.guideArticles)
+      .set({ status: "published", publishedAt: new Date(), updatedAt: new Date() })
+      .where(eq(schema.guideArticles.id, id))
+      .returning();
+    return article;
+  }
+
+  async unpublishGuideArticle(id: number): Promise<schema.GuideArticle | undefined> {
+    const [article] = await db
+      .update(schema.guideArticles)
+      .set({ status: "draft", publishedAt: null, updatedAt: new Date() })
+      .where(eq(schema.guideArticles.id, id))
+      .returning();
+    return article;
+  }
+
+  async createGuideEvent(data: schema.InsertGuideEvent): Promise<schema.GuideEvent> {
+    const [event] = await db.insert(schema.guideEvents).values(data).returning();
+    return event;
+  }
+
+  async getGuideEventsBySlug(slug: string, limit: number = 100): Promise<schema.GuideEvent[]> {
+    return db
+      .select()
+      .from(schema.guideEvents)
+      .where(eq(schema.guideEvents.slug, slug))
+      .orderBy(desc(schema.guideEvents.createdAt))
+      .limit(limit);
+  }
+
+  async getGuideStats(slug?: string): Promise<{ pageViews: number; readEnd: number; ctaClicks: number }> {
+    const baseQuery = slug 
+      ? and(eq(schema.guideEvents.slug, slug))
+      : undefined;
+
+    const [pageViewsResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.guideEvents)
+      .where(baseQuery ? and(baseQuery, eq(schema.guideEvents.eventType, "page_view")) : eq(schema.guideEvents.eventType, "page_view"));
+    
+    const [readEndResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.guideEvents)
+      .where(baseQuery ? and(baseQuery, eq(schema.guideEvents.eventType, "read_end")) : eq(schema.guideEvents.eventType, "read_end"));
+
+    const [ctaClicksResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.guideEvents)
+      .where(baseQuery ? and(baseQuery, eq(schema.guideEvents.eventType, "cta_click")) : eq(schema.guideEvents.eventType, "cta_click"));
+
+    return {
+      pageViews: Number(pageViewsResult?.count || 0),
+      readEnd: Number(readEndResult?.count || 0),
+      ctaClicks: Number(ctaClicksResult?.count || 0),
+    };
+  }
+
+  async getGuideSettings(): Promise<schema.GuideSettings | undefined> {
+    const [settings] = await db.select().from(schema.guideSettings).limit(1);
+    return settings;
+  }
+
+  async updateGuideSettings(data: Partial<schema.GuideSettings>): Promise<schema.GuideSettings | undefined> {
+    const existing = await this.getGuideSettings();
+    if (existing) {
+      const [updated] = await db
+        .update(schema.guideSettings)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(schema.guideSettings.id, existing.id))
+        .returning();
+      return updated;
+    }
+    const [created] = await db
+      .insert(schema.guideSettings)
+      .values({
+        featuredSlugs: data.featuredSlugs || [],
+        topicsOrder: data.topicsOrder || [],
+        enableIndexing: data.enableIndexing ?? true,
       })
       .returning();
     return created;
