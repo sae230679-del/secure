@@ -438,7 +438,7 @@ function buildRknCheck(html: string, url: string): RknCheckResult {
   };
 }
 
-async function fetchWebsite(urlString: string, timeout = 15000): Promise<WebsiteData> {
+export async function fetchWebsite(urlString: string, timeout = 15000): Promise<WebsiteData> {
   const startTime = Date.now();
   
   // Parse and validate URL first

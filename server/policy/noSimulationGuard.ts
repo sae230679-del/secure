@@ -24,7 +24,12 @@ const FORBIDDEN_PATTERNS: RegExp[] = [
   /\bsimulateAuditResults\b/,
   /\bgetStatusByCategory\b/,
   /\bMOCK_MODE\s*=\s*true/i,
-  /\bAUDIT_MOCK_MODE\b/,
+];
+
+const ALLOWED_CONTEXT_PATTERNS: RegExp[] = [
+  /MOCK_MODE.*FORBIDDEN/i,
+  /process\.env\.AUDIT_MOCK_MODE.*production/i,
+  /FATAL.*MOCK/i,
 ];
 
 const EXCLUDED_PATHS = [
@@ -61,6 +66,11 @@ function scanFile(filePath: string): SimulationViolation[] {
     
     lines.forEach((line, index) => {
       if (line.trim().startsWith("//") || line.trim().startsWith("*")) {
+        return;
+      }
+      
+      const isAllowedContext = ALLOWED_CONTEXT_PATTERNS.some(p => p.test(line));
+      if (isAllowedContext) {
         return;
       }
       

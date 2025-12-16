@@ -3981,5 +3981,144 @@ export async function registerRoutes(
     }
   });
 
+  // =====================================================
+  // Tools: WHOIS Lookup (Фаза D)
+  // =====================================================
+  app.post("/api/tools/whois-lookup", async (req, res) => {
+    try {
+      const { domain } = req.body as { domain: string };
+      
+      if (!domain || typeof domain !== "string") {
+        return res.status(400).json({ error: "Не указан домен" });
+      }
+      
+      const { checkDnsWhoisOwnership } = await import("./checks/dnsWhoisOwnership");
+      const result = await checkDnsWhoisOwnership(domain);
+      
+      res.json(result);
+    } catch (error: any) {
+      console.error("[WHOIS Lookup] Error:", error?.message || error);
+      res.status(500).json({ 
+        error: "Ошибка при проверке WHOIS",
+        status: "unavailable",
+        evidence: [],
+        limitations: [error?.message || "Неизвестная ошибка"]
+      });
+    }
+  });
+
+  // =====================================================
+  // Tools: Consent Generator (Фаза E)
+  // =====================================================
+  app.post("/api/tools/consent-generator", async (req, res) => {
+    try {
+      const { 
+        validateConsent152, 
+        generateConsentText, 
+        generateCheckboxHtml, 
+        generateConsentJs 
+      } = await import("./legal/consent152Validator");
+      
+      const input = req.body;
+      
+      if (!input.mode) {
+        input.mode = "website_checkbox";
+      }
+      
+      const validation = validateConsent152(input);
+      
+      if (!validation.isValid) {
+        return res.status(400).json({
+          success: false,
+          isValid: false,
+          issues: validation.issues,
+          message: "Обязательные поля не заполнены. Исправьте ошибки и повторите запрос.",
+        });
+      }
+      
+      const consentText = generateConsentText(input);
+      const checkboxHtml = input.mode === "website_checkbox" ? generateCheckboxHtml(input) : null;
+      const consentJs = input.mode === "website_checkbox" ? generateConsentJs() : null;
+      
+      res.json({
+        success: true,
+        isValid: true,
+        hasWarnings: validation.hasWarnings,
+        issues: validation.issues.filter(i => i.severity === "warn"),
+        consentText,
+        checkboxHtml,
+        consentJs,
+      });
+    } catch (error: any) {
+      console.error("[Consent Generator] Error:", error?.message || error);
+      res.status(500).json({ 
+        success: false,
+        error: "Ошибка при генерации согласия",
+        message: error?.message || "Неизвестная ошибка"
+      });
+    }
+  });
+
+  // =====================================================
+  // Tools: 149-FZ Check (Фаза F)
+  // =====================================================
+  app.post("/api/tools/info149-check", async (req, res) => {
+    try {
+      const { url } = req.body as { url: string };
+      
+      if (!url || typeof url !== "string") {
+        return res.status(400).json({ error: "Не указан URL сайта" });
+      }
+      
+      const { runInfo149Checks } = await import("./legal/info149Checks");
+      const { fetchWebsite } = await import("./audit-engine");
+      
+      const websiteData = await fetchWebsite(url);
+      
+      if (!websiteData.html || websiteData.error) {
+        return res.status(400).json({ 
+          error: websiteData.error || "Не удалось получить HTML страницы",
+          checks: [],
+          summary: { total: 0, ok: 0, warn: 0, fail: 0, na: 0 }
+        });
+      }
+      
+      const result = runInfo149Checks({ html: websiteData.html, url });
+      
+      res.json(result);
+    } catch (error: any) {
+      console.error("[149-FZ Check] Error:", error?.message || error);
+      res.status(500).json({ 
+        error: "Ошибка при проверке по 149-ФЗ",
+        message: error?.message || "Неизвестная ошибка"
+      });
+    }
+  });
+
+  // =====================================================
+  // Consent Event Recording (public, for JS snippet)
+  // =====================================================
+  app.post("/api/consent/record", async (req, res) => {
+    try {
+      const { timestamp, consentVersionHash, pageUrl, userAgent, screenResolution } = req.body;
+      
+      const ip = req.ip || req.socket.remoteAddress || null;
+      const maskedIp = ip ? ip.replace(/(\d+\.\d+)\.\d+\.\d+/, "$1.xxx.xxx") : null;
+      
+      console.log("[Consent Record] Recorded consent:", {
+        timestamp,
+        consentVersionHash,
+        pageUrl,
+        maskedIp,
+        screenResolution,
+      });
+      
+      res.json({ success: true, recorded: true });
+    } catch (error: any) {
+      console.error("[Consent Record] Error:", error?.message || error);
+      res.status(500).json({ success: false, error: "Failed to record consent" });
+    }
+  });
+
   return httpServer;
 }
