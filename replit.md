@@ -118,3 +118,23 @@ npm run start         # Start production server
 - `ALLOW_INSECURE_LOCALHOST_COOKIES` forbidden in production
 - `AUDIT_MOCK_MODE` forbidden in production
 - `SECRET_KEY` must remain stable to avoid invalidating outstanding email verification and password reset tokens
+- Registration is blocked (503) if SMTP is not configured - configure email settings in SuperAdmin panel first
+- Resend verification emails rate limited to 5 per hour per email address
+
+### Session Table Setup (Required for Production)
+After deploying to a new database, create the session table for `connect-pg-simple`:
+```sql
+CREATE TABLE IF NOT EXISTS "session" (
+  "sid" varchar NOT NULL,
+  "sess" json NOT NULL,
+  "expire" timestamp(6) NOT NULL,
+  CONSTRAINT "session_pkey" PRIMARY KEY ("sid")
+);
+CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");
+```
+
+### Auth Flow Summary
+- **Registration**: Requires SMTP → sends verification email → user lands on pending verification screen
+- **Email Verification**: Token valid 24h → auto-redirect to /auth?state=verified → toast shown
+- **Password Reset**: Public endpoint (3/hour limit) → token valid 1h → auto-redirect to /auth?state=password_reset
+- **Login**: Blocked if email not verified (code: EMAIL_NOT_VERIFIED) → resend option shown

@@ -61,9 +61,32 @@ function isUnsafeHost(hostname: string): boolean {
   return PRIVATE_IP_RANGES.some((re) => re.test(lower));
 }
 
+// Rate limiter for resend verification emails (max 5 per hour per email)
+const RESEND_RATE_LIMIT = 5;
+const RESEND_RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const resendAttempts = new Map<string, { count: number; windowStart: number }>();
+
+function checkResendRateLimit(email: string): { allowed: boolean; retryAfter?: number } {
+  const normalizedEmail = email.toLowerCase().trim();
+  const now = Date.now();
+  const record = resendAttempts.get(normalizedEmail);
+  
+  if (!record || now - record.windowStart > RESEND_RATE_WINDOW_MS) {
+    resendAttempts.set(normalizedEmail, { count: 1, windowStart: now });
+    return { allowed: true };
+  }
+  
+  if (record.count >= RESEND_RATE_LIMIT) {
+    const retryAfter = Math.ceil((record.windowStart + RESEND_RATE_WINDOW_MS - now) / 1000);
+    return { allowed: false, retryAfter };
+  }
+  
+  record.count++;
+  return { allowed: true };
+}
+
 function validateWebsiteUrl(rawUrl: string): string {
   const normalized = normalizeUrl(rawUrl);
-
   let url: URL;
   try {
     url = new URL(normalized);
@@ -173,6 +196,17 @@ export async function registerRoutes(
 
   app.post("/api/auth/register", async (req, res) => {
     try {
+      // Check if SMTP is configured before allowing registration
+      const emailConfigured = await isEmailConfigured();
+      if (!emailConfigured) {
+        console.log(`[AUTH] Registration blocked: SMTP not configured`);
+        return res.status(503).json({ 
+          error: "Регистрация временно недоступна. Email сервис не настроен.",
+          code: "SMTP_NOT_CONFIGURED",
+          message: "Регистрация временно недоступна. Email сервис не настроен."
+        });
+      }
+      
       const data = registerSchema.parse(req.body);
       
       const existingUser = await storage.getUserByEmail(data.email);
@@ -197,24 +231,19 @@ export async function registerRoutes(
         emailVerifyTokenExpiresAt: verifyExpiresAt,
       });
       
-      // Try to send verification email
-      const emailConfigured = await isEmailConfigured();
-      let emailSent = false;
+      // Send verification email (SMTP already verified at start of handler)
+      const siteUrl = process.env.SITE_URL || "https://securelex.ru";
+      const verifyLink = `${siteUrl}/verify-email?token=${verifyToken}`;
       
-      if (emailConfigured) {
-        const siteUrl = process.env.SITE_URL || "https://securelex.ru";
-        const verifyLink = `${siteUrl}/verify-email?token=${verifyToken}`;
-        
-        emailSent = await sendEmailVerificationEmail(user.email, {
-          userName: user.name,
-          verificationLink: verifyLink,
-        });
-        
-        if (emailSent) {
-          console.log(`[AUTH] Verification email sent to: ${user.email}`);
-        } else {
-          console.log(`[AUTH] Failed to send verification email to: ${user.email}`);
-        }
+      const emailSent = await sendEmailVerificationEmail(user.email, {
+        userName: user.name,
+        verificationLink: verifyLink,
+      });
+      
+      if (emailSent) {
+        console.log(`[AUTH] Verification email sent to: ${user.email}`);
+      } else {
+        console.log(`[AUTH] Failed to send verification email to: ${user.email}`);
       }
       
       // Set user ID in session
@@ -380,7 +409,19 @@ export async function registerRoutes(
       const { email } = req.body;
       
       if (!email || typeof email !== "string") {
-        return res.status(400).json({ error: "Email обязателен" });
+        return res.status(400).json({ error: "Email обязателен", code: "VALIDATION_ERROR", message: "Email обязателен" });
+      }
+      
+      // Check rate limit
+      const rateCheck = checkResendRateLimit(email);
+      if (!rateCheck.allowed) {
+        console.log(`[AUTH] Resend rate limited for: ${email}`);
+        return res.status(429).json({ 
+          error: "Слишком много запросов. Попробуйте позже.",
+          code: "RATE_LIMITED",
+          message: "Слишком много запросов. Попробуйте позже.",
+          retryAfter: rateCheck.retryAfter
+        });
       }
       
       console.log(`[AUTH] Resend verification request for: ${email}`);
