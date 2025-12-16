@@ -679,6 +679,44 @@ function checkSecurityHeaders(data: WebsiteData): AuditCheckResult[] {
     fixSteps: ["Добавить заголовок X-Content-Type-Options: nosniff"],
   });
 
+  const referrerPolicy = data.headers["referrer-policy"];
+  results.push({
+    id: "SEC-006",
+    checkId: "SEC_HEADERS_REFERRER_MISSING",
+    name: "Referrer-Policy",
+    category: "security",
+    status: referrerPolicy ? "passed" : "warning",
+    description: "Контроль передачи Referer заголовка",
+    details: referrerPolicy 
+      ? `Referrer-Policy настроен: ${referrerPolicy}`
+      : "Referrer-Policy не настроен - возможна утечка URL при переходах на внешние сайты",
+    evidence: referrerPolicy 
+      ? [`Заголовок referrer-policy: ${referrerPolicy}`]
+      : ["Заголовок referrer-policy отсутствует"],
+    lawBasis,
+    aggregationKey: "SEC_HEADERS",
+    fixSteps: ["Добавить заголовок Referrer-Policy: strict-origin-when-cross-origin"],
+  });
+
+  const permissionsPolicy = data.headers["permissions-policy"] || data.headers["feature-policy"];
+  results.push({
+    id: "SEC-007",
+    checkId: "SEC_HEADERS_PERMISSIONS_MISSING",
+    name: "Permissions-Policy",
+    category: "security",
+    status: permissionsPolicy ? "passed" : "warning",
+    description: "Политика разрешений браузера",
+    details: permissionsPolicy 
+      ? "Permissions-Policy настроен для контроля функций браузера"
+      : "Permissions-Policy не настроен - функции браузера (камера, геолокация) не ограничены",
+    evidence: permissionsPolicy 
+      ? [`Заголовок permissions-policy: ${permissionsPolicy.substring(0, 150)}...`]
+      : ["Заголовок permissions-policy отсутствует"],
+    lawBasis,
+    aggregationKey: "SEC_HEADERS",
+    fixSteps: ["Добавить заголовок Permissions-Policy для ограничения функций браузера"],
+  });
+
   return results;
 }
 
