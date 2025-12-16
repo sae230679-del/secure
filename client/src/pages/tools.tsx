@@ -46,12 +46,21 @@ import {
 } from "@/components/ui/select";
 
 type Tool = {
-  key: string;
+  id: number;
+  slug: string;
   name: string;
   description: string;
   price: number;
   isFree: boolean;
   enabled: boolean;
+  usageCount: number;
+  hasPaid: boolean;
+};
+
+type CatalogResponse = {
+  success: boolean;
+  serviceEnabled: boolean;
+  tools: Tool[];
 };
 
 type ToolResult = {
@@ -79,11 +88,12 @@ export default function ToolsPage() {
   const [toolResult, setToolResult] = useState<ToolResult | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  const { data: toolsData, isLoading } = useQuery<{ success: boolean; tools: Tool[] }>({
-    queryKey: ["/api/tools"],
+  const { data: catalogData, isLoading } = useQuery<CatalogResponse>({
+    queryKey: ["/api/tools/catalog"],
   });
 
-  const tools = toolsData?.tools || [];
+  const tools = catalogData?.tools || [];
+  const serviceEnabled = catalogData?.serviceEnabled ?? true;
 
   const executeMutation = useMutation({
     mutationFn: async ({ toolKey, params }: { toolKey: string; params: any }) => {
@@ -167,9 +177,9 @@ export default function ToolsPage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {tools.map((tool) => {
-              const Icon = toolIcons[tool.key] || Shield;
+              const Icon = toolIcons[tool.slug] || Shield;
               return (
-                <Card key={tool.key} className="flex flex-col" data-testid={`card-tool-${tool.key}`}>
+                <Card key={tool.slug} className="flex flex-col" data-testid={`card-tool-${tool.slug}`}>
                   <CardHeader className="pb-2">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-3">
@@ -193,7 +203,7 @@ export default function ToolsPage() {
                       className="w-full"
                       onClick={() => handleOpenTool(tool)}
                       disabled={!tool.enabled}
-                      data-testid={`button-use-tool-${tool.key}`}
+                      data-testid={`button-use-tool-${tool.slug}`}
                     >
                       {tool.enabled ? "Использовать" : "Недоступно"}
                     </Button>
@@ -211,7 +221,7 @@ export default function ToolsPage() {
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2">
                     {(() => {
-                      const Icon = toolIcons[selectedTool.key] || Shield;
+                      const Icon = toolIcons[selectedTool.slug] || Shield;
                       return <Icon className="h-5 w-5 text-primary" />;
                     })()}
                     {selectedTool.name}
@@ -221,7 +231,7 @@ export default function ToolsPage() {
                 
                 <ToolForm
                   tool={selectedTool}
-                  onSubmit={(params) => executeMutation.mutate({ toolKey: selectedTool.key, params })}
+                  onSubmit={(params) => executeMutation.mutate({ toolKey: selectedTool.slug, params })}
                   isLoading={executeMutation.isPending}
                   result={toolResult}
                   onCopy={copyToClipboard}
@@ -261,7 +271,7 @@ function ToolForm({
     return <ToolResultDisplay tool={tool} result={result} onCopy={onCopy} />;
   }
 
-  switch (tool.key) {
+  switch (tool.slug) {
     case "privacy-generator":
       return (
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -671,7 +681,7 @@ function ToolResultDisplay({
     );
   }
 
-  switch (tool.key) {
+  switch (tool.slug) {
     case "privacy-generator":
       const policyText = result.policy || "";
       return (
