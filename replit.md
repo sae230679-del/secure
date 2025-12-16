@@ -17,6 +17,7 @@ Preferred communication style: Simple, everyday language.
 - **Styling**: Tailwind CSS with shadcn/ui component library (New York style), Material Design 3 inspired
 - **Theming**: Comprehensive preset-based system with light/dark modes, 19 semantic color tokens, and SuperAdmin theme management.
 - **Express Audit Results UI**: `AuditResultsView` component (`client/src/components/audit/AuditResultsView.tsx`) displays BriefResults with score circle, stats summary (OK/Warn/Fail counts with icons), hosting info block, expandable highlights accordion, CTA for PDF download and full report purchase, and reset button.
+- **Full Audit Page**: Dedicated `/full-audit` route (`client/src/pages/full-audit.tsx`) for site type selection with expandable package grid, moved from landing page anchor for cleaner UX.
 
 ### Backend
 - **Runtime**: Node.js with Express.js
