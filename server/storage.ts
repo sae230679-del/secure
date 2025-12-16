@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { eq, desc, and, sql, gt } from "drizzle-orm";
+import { eq, desc, and, or, sql, gt } from "drizzle-orm";
 import * as schema from "@shared/schema";
 import crypto from "crypto";
 import type {
@@ -1597,6 +1597,62 @@ export class DatabaseStorage implements IStorage {
       .update(schema.toolConfigs)
       .set({ usageCount: sql`${schema.toolConfigs.usageCount} + 1` })
       .where(eq(schema.toolConfigs.toolKey, toolKey));
+  }
+
+  async getUserToolHistory(userId: number, limit = 50): Promise<schema.ToolUsage[]> {
+    return db
+      .select()
+      .from(schema.toolUsage)
+      .where(eq(schema.toolUsage.userId, userId))
+      .orderBy(desc(schema.toolUsage.createdAt))
+      .limit(limit);
+  }
+
+  async checkToolPayment(userId: number, toolKey: string): Promise<boolean> {
+    const tool = await this.getToolConfigByKey(toolKey);
+    if (!tool) return false;
+    if (tool.isFree) return true;
+
+    const [payment] = await db
+      .select()
+      .from(schema.payments)
+      .where(
+        and(
+          eq(schema.payments.userId, userId),
+          eq(schema.payments.serviceType, "tool"),
+          eq(schema.payments.toolId, tool.id),
+          or(
+            eq(schema.payments.status, "succeeded"),
+            eq(schema.payments.status, "paid")
+          )
+        )
+      )
+      .limit(1);
+    return !!payment;
+  }
+
+  async createToolPayment(userId: number, toolKey: string): Promise<schema.Payment | undefined> {
+    const tool = await this.getToolConfigByKey(toolKey);
+    if (!tool) return undefined;
+
+    const [payment] = await db
+      .insert(schema.payments)
+      .values({
+        userId,
+        serviceType: "tool",
+        toolId: tool.id,
+        amount: tool.price,
+        currency: "RUB",
+        status: "pending",
+        description: `Инструмент: ${tool.displayName}`,
+      })
+      .returning();
+    return payment;
+  }
+
+  async getToolsServiceEnabled(): Promise<boolean> {
+    const service = await this.getServiceConfigByKey("tools");
+    return service?.isEnabled ?? true;
   }
 
   // =====================================================

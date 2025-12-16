@@ -50,6 +50,238 @@ async function logToolUsage(record: ToolUsageRecord): Promise<void> {
   }
 }
 
+// Paywall guard middleware for paid tools
+async function toolPaywallGuard(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+  toolKey: string,
+  skipPaymentCheck = false
+): Promise<void> {
+  // 1. Check if tools service is enabled
+  const serviceEnabled = await storage.getToolsServiceEnabled();
+  if (!serviceEnabled) {
+    res.status(503).json({
+      success: false,
+      error: "Сервис инструментов временно недоступен",
+      code: "SERVICE_DISABLED",
+    });
+    return;
+  }
+
+  // 2. Check if tool is enabled
+  const tool = await storage.getToolConfigByKey(toolKey);
+  if (!tool) {
+    res.status(404).json({
+      success: false,
+      error: "Инструмент не найден",
+      code: "TOOL_NOT_FOUND",
+    });
+    return;
+  }
+
+  if (!tool.isEnabled) {
+    res.status(503).json({
+      success: false,
+      error: "Инструмент временно недоступен",
+      code: "TOOL_DISABLED",
+    });
+    return;
+  }
+
+  // 3. Skip payment check for free tools
+  if (tool.isFree || skipPaymentCheck) {
+    next();
+    return;
+  }
+
+  // 4. Check authentication
+  const userId = req.session.userId;
+  if (!userId) {
+    res.status(401).json({
+      success: false,
+      error: "Требуется авторизация",
+      code: "AUTH_REQUIRED",
+    });
+    return;
+  }
+
+  // 5. Check payment
+  const hasPaid = await storage.checkToolPayment(userId, toolKey);
+  if (!hasPaid) {
+    res.status(402).json({
+      success: false,
+      error: `Требуется оплата: ${tool.price}₽`,
+      code: "PAYMENT_REQUIRED",
+      price: tool.price,
+      toolKey: tool.toolKey,
+      toolName: tool.displayName,
+    });
+    return;
+  }
+
+  next();
+}
+
+// ============================================
+// Catalog endpoint - returns all tools with stats
+// ============================================
+toolsRouter.get("/catalog", async (req: Request, res: Response) => {
+  try {
+    const serviceEnabled = await storage.getToolsServiceEnabled();
+    if (!serviceEnabled) {
+      return res.status(503).json({
+        success: false,
+        error: "Сервис инструментов временно недоступен",
+        code: "SERVICE_DISABLED",
+      });
+    }
+
+    const tools = await storage.getAllToolConfigs();
+    const userId = req.session.userId;
+
+    const catalogItems = await Promise.all(
+      tools.map(async (t) => {
+        const hasPaid = userId ? await storage.checkToolPayment(userId, t.toolKey) : false;
+        return {
+          id: t.id,
+          slug: t.toolKey,
+          name: t.displayName,
+          description: t.description,
+          icon: t.toolKey,
+          price: t.price,
+          isFree: t.isFree,
+          enabled: t.isEnabled,
+          usageCount: t.usageCount,
+          hasPaid: hasPaid || t.isFree,
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      serviceEnabled: true,
+      tools: catalogItems,
+    });
+  } catch (error) {
+    console.error("[TOOLS] catalog error:", error);
+    res.status(500).json({ success: false, error: "Ошибка загрузки каталога" });
+  }
+});
+
+// ============================================
+// History endpoint - returns user's tool usage history
+// ============================================
+toolsRouter.get("/history", async (req: Request, res: Response) => {
+  try {
+    const userId = req.session.userId;
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: "Требуется авторизация",
+        code: "AUTH_REQUIRED",
+      });
+    }
+
+    const history = await storage.getUserToolHistory(userId);
+    
+    res.json({
+      success: true,
+      history: history.map((h) => ({
+        id: h.id,
+        toolKey: h.toolKey,
+        inputData: h.inputData,
+        outputData: h.outputData,
+        isPaid: h.isPaid,
+        createdAt: h.createdAt,
+      })),
+    });
+  } catch (error) {
+    console.error("[TOOLS] history error:", error);
+    res.status(500).json({ success: false, error: "Ошибка загрузки истории" });
+  }
+});
+
+// ============================================
+// Create payment for tool
+// ============================================
+toolsRouter.post("/payment/create", async (req: Request, res: Response) => {
+  try {
+    const userId = req.session.userId;
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: "Требуется авторизация",
+        code: "AUTH_REQUIRED",
+      });
+    }
+
+    const { toolKey } = z.object({ toolKey: z.string() }).parse(req.body);
+
+    const tool = await storage.getToolConfigByKey(toolKey);
+    if (!tool) {
+      return res.status(404).json({ success: false, error: "Инструмент не найден" });
+    }
+
+    if (tool.isFree) {
+      return res.json({ success: true, isFree: true, message: "Инструмент бесплатный" });
+    }
+
+    // Check if already paid
+    const hasPaid = await storage.checkToolPayment(userId, toolKey);
+    if (hasPaid) {
+      return res.json({ success: true, alreadyPaid: true, message: "Уже оплачено" });
+    }
+
+    const payment = await storage.createToolPayment(userId, toolKey);
+    if (!payment) {
+      return res.status(500).json({ success: false, error: "Ошибка создания платежа" });
+    }
+
+    res.json({
+      success: true,
+      payment: {
+        id: payment.id,
+        amount: payment.amount,
+        currency: payment.currency,
+        status: payment.status,
+        description: payment.description,
+      },
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, errors: error.errors });
+    }
+    console.error("[TOOLS] payment/create error:", error);
+    res.status(500).json({ success: false, error: "Ошибка создания платежа" });
+  }
+});
+
+// ============================================
+// Simulate payment success (for testing)
+// ============================================
+toolsRouter.post("/payment/simulate-success", async (req: Request, res: Response) => {
+  if (process.env.NODE_ENV === "production") {
+    return res.status(403).json({ success: false, error: "Недоступно в production" });
+  }
+
+  try {
+    const userId = req.session.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: "Требуется авторизация" });
+    }
+
+    const { paymentId } = z.object({ paymentId: z.number() }).parse(req.body);
+    
+    await storage.updatePaymentStatus(paymentId, "succeeded");
+    
+    res.json({ success: true, message: "Платёж подтверждён (тест)" });
+  } catch (error) {
+    console.error("[TOOLS] payment/simulate-success error:", error);
+    res.status(500).json({ success: false, error: "Ошибка" });
+  }
+});
+
 function normalizeUrl(input: string): string {
   let url = input.trim().toLowerCase();
   if (!url.startsWith("http://") && !url.startsWith("https://")) {

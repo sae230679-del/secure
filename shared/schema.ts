@@ -107,6 +107,8 @@ export const payments = pgTable("payments", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").references(() => users.id).notNull(),
   auditId: integer("audit_id").references(() => audits.id),
+  serviceType: varchar("service_type", { length: 50 }).default("audit"),
+  toolId: integer("tool_id"),
   amount: integer("amount").notNull(),
   currency: varchar("currency", { length: 3 }).default("RUB").notNull(),
   yandexPaymentId: varchar("yandex_payment_id", { length: 255 }),
