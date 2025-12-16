@@ -98,7 +98,7 @@ if (!isTest) {
 const sessionStore = new PgSession({
   pool,
   tableName: "session",
-  createTableIfMissing: false,
+  createTableIfMissing: true,
   errorLog: isTest ? () => {} : (err) => console.error('[SESSION STORE ERROR]', err),
 });
 
