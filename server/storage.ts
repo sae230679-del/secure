@@ -1,6 +1,7 @@
 import { db } from "./db";
 import { eq, desc, and, sql, gt } from "drizzle-orm";
 import * as schema from "@shared/schema";
+import crypto from "crypto";
 import type {
   User,
   AuditPackage,
@@ -1349,7 +1350,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async anonymizeUser(userId: number): Promise<void> {
-    const randomHash = require("crypto").randomBytes(16).toString("hex");
+    const randomHash = crypto.randomBytes(16).toString("hex");
     await db
       .update(schema.users)
       .set({
@@ -1411,7 +1412,6 @@ export class DatabaseStorage implements IStorage {
         oldestEvent = events[0].createdAt;
       }
     } else {
-      const crypto = require("crypto");
       const anonHash = crypto.createHash("sha256").update(`${ip}|${userAgent}`).digest("hex");
       const events = await db
         .select()
@@ -1450,7 +1450,6 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Record the event
-    const crypto = require("crypto");
     const anonHash = crypto.createHash("sha256").update(`${ip}|${userAgent}`).digest("hex");
 
     await db.insert(schema.freeExpressLimitEvents).values({
