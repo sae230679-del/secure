@@ -16,6 +16,7 @@ Preferred communication style: Simple, everyday language.
 - **State Management**: TanStack React Query for server state, React Context for auth and theme
 - **Styling**: Tailwind CSS with shadcn/ui component library (New York style), Material Design 3 inspired
 - **Theming**: Comprehensive preset-based system with light/dark modes, 19 semantic color tokens, and SuperAdmin theme management.
+- **Express Audit Results UI**: `AuditResultsView` component (`client/src/components/audit/AuditResultsView.tsx`) displays BriefResults with score circle, stats summary (OK/Warn/Fail counts with icons), hosting info block, expandable highlights accordion, CTA for PDF download and full report purchase, and reset button.
 
 ### Backend
 - **Runtime**: Node.js with Express.js

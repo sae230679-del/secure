@@ -485,6 +485,7 @@ export function ExpressCheck() {
               isExpress={true}
               onDownloadPdf={handleDownloadPdf}
               onPurchaseFullReport={handlePurchaseReport}
+              onReset={resetCheck}
               isDownloading={isDownloading}
               isPurchasing={isPurchasing}
             />

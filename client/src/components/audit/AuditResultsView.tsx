@@ -26,6 +26,10 @@ import {
   Loader2,
   Shield,
   Info,
+  MapPin,
+  RefreshCw,
+  ChevronRight,
+  Scale,
 } from "lucide-react";
 import type { BriefResults, HostingInfo, BriefHighlight } from "@shared/schema";
 
@@ -34,6 +38,7 @@ interface AuditResultsViewProps {
   isExpress?: boolean;
   onDownloadPdf?: () => void;
   onPurchaseFullReport?: () => void;
+  onReset?: () => void;
   isDownloading?: boolean;
   isPurchasing?: boolean;
 }
@@ -84,11 +89,26 @@ function getHostingStatusDisplay(status: string) {
   switch (status) {
     case "ru":
     case "russian":
-      return { icon: "🇷🇺", label: "Россия", color: "text-emerald-600" };
+      return { 
+        icon: <MapPin className="w-5 h-5 text-emerald-500" />, 
+        label: "Россия", 
+        color: "text-emerald-600",
+        bgColor: "bg-emerald-500/10"
+      };
     case "foreign":
-      return { icon: "🌍", label: "Зарубежный", color: "text-amber-600" };
+      return { 
+        icon: <Globe className="w-5 h-5 text-amber-500" />, 
+        label: "Зарубежный", 
+        color: "text-amber-600",
+        bgColor: "bg-amber-500/10"
+      };
     default:
-      return { icon: "❓", label: "Не определено", color: "text-muted-foreground" };
+      return { 
+        icon: <HelpCircle className="w-5 h-5 text-muted-foreground" />, 
+        label: "Не определено", 
+        color: "text-muted-foreground",
+        bgColor: "bg-muted/30"
+      };
   }
 }
 
@@ -131,51 +151,74 @@ function ScoreCircle({ percent, severity }: { percent: number; severity: string 
   );
 }
 
+function StatsSummary({ totals }: { totals: { checks: number; ok: number; warn: number; fail: number; na: number } }) {
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      <div className="flex items-center justify-center gap-1.5 p-2 rounded-md bg-emerald-500/10">
+        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+        <span className="font-semibold text-emerald-600">{totals.ok}</span>
+        <span className="text-xs text-muted-foreground hidden sm:inline">OK</span>
+      </div>
+      <div className="flex items-center justify-center gap-1.5 p-2 rounded-md bg-amber-500/10">
+        <AlertTriangle className="w-4 h-4 text-amber-500" />
+        <span className="font-semibold text-amber-600">{totals.warn}</span>
+        <span className="text-xs text-muted-foreground hidden sm:inline">Внимание</span>
+      </div>
+      <div className="flex items-center justify-center gap-1.5 p-2 rounded-md bg-rose-500/10">
+        <XCircle className="w-4 h-4 text-rose-500" />
+        <span className="font-semibold text-rose-600">{totals.fail}</span>
+        <span className="text-xs text-muted-foreground hidden sm:inline">Ошибки</span>
+      </div>
+    </div>
+  );
+}
+
 function HostingInfoBlock({ hosting }: { hosting: HostingInfo }) {
   const statusDisplay = getHostingStatusDisplay(hosting.status);
   const needsVerification = hosting.confidence < 0.8;
 
   return (
-    <Card className="bg-muted/30">
-      <CardHeader className="pb-2 pt-4">
-        <CardTitle className="text-sm flex items-center gap-2">
-          <Server className="w-4 h-4" />
-          Размещение сервера
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        <div className="flex items-center gap-2">
-          <span className="text-xl">{statusDisplay.icon}</span>
-          <span className={`font-medium ${statusDisplay.color}`}>
-            {statusDisplay.label}
-          </span>
-          {needsVerification && (
-            <Tooltip>
-              <TooltipTrigger>
-                <Info className="w-4 h-4 text-amber-500" />
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="text-xs max-w-xs">
-                  Уровень уверенности: {Math.round(hosting.confidence * 100)}%.
-                  Рекомендуется дополнительная проверка.
-                </p>
-              </TooltipContent>
-            </Tooltip>
-          )}
+    <div className={`rounded-lg p-4 ${statusDisplay.bgColor} border`}>
+      <div className="flex items-center gap-3">
+        <div className="shrink-0">
+          {statusDisplay.icon}
         </div>
-        {hosting.providerGuess && (
-          <p className="text-sm text-muted-foreground">
-            Провайдер: <span className="font-medium">{hosting.providerGuess}</span>
-          </p>
-        )}
-        {hosting.ips && hosting.ips.length > 0 && (
-          <p className="text-xs text-muted-foreground font-mono">
-            IP: {hosting.ips.slice(0, 2).join(", ")}
-            {hosting.ips.length > 2 && ` +${hosting.ips.length - 2}`}
-          </p>
-        )}
-      </CardContent>
-    </Card>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className={`font-semibold ${statusDisplay.color}`}>
+              Хостинг: {statusDisplay.label}
+            </span>
+            {needsVerification && (
+              <Tooltip>
+                <TooltipTrigger>
+                  <Info className="w-4 h-4 text-amber-500" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs max-w-xs">
+                    Уровень уверенности: {Math.round(hosting.confidence * 100)}%.
+                    Рекомендуется дополнительная проверка.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+          <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground mt-1">
+            {hosting.providerGuess && (
+              <span>
+                <Server className="w-3 h-3 inline mr-1" />
+                {hosting.providerGuess}
+              </span>
+            )}
+            {hosting.ips && hosting.ips.length > 0 && (
+              <span className="font-mono">
+                {hosting.ips.slice(0, 2).join(", ")}
+                {hosting.ips.length > 2 && ` +${hosting.ips.length - 2}`}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -332,33 +375,33 @@ export function AuditResultsView({
   isExpress = true,
   onDownloadPdf,
   onPurchaseFullReport,
+  onReset,
   isDownloading,
   isPurchasing,
 }: AuditResultsViewProps) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-5" data-testid="express-results-view">
       <div className="text-center">
-        <h2 className="text-lg font-semibold mb-1">
-          {isExpress ? "Результаты экспресс-аудита" : "Результаты аудита"}
-        </h2>
-        <p className="text-sm text-muted-foreground">
+        <div className="flex items-center justify-center gap-2 mb-1">
+          <Shield className="w-5 h-5 text-primary" />
+          <h2 className="text-lg font-semibold">
+            {isExpress ? "Результаты экспресс-аудита" : "Результаты аудита"}
+          </h2>
+        </div>
+        <p className="text-sm text-muted-foreground" data-testid="text-audited-domain">
           {results.site.domain}
         </p>
       </div>
 
-      <div className="flex flex-col items-center gap-3">
+      <div className="flex flex-col items-center gap-4">
         <ScoreCircle
           percent={results.score.percent}
           severity={results.score.severity}
         />
-        <div className="flex items-center gap-2">
-          {getSeverityBadge(results.score.severity)}
-          <span className="text-sm text-muted-foreground">
-            {results.score.totals.ok} пройдено, {results.score.totals.warn}{" "}
-            предупреждений, {results.score.totals.fail} нарушений
-          </span>
-        </div>
+        {getSeverityBadge(results.score.severity)}
       </div>
+
+      <StatsSummary totals={results.score.totals} />
 
       <HostingInfoBlock hosting={results.hosting} />
 
@@ -372,6 +415,21 @@ export function AuditResultsView({
           isDownloading={isDownloading}
           isPurchasing={isPurchasing}
         />
+      )}
+
+      {onReset && (
+        <div className="pt-2 border-t">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onReset}
+            className="w-full text-muted-foreground"
+            data-testid="button-new-check"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Проверить другой сайт
+          </Button>
+        </div>
       )}
     </div>
   );
