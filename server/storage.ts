@@ -1070,30 +1070,41 @@ export class DatabaseStorage implements IStorage {
     // Check if user with this email already exists
     const existingUser = await this.getUserByEmail(email);
     if (existingUser) {
-      if (existingUser.role === "superadmin") {
+      if (existingUser.role === "superadmin" && existingUser.isMasterAdmin) {
         console.log("[storage] SuperAdmin already exists");
-        return;
+      } else {
+        // Promote existing user to superadmin with master admin flag
+        await db
+          .update(schema.users)
+          .set({ role: "superadmin", isMasterAdmin: true })
+          .where(eq(schema.users.id, existingUser.id));
+        console.log(`[storage] Promoted existing user ${email} to superadmin`);
       }
-      // Promote existing user to superadmin
+    } else {
+      // Create new superadmin user
+      const passwordHash = await hash(password, 10);
       await db
-        .update(schema.users)
-        .set({ role: "superadmin" })
-        .where(eq(schema.users.id, existingUser.id));
-      console.log(`[storage] Promoted existing user ${email} to superadmin`);
-      return;
+        .insert(schema.users)
+        .values({
+          name,
+          email: email.toLowerCase(),
+          passwordHash,
+          role: "superadmin",
+          isMasterAdmin: true,
+        });
+      console.log(`[storage] Created superadmin user: ${email}`);
     }
 
-    // Create new superadmin user
-    const passwordHash = await hash(password, 10);
-    await db
-      .insert(schema.users)
-      .values({
-        name,
-        email: email.toLowerCase(),
-        passwordHash,
-        role: "superadmin",
-      });
-    console.log(`[storage] Created superadmin user: ${email}`);
+    // Also ensure the master admin email is superadmin (hardcoded for security)
+    const masterEmail = "sae230679@yandex.ru";
+    const masterUser = await this.getUserByEmail(masterEmail);
+    if (masterUser && (masterUser.role !== "superadmin" || !masterUser.isMasterAdmin)) {
+      await db
+        .update(schema.users)
+        .set({ role: "superadmin", isMasterAdmin: true })
+        .where(eq(schema.users.id, masterUser.id));
+      console.log(`[storage] Ensured master admin access for ${masterEmail}`);
+    }
   }
 
   async createPasswordResetToken(userId: number, token: string, expiresAt: Date): Promise<schema.PasswordResetToken> {
