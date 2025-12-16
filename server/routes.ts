@@ -62,6 +62,14 @@ function isUnsafeHost(hostname: string): boolean {
   return PRIVATE_IP_RANGES.some((re) => re.test(lower));
 }
 
+// 152-ФЗ compliance: mask PII in logs
+function maskEmail(email: string): string {
+  const [local, domain] = email.split("@");
+  if (!domain) return "***";
+  const maskedLocal = local.length > 2 ? local[0] + "***" + local.slice(-1) : "***";
+  return `${maskedLocal}@${domain}`;
+}
+
 // Rate limiter for resend verification emails (max 5 per hour per email)
 const RESEND_RATE_LIMIT = 5;
 const RESEND_RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
@@ -148,9 +156,7 @@ const PASSWORD_RESET_MAX_ATTEMPTS = 3;
 const PASSWORD_RESET_WINDOW_MS = 60 * 60 * 1000; // 1 hour window for rate limiting
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
-  console.log(`[AUTH] requireAuth check - path: ${req.path}, userId: ${req.session.userId}, sessionID: ${req.sessionID}`);
   if (!req.session.userId) {
-    console.log(`[AUTH] Unauthorized - no userId in session for path: ${req.path}`);
     return res.status(401).json({ error: "Unauthorized" });
   }
   next();
