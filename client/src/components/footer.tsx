@@ -219,6 +219,11 @@ export function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/guide" className="hover:text-foreground transition-colors" data-testid="link-footer-guide">
+                  Справочник
+                </Link>
+              </li>
+              <li>
                 <Link href="/privacy-policy" className="hover:text-foreground transition-colors" data-testid="link-footer-privacy-policy">
                   Политика конфиденциальности
                 </Link>
