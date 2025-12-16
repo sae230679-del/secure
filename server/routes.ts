@@ -18,6 +18,7 @@ import fs from "fs";
 import { runExpressAudit, runAudit, checkWebsiteExists, runDebugAudit } from "./audit-engine";
 import { generatePdfReport } from "./pdf-generator";
 import { toolsRouter } from "./tools-routes";
+import { maskEmail } from "./utils/pii";
 
 // GUARD: Mock mode forbidden in production
 if (process.env.AUDIT_MOCK_MODE === "true" && process.env.NODE_ENV === "production") {
@@ -60,14 +61,6 @@ function isUnsafeHost(hostname: string): boolean {
   const ipv4Match = lower.match(/^(\d{1,3}\.){3}\d{1,3}$/);
   if (!ipv4Match) return false;
   return PRIVATE_IP_RANGES.some((re) => re.test(lower));
-}
-
-// 152-ФЗ compliance: mask PII in logs
-function maskEmail(email: string): string {
-  const [local, domain] = email.split("@");
-  if (!domain) return "***";
-  const maskedLocal = local.length > 2 ? local[0] + "***" + local.slice(-1) : "***";
-  return `${maskedLocal}@${domain}`;
 }
 
 // Rate limiter for resend verification emails (max 5 per hour per email)
@@ -251,9 +244,9 @@ export async function registerRoutes(
       });
       
       if (emailSent) {
-        console.log(`[AUTH] Verification email sent to: ${user.email}`);
+        console.log(`[AUTH] Verification email sent to: ${maskEmail(user.email)}`);
       } else {
-        console.log(`[AUTH] Failed to send verification email to: ${user.email}`);
+        console.log(`[AUTH] Failed to send verification email`);
       }
       
       // Set user ID in session
@@ -288,11 +281,9 @@ export async function registerRoutes(
     try {
       const data = loginSchema.parse(req.body);
       
-      console.log(`[AUTH] Login attempt for email: ${data.email}`);
-      
       const existingUser = await storage.getUserByEmail(data.email);
       if (!existingUser) {
-        console.log(`[AUTH] User not found: ${data.email}`);
+        console.log(`[AUTH] User not found`);
         return res.status(401).json({ 
           error: "Неверный email или пароль",
           code: "INVALID_CREDENTIALS",
@@ -302,7 +293,7 @@ export async function registerRoutes(
       
       const user = await (storage as any).validatePassword(data.email, data.password);
       if (!user) {
-        console.log(`[AUTH] Invalid password for: ${data.email}`);
+        console.log(`[AUTH] Invalid password`);
         return res.status(401).json({ 
           error: "Неверный email или пароль",
           code: "INVALID_CREDENTIALS",
@@ -310,14 +301,14 @@ export async function registerRoutes(
         });
       }
       
-      console.log(`[AUTH] Password validated for: ${data.email}, userId: ${user.id}, role: ${user.role}`);
+      console.log(`[AUTH] Password validated for userId: ${user.id}`);
       
       // Admin and superadmin skip email verification requirement
       const isPrivileged = user.role === "admin" || user.role === "superadmin";
       
       // Check email verification status for regular users
       if (!isPrivileged && !user.emailVerifiedAt) {
-        console.log(`[AUTH] Email not verified for: ${data.email}`);
+        console.log(`[AUTH] Email not verified`);
         return res.status(403).json({ 
           error: "Email не подтвержден",
           code: "EMAIL_NOT_VERIFIED",
@@ -326,7 +317,7 @@ export async function registerRoutes(
       }
       
       // Login directly
-      console.log(`[AUTH] Login successful for: ${data.email}, userId: ${user.id}`);
+      console.log(`[AUTH] Login successful for userId: ${user.id}`);
       req.session.userId = user.id;
       
       req.session.save((saveErr) => {
@@ -388,13 +379,13 @@ export async function registerRoutes(
       
       // Check if already verified
       if (matchedUser.emailVerifiedAt) {
-        console.log(`[AUTH] Email already verified for: ${matchedUser.email}`);
+        console.log(`[AUTH] Email already verified`);
         return res.json({ success: true, message: "Email уже подтвержден", alreadyVerified: true });
       }
       
       // Check expiration
       if (matchedUser.emailVerifyTokenExpiresAt && new Date() > new Date(matchedUser.emailVerifyTokenExpiresAt)) {
-        console.log(`[AUTH] Email verification token expired for: ${matchedUser.email}`);
+        console.log(`[AUTH] Email verification token expired`);
         return res.status(400).json({ error: "Ссылка истекла. Запросите повторную отправку.", code: "TOKEN_EXPIRED" });
       }
       
@@ -405,7 +396,7 @@ export async function registerRoutes(
         emailVerifyTokenExpiresAt: null,
       });
       
-      console.log(`[AUTH] Email verified successfully for: ${matchedUser.email}`);
+      console.log(`[AUTH] Email verified successfully`);
       
       res.json({ success: true, message: "Email успешно подтвержден" });
     } catch (error) {
@@ -425,7 +416,7 @@ export async function registerRoutes(
       // Check rate limit
       const rateCheck = checkResendRateLimit(email);
       if (!rateCheck.allowed) {
-        console.log(`[AUTH] Resend rate limited for: ${email}`);
+        console.log(`[AUTH] Resend rate limited`);
         return res.status(429).json({ 
           error: "Слишком много запросов. Попробуйте позже.",
           code: "RATE_LIMITED",
@@ -434,7 +425,7 @@ export async function registerRoutes(
         });
       }
       
-      console.log(`[AUTH] Resend verification request for: ${email}`);
+      console.log(`[AUTH] Resend verification request`);
       
       const user = await storage.getUserByEmail(email);
       
@@ -475,9 +466,9 @@ export async function registerRoutes(
       });
       
       if (emailSent) {
-        console.log(`[AUTH] Verification email resent to: ${user.email}`);
+        console.log(`[AUTH] Verification email resent`);
       } else {
-        console.log(`[AUTH] Failed to resend verification email to: ${user.email}`);
+        console.log(`[AUTH] Failed to resend verification email`);
       }
       
       res.json({ success: true, message: "Если email зарегистрирован, письмо будет отправлено" });
@@ -543,7 +534,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Email обязателен" });
       }
       
-      console.log(`[AUTH] Password reset request for: ${email}`);
+      console.log(`[AUTH] Password reset request`);
 
       const user = await storage.getUserByEmail(email);
       
@@ -555,7 +546,7 @@ export async function registerRoutes(
       
       // Admin/superadmin cannot use public password reset - must go through SuperAdmin
       if (user.role === "admin" || user.role === "superadmin") {
-        console.log(`[AUTH] Password reset: privileged user ${user.email} must use SuperAdmin reset`);
+        console.log(`[AUTH] Password reset: privileged user must use SuperAdmin reset`);
         return res.json({ success: true, message: "Если email существует, вы получите письмо с инструкциями" });
       }
       
@@ -571,7 +562,7 @@ export async function registerRoutes(
       }
       
       if (currentAttempts >= PASSWORD_RESET_MAX_ATTEMPTS) {
-        console.log(`[AUTH] Password reset rate limited for: ${email}`);
+        console.log(`[AUTH] Password reset rate limited`);
         return res.status(429).json({ 
           error: "Слишком много запросов. Попробуйте через час.",
           code: "RATE_LIMITED"
@@ -604,9 +595,9 @@ export async function registerRoutes(
       const emailSent = await sendPasswordResetEmail(user.email, resetLink, user.name);
       
       if (emailSent) {
-        console.log(`[AUTH] Password reset email sent to: ${email}`);
+        console.log(`[AUTH] Password reset email sent`);
       } else {
-        console.log(`[AUTH] Failed to send password reset email to: ${email}`);
+        console.log(`[AUTH] Failed to send password reset email`);
       }
       
       res.json({ success: true, message: "Если email существует, вы получите письмо с инструкциями" });
@@ -666,7 +657,7 @@ export async function registerRoutes(
         passwordResetAttempts: 0,
       });
 
-      console.log(`[AUTH] Password reset successful for: ${matchedUser.email}`);
+      console.log(`[AUTH] Password reset successful`);
       res.json({ success: true, message: "Пароль успешно изменен" });
     } catch (error) {
       console.error("[AUTH] Reset password error:", error);
@@ -3602,7 +3593,7 @@ export async function registerRoutes(
         });
       }
       
-      console.log(`[ADMIN] Password reset initiated for ${targetUser.role} user: ${targetUser.email}`);
+      console.log(`[ADMIN] Password reset initiated for ${targetUser.role} user: ${maskEmail(targetUser.email)}`);
       
       // Generate new temporary password
       const tempPassword = crypto.randomBytes(8).toString("hex");
@@ -3647,7 +3638,7 @@ export async function registerRoutes(
           emailSent = await sendPasswordResetEmail(targetUser.email, resetLink, targetUser.name);
           
           if (emailSent) {
-            console.log(`[ADMIN] Password reset email sent to: ${targetUser.email}`);
+            console.log(`[ADMIN] Password reset email sent`);
           }
         }
       }

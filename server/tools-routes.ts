@@ -10,6 +10,7 @@ import { checkDnsWhoisOwnership } from "./checks/dnsWhoisOwnership";
 import { validateConsent152, generateConsentText, generateCheckboxHtml, generateConsentJs, type ConsentInput } from "./legal/consent152Validator";
 import { runInfo149Checks } from "./legal/info149Checks";
 import { checkHosting, checkHostingLayer1 } from "./hosting-checker";
+import { redactObject, DEFAULT_PII_KEYS } from "./utils/pii";
 import https from "https";
 import http from "http";
 import dns from "dns";
@@ -35,26 +36,13 @@ interface ToolUsageRecord {
   isPaid: boolean;
 }
 
-// 152-ФЗ compliance: redact PII from stored data
-const PII_FIELDS = ["operatorEmail", "operatorAddress", "operatorInn", "email", "inn", "subjectName", "subjectDocument"];
-
-function redactPii(data: any): any {
-  if (!data || typeof data !== "object") return data;
-  const redacted = { ...data };
-  for (const field of PII_FIELDS) {
-    if (field in redacted) {
-      redacted[field] = "[REDACTED]";
-    }
-  }
-  return redacted;
-}
-
 async function logToolUsage(record: ToolUsageRecord): Promise<void> {
   try {
     const safeRecord = {
       ...record,
-      sessionId: null, // Never store session IDs
-      inputData: redactPii(record.inputData),
+      sessionId: null,
+      inputData: redactObject(record.inputData, DEFAULT_PII_KEYS),
+      outputData: redactObject(record.outputData, DEFAULT_PII_KEYS),
     };
     await storage.logToolUsage(safeRecord);
   } catch (e) {
