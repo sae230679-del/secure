@@ -1,0 +1,299 @@
+ROLE: Replit AI Agent (senior fullstack + security + QA).
+PROJECT: SecureLex.ru (Express/TypeScript + React/Vite + Drizzle/Postgres + pdfkit + nodemailer).​
+GOAL: Довести продукт до “боевой” версии по четырём блокам одновременно:
+
+Аудит сайта: строго реальные проверки, без симуляций/рандома; каждое нарушение имеет evidence.
+
+Штрафные риски: мэппинг на КоАП, расчёт сумм по субъектам, дедупликация по aggregationKey, вывод списка уникальных нарушений в PDF.
+
+AI: единые имена env ключей, diagnostics endpoint, корректный fallback и отчёт по режимам.
+
+Почта + auth: SMTP настраивается через SuperAdmin; email‑верификация один раз при регистрации; восстановление пароля через email; admin/superadmin логинятся без verify; публичный forgot-password для админов запрещён; reset админов только из SuperAdmin.
+
+0) Жёсткие правила (обязательные)
+Запрещены симуляции в платном/боевом контуре: нельзя использовать simulateAuditResults, getRandomStatus, getStatusByCategory и любые рандом‑статусы в API /api/audits и в PDF.​
+
+Любой failed или warning обязан иметь evidence[] (минимум 1). Если нельзя проверить — статус warning и evidence “почему”.​
+
+Никаких “предположений” в отчёте/PDF: только факты, доказательства, причины.
+
+Любые секреты (AI keys, SMTP password) не отдавать через API; только boolean/маска.
+
+В конце выдать deliverables (см. раздел 9).
+
+1) Аудит сайта: устранить симуляции и стандартизировать результаты
+1.1 Удалить/изолировать симуляции
+Найди и убери применение симуляторов для платного аудита (POST /api/audits, GET /api/audits/:id/pdf).​
+
+Если нужна демо‑проверка — оставить только в публичном экспресс‑контуре и запретить PDF по демо данным, либо делать watermark “DEMO”.
+
+1.2 Единая структура результата чеков
+Расширь/нормализуй AuditCheckResult:
+
+checkId: string (стабильный)
+
+name: string
+
+category: string
+
+status: "passed" | "warning" | "failed"
+
+details?: string
+
+evidence: string[] (обязателен для warning/failed)
+
+fixSteps: string[]
+
+lawBasis: Array<{ law: "152"|"149"; article: string; note?: string }>
+
+aggregationKey: string (для штрафов/дедупликации)
+
+Сделай так, чтобы runAudit всегда возвращал эти поля.​
+
+1.3 Реальные проверки (минимум)
+Гарантировать реальные PASS/FAIL критерии и evidence для:
+
+HTTPS / redirect
+
+Security headers: HSTS, CSP, XFO, XCTO, Referrer-Policy, Permissions-Policy
+
+Privacy policy / link presence
+
+Consent checkbox
+
+Cookie banner / consent manager
+
+2) Штрафы КоАП: мэппинг + дедупликация по aggregationKey + PDF
+2.1 penalties-map.ts
+Должен существовать единый PENALTY_MAP связывающий checkId → КоАП диапазоны (min/max) по субъектам: citizen, selfEmployed, official, ip, legalEntity.
+
+Самозанятый:
+
+если не ИП → считать как citizen
+
+если ИП на НПД → как ip
+
+Любая агрегация штрафов: только через aggregationKey (однотипные нарушения на разных страницах = один кейс).
+
+2.2 PDF: раздел “Штрафные риски”
+В PDF обязательно:
+
+Заголовок “РАСЧЁТ ШТРАФНЫХ РИСКОВ ПО КоАП РФ”
+
+Перед таблицей — нумерованный список уникальных нарушений: “человекочитаемое имя + [aggregationKey]” и пояснение дедупликации.
+
+Таблица MIN/MAX по субъектам.
+
+Примечание про самозанятого.
+
+3) AI: ключи, режимы, diagnostics, поведение
+3.1 Единые env имена
+Везде использовать:
+
+GIGACHATAPIKEY
+
+OPENAIAPIKEY​
+
+3.2 Diagnostics endpoint (SuperAdmin)
+Сделай/поддержи:
+
+GET /api/admin/diagnostics/ai-keys
+Возвращает только boolean + строки:
+
+json
+{
+  "hasGigaChatKey": true/false,
+  "hasOpenAiKey": true/false,
+  "aiModeConfigured": "gigachatonly|openaionly|hybrid|none",
+  "effectiveAiMode": "gigachatonly|openaionly|hybrid|none (reason)"
+}
+Без утечки значений ключей.
+
+3.3 Эффективный режим
+Если режим выбран, но ключа нет → не падать, но effectiveAiMode должен стать none (no KEYNAME) и AI summary/recommendations пропускаются.​
+
+3.4 Обязательная матрица теста AI
+Прогоны для none, gigachatonly, openaionly, hybrid:
+
+A) ключ отсутствует
+
+B) ключ задан (Secrets)
+Для каждого:
+
+POST /api/audits на одинаковый URL
+
+сохранить JSON
+
+скачать PDF
+
+зафиксировать: провайдер вызывался/нет, summary/recommendations есть/нет, ошибок нет
+
+4) Почта REG.RU: SMTP через SuperAdmin (только исходящая)
+Проект уже использует email‑функции и isEmailConfigured; надо сделать “боевой” SMTP конфиг через админку.​
+
+4.1 SuperAdmin Email Settings (UI + API)
+Admin → Settings → Email (SMTP):
+
+enabled
+
+smtpHost (default mail.securelex.ru)
+
+smtpPort (default 465)
+
+smtpSecure (default true)
+
+smtpRequireTls (для 587)
+
+smtpUser (default support@securelex.ru)
+
+smtpPassword (ввод → записать в Secret)
+
+fromEmail/fromName/replyTo
+
+“Send test email” кнопка
+
+API (SuperAdmin only):
+
+GET /api/admin/settings/email
+
+PUT /api/admin/settings/email
+
+POST /api/admin/settings/email/test
+
+4.2 Секрет SMTP_PASSWORD
+Пароль хранить только в Secrets как SMTP_PASSWORD.
+
+В БД хранить только smtpPasswordSecretName="SMTP_PASSWORD" и флаг/маску.
+
+4.3 server/email.ts
+getSmtpTransport() читает настройки из БД + process.env.SMTP_PASSWORD и создаёт nodemailer transport.
+
+isEmailConfigured() проверяет settings + наличие SMTP_PASSWORD.​
+
+Добавить новые письма:
+
+verify email
+
+reset password user
+
+admin reset (только из админки)
+
+5) Auth: “2FA” только один раз при регистрации + reset по email
+5.1 Email verification при регистрации (одноразовая “2FA”)
+DB
+Добавить поля в users:
+
+emailVerifiedAt: Date | null
+
+emailVerifyTokenHash: string | null
+
+emailVerifyTokenExpiresAt: Date | null
+
+emailVerifySentAt: Date | null
+
+emailVerifySendCount: number (опционально)
+
+Токены хранить только hash (sha256 + pepper = SESSIONSECRET).​
+
+Endpoints
+POST /api/auth/register
+
+Создаёт user (не admin), emailVerifiedAt=null
+
+Генерит verify token (32–48 bytes), TTL 60 минут, сохраняет hash
+
+Отправляет письмо подтверждения
+
+Если SMTP не настроен: НЕ создавать пользователя и вернуть 503 “Email сервис не настроен, регистрация временно недоступна” (жёстко, чтобы не плодить мёртвые аккаунты).
+
+GET /api/auth/verify-email?token=...
+
+Проверка hash+TTL
+
+Проставить emailVerifiedAt=now, очистить verify поля
+
+Можно автоматически залогинить
+
+POST /api/auth/resend-verify-email
+
+Только для обычных пользователей, кто не verified
+
+Rate limit: 60 сек между отправками, макс 5/час
+
+5.2 Login правило (исключение для админов)
+POST /api/auth/login:
+
+Если роль admin или superadmin → не требовать emailVerifiedAt.
+
+Иначе: если emailVerifiedAt null → 403 { error: "EMAIL_NOT_VERIFIED" } и фронт показывает resend.
+
+6) Восстановление пароля (разные правила для user vs admin)
+6.1 Публичный forgot/reset (только для обычных users)
+POST /api/auth/forgot-password
+
+Всегда 200 { ok: true }
+
+Если user найден:
+
+если role admin/superadmin → НЕ отправлять reset (логировать security event)
+
+иначе: создать reset token hash + TTL 30 мин, отправить письмо
+
+POST /api/auth/reset-password
+
+Проверить token+TTL, одноразовость
+
+Обновить пароль
+
+Инвалидировать reset token
+
+По возможности сбросить активные сессии пользователя
+
+6.2 Reset admin только через SuperAdmin
+SuperAdmin endpoint:
+
+POST /api/admin/users/:id/reset-password
+
+генерит временный пароль или admin-reset link
+
+отправляет на email админа (если SMTP настроен)
+
+альтернативный fallback: показать временный пароль один раз в UI (и больше не хранить)
+
+7) Newsletter (опционально, но если делаем — через те же SMTP настройки)
+POST /api/newsletter/subscribe → pending + письмо подтверждения (double opt-in)
+
+GET /api/newsletter/confirm?token=...
+
+POST /api/newsletter/unsubscribe
+Не раскрывать “есть ли такой email”.
+
+8) UX (минимально необходимое)
+Страница /verify-email (обработка token)
+
+Страница /reset-password (форма нового пароля)
+
+На логине: обработка EMAIL_NOT_VERIFIED + кнопка resend
+
+В админке: Email Settings + AI diagnostics (уже есть)​
+
+9) Финальные deliverables (обязательно выдать в конце)
+Список всех изменённых файлов.
+
+Примеры 2 JSON‑аудитов + 2 PDF (до/после или разные режимы).
+
+Таблица результатов AI‑матрицы (4 режима × 2 сценария).
+
+Подтверждение:
+
+в платном аудите нет симуляций
+
+warning/failed всегда с evidence
+
+штрафы суммируются по aggregationKey без дублей
+
+SMTP управляется только из SuperAdmin, пароль только в Secret
+
+verify “один раз” для обычных пользователей, admin/superadmin без verify, reset админа только из SuperAdmin.​
+
+END PROMPT.
