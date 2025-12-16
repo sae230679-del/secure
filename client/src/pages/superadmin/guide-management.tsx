@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -34,8 +34,25 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Plus, Edit, Trash2, Eye, EyeOff, FileText, FolderOpen, BookOpen, GripVertical, Settings } from "lucide-react";
+import { Plus, Edit, Trash2, Eye, EyeOff, FileText, FolderOpen, BookOpen, GripVertical, Settings, RotateCcw, Save } from "lucide-react";
 import type { GuideArticle, GuideSection, GuideTopic } from "@shared/schema";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 type TopicWithCount = GuideTopic & { articlesCount: number };
 
@@ -710,23 +727,58 @@ function TopicsTab() {
   );
 }
 
+type SectionWithCounts = GuideSection & { topicsCount: number; articlesCount: number };
+
 function SectionsTab() {
   const { toast } = useToast();
   const [editingSection, setEditingSection] = useState<GuideSection | null>(null);
+  const [localSections, setLocalSections] = useState<SectionWithCounts[]>([]);
+  const [hasChanges, setHasChanges] = useState(false);
+  const [serverVersion, setServerVersion] = useState(0);
 
-  const { data: sections, isLoading } = useQuery<GuideSection[]>({
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const { data: sections, isLoading, dataUpdatedAt } = useQuery<SectionWithCounts[]>({
     queryKey: ["/api/admin/guide/sections"],
   });
+
+  useEffect(() => {
+    if (sections && sections.length > 0 && dataUpdatedAt !== serverVersion) {
+      const sorted = sections.slice().sort((a, b) => a.sortOrder - b.sortOrder);
+      setLocalSections(sorted);
+      setServerVersion(dataUpdatedAt);
+      setHasChanges(false);
+    }
+  }, [sections, dataUpdatedAt, serverVersion]);
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: any }) => {
       return apiRequest("PATCH", `/api/admin/guide/sections/${id}`, data);
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/guide/sections"] });
       queryClient.invalidateQueries({ queryKey: ["/api/guide/home"] });
       toast({ title: "Раздел обновлён" });
       setEditingSection(null);
+    },
+    onError: (err: any) => {
+      toast({ title: "Ошибка", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const reorderMutation = useMutation({
+    mutationFn: async (items: Array<{ id: number; sortOrder: number }>) => {
+      return apiRequest("PUT", "/api/admin/guide/sections/reorder", { items });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/guide/sections"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/guide/home"] });
+      toast({ title: "Порядок разделов сохранён" });
     },
     onError: (err: any) => {
       toast({ title: "Ошибка", description: err.message, variant: "destructive" });
@@ -740,77 +792,193 @@ function SectionsTab() {
     });
   };
 
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (!over || active.id === over.id) return;
+
+    setLocalSections(prev => {
+      const oldIndex = prev.findIndex(s => s.id === active.id);
+      const newIndex = prev.findIndex(s => s.id === over.id);
+      if (oldIndex !== -1 && newIndex !== -1) {
+        return arrayMove(prev, oldIndex, newIndex);
+      }
+      return prev;
+    });
+    setHasChanges(true);
+  }, []);
+
+  const saveOrder = () => {
+    const items = localSections.map((section, index) => ({
+      id: section.id,
+      sortOrder: (index + 1) * 10,
+    }));
+    reorderMutation.mutate(items);
+  };
+
+  const resetOrder = () => {
+    if (sections) {
+      setLocalSections(sections.slice().sort((a, b) => a.sortOrder - b.sortOrder));
+      setServerVersion(dataUpdatedAt);
+    }
+    setHasChanges(false);
+    toast({ title: "Изменения отменены" });
+  };
+
   return (
     <div className="space-y-6 mt-6">
-      <div>
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <p className="text-muted-foreground">
-          Настройте видимость, порядок и описания разделов справочника
+          Перетащите разделы для изменения порядка. Изменения применяются после сохранения.
         </p>
+        <div className="flex gap-2">
+          {hasChanges && (
+            <>
+              <Button 
+                variant="outline" 
+                onClick={resetOrder}
+                data-testid="button-reset-order"
+              >
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Отменить
+              </Button>
+              <Button 
+                onClick={saveOrder}
+                disabled={reorderMutation.isPending}
+                data-testid="button-save-order"
+              >
+                <Save className="h-4 w-4 mr-2" />
+                Сохранить порядок
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {isLoading ? (
         <p className="text-muted-foreground">Загрузка...</p>
       ) : (
-        <div className="space-y-3">
-          {sections?.sort((a, b) => a.sortOrder - b.sortOrder).map(section => (
-            <Card key={section.id} data-testid={`card-section-${section.slug}`}>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-4 flex-1">
-                    <GripVertical className="h-5 w-5 text-muted-foreground cursor-move" />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-medium">{section.title}</h3>
-                        <Badge variant="outline">{section.slug}</Badge>
-                        {!section.isVisible && (
-                          <Badge variant="secondary">Скрыт</Badge>
-                        )}
-                      </div>
-                      {section.description && (
-                        <p className="text-sm text-muted-foreground mt-1">{section.description}</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Switch 
-                      checked={section.isVisible} 
-                      onCheckedChange={() => toggleVisibility(section)}
-                      data-testid={`switch-visibility-${section.slug}`}
-                    />
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button 
-                          size="icon" 
-                          variant="ghost"
-                          onClick={() => setEditingSection(section)}
-                          data-testid={`button-edit-section-${section.slug}`}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Редактирование раздела</DialogTitle>
-                        </DialogHeader>
-                        {editingSection && (
-                          <SectionEditForm 
-                            section={editingSection} 
-                            onSave={(data) => {
-                              updateMutation.mutate({ id: editingSection.id, data });
-                            }}
-                            isPending={updateMutation.isPending}
-                          />
-                        )}
-                      </DialogContent>
-                    </Dialog>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={localSections.map(s => s.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="space-y-3">
+              {localSections.map(section => (
+                <SortableSectionCard
+                  key={section.id}
+                  section={section}
+                  onToggleVisibility={() => toggleVisibility(section)}
+                  onEdit={() => setEditingSection(section)}
+                  editingSection={editingSection}
+                  updateMutation={updateMutation}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
+
+      <Dialog open={!!editingSection} onOpenChange={(open) => !open && setEditingSection(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Редактирование раздела</DialogTitle>
+          </DialogHeader>
+          {editingSection && (
+            <SectionEditForm 
+              section={editingSection} 
+              onSave={(data) => {
+                updateMutation.mutate({ id: editingSection.id, data });
+              }}
+              isPending={updateMutation.isPending}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+function SortableSectionCard({
+  section,
+  onToggleVisibility,
+  onEdit,
+}: {
+  section: SectionWithCounts;
+  onToggleVisibility: () => void;
+  onEdit: () => void;
+  editingSection: GuideSection | null;
+  updateMutation: any;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: section.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <Card 
+      ref={setNodeRef} 
+      style={style}
+      data-testid={`card-section-${section.slug}`}
+      className={isDragging ? "ring-2 ring-primary" : ""}
+    >
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4 flex-1">
+            <div 
+              {...attributes} 
+              {...listeners}
+              className="cursor-grab active:cursor-grabbing touch-none"
+            >
+              <GripVertical className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-medium">{section.title}</h3>
+                <Badge variant="outline">{section.slug}</Badge>
+                <Badge variant="secondary">Тем: {section.topicsCount}</Badge>
+                <Badge variant="secondary">Статей: {section.articlesCount}</Badge>
+                {!section.isVisible && (
+                  <Badge variant="destructive">Скрыт</Badge>
+                )}
+              </div>
+              {section.description && (
+                <p className="text-sm text-muted-foreground mt-1">{section.description}</p>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch 
+              checked={section.isVisible} 
+              onCheckedChange={onToggleVisibility}
+              data-testid={`switch-visibility-${section.slug}`}
+            />
+            <Button 
+              size="icon" 
+              variant="ghost"
+              onClick={onEdit}
+              data-testid={`button-edit-section-${section.slug}`}
+            >
+              <Edit className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

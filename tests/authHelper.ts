@@ -26,16 +26,21 @@ export async function loginAsSuperAdmin() {
 }
 
 export async function createTestUser(email: string, password: string) {
-  const existingUser = await storage.getUserByEmail(email);
-  if (existingUser) {
-    return existingUser;
+  let user = await storage.getUserByEmail(email);
+  if (user) {
+    if (!user.emailVerifiedAt) {
+      await storage.updateUser(user.id, { emailVerifiedAt: new Date() });
+    }
+    return user;
   }
   
-  const user = await storage.createUser({
+  user = await storage.createUser({
     name: 'Test User',
     email,
     password,
   });
+  
+  await storage.updateUser(user.id, { emailVerifiedAt: new Date() });
   
   return user;
 }

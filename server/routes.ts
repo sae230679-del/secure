@@ -4575,10 +4575,10 @@ export async function registerRoutes(
     }
   });
 
-  // Get all sections (superadmin)
+  // Get all sections with counts (superadmin)
   app.get("/api/admin/guide/sections", requireSuperAdmin, async (req, res) => {
     try {
-      const sections = await storage.getGuideSections();
+      const sections = await storage.getGuideSectionsWithCounts();
       res.json(sections);
     } catch (error: any) {
       console.error("[Guide Admin] Error fetching sections:", error?.message);
@@ -4598,6 +4598,35 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("[Guide Admin] Error updating section:", error?.message);
       res.status(500).json({ error: "Ошибка обновления раздела" });
+    }
+  });
+
+  // Reorder sections (superadmin) - PUT /api/admin/guide/sections/reorder
+  const reorderSchema = z.object({
+    items: z.array(z.object({
+      id: z.number().int().positive(),
+      sortOrder: z.number().int().min(0),
+    })).length(9).refine(
+      (items) => new Set(items.map(i => i.id)).size === items.length,
+      { message: "Все id должны быть уникальными" }
+    ),
+  });
+
+  app.put("/api/admin/guide/sections/reorder", requireSuperAdmin, async (req, res) => {
+    try {
+      const result = reorderSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ 
+          error: "Неверный формат данных", 
+          details: result.error.flatten() 
+        });
+      }
+      
+      const sections = await storage.reorderGuideSections(result.data.items);
+      res.json(sections);
+    } catch (error: any) {
+      console.error("[Guide Admin] Error reordering sections:", error?.message);
+      res.status(500).json({ error: "Ошибка изменения порядка разделов" });
     }
   });
 

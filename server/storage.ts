@@ -1937,6 +1937,54 @@ export class DatabaseStorage implements IStorage {
     return section;
   }
 
+  async getGuideSectionsWithCounts(): Promise<Array<schema.GuideSection & { topicsCount: number; articlesCount: number }>> {
+    const sections = await db
+      .select()
+      .from(schema.guideSections)
+      .orderBy(schema.guideSections.sortOrder, schema.guideSections.id);
+
+    const result = await Promise.all(
+      sections.map(async (section) => {
+        const topics = await db
+          .select({ id: schema.guideTopics.id })
+          .from(schema.guideTopics)
+          .where(eq(schema.guideTopics.sectionId, section.id));
+        
+        let articlesCount = 0;
+        for (const topic of topics) {
+          const [count] = await db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(schema.guideArticles)
+            .where(eq(schema.guideArticles.topicId, topic.id));
+          articlesCount += count?.count || 0;
+        }
+
+        return {
+          ...section,
+          topicsCount: topics.length,
+          articlesCount,
+        };
+      })
+    );
+
+    return result;
+  }
+
+  async reorderGuideSections(items: Array<{ id: number; sortOrder: number }>): Promise<schema.GuideSection[]> {
+    // Update in transaction
+    for (const item of items) {
+      await db
+        .update(schema.guideSections)
+        .set({ sortOrder: item.sortOrder, updatedAt: new Date() })
+        .where(eq(schema.guideSections.id, item.id));
+    }
+
+    return db
+      .select()
+      .from(schema.guideSections)
+      .orderBy(schema.guideSections.sortOrder, schema.guideSections.id);
+  }
+
   // =====================================================
   // Guide Topics Methods
   // =====================================================
@@ -2090,7 +2138,15 @@ export class DatabaseStorage implements IStorage {
       ))
       .limit(3);
 
-    // Search topics with section slug
+    // Get visible section IDs for filtering
+    const visibleSections = await db
+      .select({ id: schema.guideSections.id, slug: schema.guideSections.slug })
+      .from(schema.guideSections)
+      .where(eq(schema.guideSections.isVisible, true));
+    const visibleSectionIds = new Set(visibleSections.map(s => s.id));
+    const sectionIdToSlug = new Map(visibleSections.map(s => [s.id, s.slug]));
+
+    // Search topics with section slug (only from visible sections)
     const topicsRaw = await db
       .select({
         slug: schema.guideTopics.slug,
@@ -2102,16 +2158,19 @@ export class DatabaseStorage implements IStorage {
         eq(schema.guideTopics.isPublished, true),
         sql`${schema.guideTopics.title} ILIKE ${searchPattern}`
       ))
-      .limit(6);
+      .limit(20);
 
-    const topics = await Promise.all(
-      topicsRaw.map(async (t) => {
-        const section = await this.getGuideSectionById(t.sectionId);
-        return { slug: t.slug, title: t.title, sectionSlug: section?.slug || "" };
-      })
-    );
+    // Filter topics by visible sections
+    const topics = topicsRaw
+      .filter(t => visibleSectionIds.has(t.sectionId))
+      .slice(0, 6)
+      .map(t => ({ 
+        slug: t.slug, 
+        title: t.title, 
+        sectionSlug: sectionIdToSlug.get(t.sectionId) || "" 
+      }));
 
-    // Search articles with topic and section slugs
+    // Search articles with topic and section slugs (only from visible sections)
     const articlesRaw = await db
       .select({
         slug: schema.guideArticles.slug,
@@ -2124,21 +2183,32 @@ export class DatabaseStorage implements IStorage {
         eq(schema.guideArticles.status, "published"),
         sql`(${schema.guideArticles.title} ILIKE ${searchPattern} OR ${schema.guideArticles.summary} ILIKE ${searchPattern})`
       ))
-      .limit(limit);
+      .limit(limit * 2);
 
-    const articles = await Promise.all(
+    // Filter articles by visible sections
+    const articlesFiltered = await Promise.all(
       articlesRaw.map(async (a) => {
         const topic = a.topicId ? await this.getGuideTopicById(a.topicId) : null;
-        const section = topic ? await this.getGuideSectionById(topic.sectionId) : null;
+        if (!topic || !visibleSectionIds.has(topic.sectionId)) {
+          return null;
+        }
         return {
           slug: a.slug,
           title: a.title,
           summary: a.summary,
-          sectionSlug: section?.slug || "",
-          topicSlug: topic?.slug || "",
+          sectionSlug: sectionIdToSlug.get(topic.sectionId) || "",
+          topicSlug: topic.slug,
         };
       })
     );
+    
+    const articles = articlesFiltered.filter(Boolean).slice(0, limit) as Array<{
+      slug: string;
+      title: string;
+      summary: string | null;
+      sectionSlug: string;
+      topicSlug: string;
+    }>;
 
     return { q: query, sections, topics, articles };
   }
