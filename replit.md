@@ -21,6 +21,8 @@ Preferred communication style: Simple, everyday language.
 - **Runtime**: Node.js with Express.js
 - **API Pattern**: RESTful endpoints
 - **Authentication**: Session-based with PostgreSQL session store and bcryptjs for password hashing.
+- **Email Verification**: One-time verification at registration with 24-hour token expiry. Tokens hashed with HMAC-SHA256+pepper (SECRET_KEY), timing-safe comparison prevents timing attacks.
+- **Password Reset**: Public endpoint for regular users with 3/hour rate limiting, 1-hour token expiry. Admin/superadmin password reset requires SuperAdmin access with PIN confirmation.
 - **Compliance Features**:
     - **PDN Consent Tracking**: Full lifecycle management including versioning, IP/user-agent logging, pre-payment consent, and withdrawal with a 30-day destruction schedule. Background jobs process destruction tasks, with SuperAdmin legal hold capability.
     - **Cookie Consent**: GDPR/152-ФЗ compliant banner with granular preferences.
@@ -115,3 +117,4 @@ npm run start         # Start production server
 - Cookie consent banner blocks analytics/marketing scripts until consent
 - `ALLOW_INSECURE_LOCALHOST_COOKIES` forbidden in production
 - `AUDIT_MOCK_MODE` forbidden in production
+- `SECRET_KEY` must remain stable to avoid invalidating outstanding email verification and password reset tokens
