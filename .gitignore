@@ -4,3 +4,7 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+
+# Attached assets (user-uploaded files, not for production)
+attached_assets/
+attachedassets/

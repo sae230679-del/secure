@@ -1,0 +1,36 @@
+# Dependencies
+node_modules
+
+# Build artifacts
+dist
+
+# Development files
+.DS_Store
+*.tar.gz
+
+# Attached assets (user-uploaded files, not for production)
+attached_assets/
+attachedassets/
+
+# Git
+.git
+.gitignore
+
+# Editor files
+.vscode
+.idea
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test files
+tests/
+*.test.ts
+*.spec.ts
+
+# Environment files (secrets handled separately)
+.env.local
+.env.development
