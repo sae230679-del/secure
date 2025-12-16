@@ -48,6 +48,7 @@ import {
   Mail,
   Wallet,
   FileText,
+  BookOpen,
 } from "lucide-react";
 
 export function AppSidebar() {
@@ -84,6 +85,7 @@ export function AppSidebar() {
     { title: "Промокоды", url: "/superadmin/promo-codes", icon: Tag },
     { title: "Управление ПДн", url: "/superadmin/pdn", icon: Shield },
     { title: "SEO-страницы", url: "/superadmin/seo-pages", icon: FileText },
+    { title: "Справочник", url: "/superadmin/guide", icon: BookOpen },
     { title: "Журнал действий", url: "/superadmin/logs", icon: Activity },
   ];
 

@@ -33,6 +33,7 @@ import SuperAdminPaymentSettingsPage from "@/pages/superadmin-payment-settings";
 import SuperAdminServicesPage from "@/pages/superadmin-services";
 import PdnManagementPage from "@/pages/superadmin/pdn-management";
 import SeoManagementPage from "@/pages/superadmin/seo-pages";
+import GuideManagementPage from "@/pages/superadmin/guide-management";
 import ReferralPage from "@/pages/referral";
 import CheckoutPage from "@/pages/checkout";
 import PaymentResultPage from "@/pages/payment-result";
@@ -50,6 +51,8 @@ import SeoPageView from "@/pages/seo-page";
 import OfferPage from "@/pages/offer";
 import ToolsPage from "@/pages/tools";
 import FullAuditPage from "@/pages/full-audit";
+import GuidePage from "@/pages/guide";
+import GuideArticlePage from "@/pages/guide-article";
 import { CookieConsent } from "@/components/cookie-consent";
 import { Loader2, LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -226,6 +229,8 @@ function Router() {
       <Route path="/offer" component={OfferPage} />
       <Route path="/tools" component={ToolsPage} />
       <Route path="/full-audit" component={FullAuditPage} />
+      <Route path="/guide" component={GuidePage} />
+      <Route path="/guide/:slug" component={GuideArticlePage} />
       <Route path="/seo/:slug" component={SeoPageView} />
       
       <Route path="/dashboard">
@@ -449,6 +454,16 @@ function Router() {
           <SuperAdminRoute>
             <DashboardLayout>
               <SeoManagementPage />
+            </DashboardLayout>
+          </SuperAdminRoute>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/superadmin/guide">
+        <ProtectedRoute>
+          <SuperAdminRoute>
+            <DashboardLayout>
+              <GuideManagementPage />
             </DashboardLayout>
           </SuperAdminRoute>
         </ProtectedRoute>
