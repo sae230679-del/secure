@@ -952,19 +952,35 @@ function checkContactInfo(html: string): AuditCheckResult {
 }
 
 function checkCompanyRequisites(html: string): AuditCheckResult {
-  const requisitePatterns = [
-    /инн\s*:?\s*\d{10,12}/i,
-    /огрн\s*:?\s*\d{13,15}/i,
-    /кпп\s*:?\s*\d{9}/i,
-    /юридический\s*адрес/i,
-    /ооо\s*["«]?[^"»]{2,50}["»]?/i,
-    /ип\s+[а-яё]+/i,
+  const evidence: string[] = [];
+  const requisitePatterns: { pattern: RegExp; name: string }[] = [
+    { pattern: /инн\s*:?\s*\d{10,12}/i, name: "ИНН" },
+    { pattern: /огрн\s*:?\s*\d{13,15}/i, name: "ОГРН" },
+    { pattern: /кпп\s*:?\s*\d{9}/i, name: "КПП" },
+    { pattern: /юридический\s*адрес/i, name: "юридический адрес" },
+    { pattern: /ооо\s*["«]?[^"»]{2,50}["»]?/i, name: "название ООО" },
+    { pattern: /ип\s+[а-яё]+/i, name: "ИП" },
   ];
 
-  const hasRequisites = requisitePatterns.some(p => p.test(html));
+  const foundPatterns: string[] = [];
+  for (const { pattern, name } of requisitePatterns) {
+    if (pattern.test(html)) {
+      foundPatterns.push(name);
+    }
+  }
+
+  const hasRequisites = foundPatterns.length > 0;
+
+  if (hasRequisites) {
+    evidence.push(`Найдено: ${foundPatterns.join(", ")}`);
+  } else {
+    evidence.push("Юридические реквизиты не обнаружены");
+    evidence.push("Проверенные паттерны: ИНН, ОГРН, КПП, юридический адрес, ООО, ИП");
+  }
 
   return {
     id: "INF-002",
+    checkId: "LEGAL_REQUISITES_MISSING",
     name: "Реквизиты компании",
     category: "fz149",
     status: hasRequisites ? "passed" : "warning",
@@ -972,23 +988,48 @@ function checkCompanyRequisites(html: string): AuditCheckResult {
     details: hasRequisites 
       ? "Юридические реквизиты найдены"
       : "Юридические реквизиты (ИНН/ОГРН) не найдены",
+    evidence,
+    lawBasis: [
+      { law: "149", article: "ст. 10.1", note: "Обязательная информация о владельце сайта" },
+    ],
+    aggregationKey: "LEGAL_REQUISITES",
+    fixSteps: [
+      "Разместить ИНН и ОГРН организации на странице контактов",
+      "Указать полное наименование организации и юридический адрес",
+    ],
   };
 }
 
 function checkTermsOfService(html: string): AuditCheckResult {
-  const termsPatterns = [
-    /пользовательское\s*соглашение/i,
-    /terms\s*(of\s*)?service/i,
-    /условия\s*использования/i,
-    /правила\s*(пользования|сервиса)/i,
-    /оферт[аыу]/i,
-    /договор\s*оферт/i,
+  const evidence: string[] = [];
+  const termsPatterns: { pattern: RegExp; name: string }[] = [
+    { pattern: /пользовательское\s*соглашение/i, name: "'пользовательское соглашение'" },
+    { pattern: /terms\s*(of\s*)?service/i, name: "'terms of service'" },
+    { pattern: /условия\s*использования/i, name: "'условия использования'" },
+    { pattern: /правила\s*(пользования|сервиса)/i, name: "'правила сервиса'" },
+    { pattern: /оферт[аыу]/i, name: "'оферта'" },
+    { pattern: /договор\s*оферт/i, name: "'договор оферты'" },
   ];
 
-  const hasTerms = termsPatterns.some(p => p.test(html));
+  const foundPatterns: string[] = [];
+  for (const { pattern, name } of termsPatterns) {
+    if (pattern.test(html)) {
+      foundPatterns.push(name);
+    }
+  }
+
+  const hasTerms = foundPatterns.length > 0;
+
+  if (hasTerms) {
+    evidence.push(`Найдено: ${foundPatterns.join(", ")}`);
+  } else {
+    evidence.push("Пользовательское соглашение не обнаружено");
+    evidence.push("Проверенные паттерны: пользовательское соглашение, terms of service, оферта");
+  }
 
   return {
     id: "LEG-001",
+    checkId: "LEGAL_TOS_MISSING",
     name: "Пользовательское соглашение",
     category: "legal",
     status: hasTerms ? "passed" : "warning",
@@ -996,46 +1037,106 @@ function checkTermsOfService(html: string): AuditCheckResult {
     details: hasTerms 
       ? "Ссылка на пользовательское соглашение найдена"
       : "Пользовательское соглашение не найдено",
+    evidence,
+    lawBasis: [
+      { law: "GK", article: "ст. 437", note: "Публичная оферта" },
+    ],
+    aggregationKey: "LEGAL_TOS",
+    fixSteps: [
+      "Разместить пользовательское соглашение или публичную оферту",
+      "Добавить ссылку в подвал сайта",
+    ],
   };
 }
 
 function checkTrackers(html: string): AuditCheckResult[] {
   const results: AuditCheckResult[] = [];
+  const lawBasis: LawBasisRef[] = [
+    { law: "152", article: "ст. 9", note: "Согласие на обработку ПДн при использовании трекеров" },
+  ];
   
-  const hasGoogleAnalytics = /google-analytics\.com|gtag|ga\s*\(|GoogleAnalyticsObject/i.test(html);
-  const hasYandexMetrika = /mc\.yandex\.ru|ym\s*\(|yandex.*metrika/i.test(html);
-  const hasFacebookPixel = /facebook\.net|fbq\s*\(|fb-pixel/i.test(html);
+  const gaPatterns = [
+    { pattern: /google-analytics\.com/i, name: "google-analytics.com" },
+    { pattern: /gtag\s*\(/i, name: "gtag()" },
+    { pattern: /ga\s*\(\s*['"]create/i, name: "ga('create')" },
+    { pattern: /GoogleAnalyticsObject/i, name: "GoogleAnalyticsObject" },
+  ];
+  
+  const gaFound: string[] = [];
+  for (const { pattern, name } of gaPatterns) {
+    if (pattern.test(html)) {
+      gaFound.push(name);
+    }
+  }
 
-  if (hasGoogleAnalytics) {
+  if (gaFound.length > 0) {
     results.push({
       id: "COOK-002",
+      checkId: "TRACKER_GA_FOUND",
       name: "Google Analytics",
       category: "cookies",
       status: "warning",
       description: "Использование Google Analytics",
       details: "Google Analytics обнаружен - требуется согласие пользователя по ФЗ-152",
+      evidence: [`Найдены маркеры: ${gaFound.join(", ")}`],
+      lawBasis,
+      aggregationKey: "TRACKERS",
     });
   }
 
-  if (hasYandexMetrika) {
+  const ymPatterns = [
+    { pattern: /mc\.yandex\.ru/i, name: "mc.yandex.ru" },
+    { pattern: /ym\s*\(\s*\d+/i, name: "ym(counter)" },
+    { pattern: /yandex.*metrika/i, name: "yandex metrika" },
+  ];
+  
+  const ymFound: string[] = [];
+  for (const { pattern, name } of ymPatterns) {
+    if (pattern.test(html)) {
+      ymFound.push(name);
+    }
+  }
+
+  if (ymFound.length > 0) {
     results.push({
       id: "COOK-003",
+      checkId: "TRACKER_YM_FOUND",
       name: "Яндекс.Метрика",
       category: "cookies",
       status: "warning",
       description: "Использование Яндекс.Метрики",
       details: "Яндекс.Метрика обнаружена - рекомендуется получить согласие на трекинг",
+      evidence: [`Найдены маркеры: ${ymFound.join(", ")}`],
+      lawBasis,
+      aggregationKey: "TRACKERS",
     });
   }
 
-  if (hasFacebookPixel) {
+  const fbPatterns = [
+    { pattern: /facebook\.net/i, name: "facebook.net" },
+    { pattern: /fbq\s*\(/i, name: "fbq()" },
+    { pattern: /fb-pixel/i, name: "fb-pixel" },
+  ];
+  
+  const fbFound: string[] = [];
+  for (const { pattern, name } of fbPatterns) {
+    if (pattern.test(html)) {
+      fbFound.push(name);
+    }
+  }
+
+  if (fbFound.length > 0) {
     results.push({
       id: "COOK-004",
+      checkId: "TRACKER_FB_FOUND",
       name: "Facebook Pixel",
       category: "cookies",
       status: "warning",
       description: "Использование Facebook Pixel",
       details: "Facebook Pixel обнаружен - требуется согласие пользователя",
+      evidence: [`Найдены маркеры: ${fbFound.join(", ")}`],
+      lawBasis,
+      aggregationKey: "TRACKERS",
     });
   }
 
