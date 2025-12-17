@@ -97,10 +97,10 @@ async function getSmtpSettings(): Promise<SmtpSettings | null> {
     const pass = smtpPass || process.env.SMTP_PASSWORD || "";
     
     // Default values for REG.RU
-    const host = smtpHost || "mail.securelex.ru";
-    const port = parseInt(smtpPort || "465");
-    const secure = smtpSecure !== "false"; // Default true for port 465
-    const requireTls = smtpRequireTls === "true"; // For port 587 STARTTLS
+    const host = smtpHost || "smtp.reg.ru";
+    const port = parseInt(smtpPort || "587");
+    const secure = smtpSecure === "true"; // Default false for port 587 with STARTTLS
+    const requireTls = smtpRequireTls !== "false"; // Default true for port 587 STARTTLS
     const user = smtpUser || "support@securelex.ru";
     const from = smtpFrom || "support@securelex.ru";
     const fromName = smtpFromName || "SecureLex";
