@@ -292,7 +292,8 @@ export async function registerRoutes(
           console.error("Session save error during login:", saveErr);
           return res.status(500).json({ error: "Session error: " + (saveErr.message || "Unknown") });
         }
-        console.log(`[AUTH] Session saved successfully for user: ${user.id}`);
+        console.log(`[AUTH] Session saved successfully for user: ${user.id}, sessionID: ${req.sessionID}`);
+        console.log(`[AUTH] Response headers Set-Cookie:`, res.getHeaders()['set-cookie']);
         const { passwordHash, emailVerifyTokenHash, passwordResetTokenHash, ...safeUser } = user;
         res.json({ user: safeUser });
       });
@@ -633,7 +634,10 @@ export async function registerRoutes(
   });
 
   app.get("/api/auth/me", async (req, res) => {
+    console.log(`[AUTH/ME] Session ID: ${req.sessionID}, userId: ${req.session.userId}, cookie: ${req.headers.cookie?.substring(0, 80) || 'none'}`);
+    
     if (!req.session.userId) {
+      console.log(`[AUTH/ME] No userId in session. Session data:`, JSON.stringify(req.session));
       return res.status(401).json({ error: "Not authenticated" });
     }
 
@@ -643,6 +647,7 @@ export async function registerRoutes(
       return res.status(401).json({ error: "User not found" });
     }
 
+    console.log(`[AUTH/ME] Found user: ${user.id}, role: ${user.role}, isMasterAdmin: ${user.isMasterAdmin}`);
     const { passwordHash, emailVerifyTokenHash, passwordResetTokenHash, ...safeUser } = user;
     res.json({ user: safeUser });
   });

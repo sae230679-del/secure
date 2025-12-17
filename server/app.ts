@@ -118,11 +118,13 @@ app.use(
     resave: false,
     saveUninitialized: false,
     proxy: true,
+    name: "connect.sid",
     cookie: {
       httpOnly: true,
       maxAge: 7 * 24 * 60 * 60 * 1000,
       sameSite: cookieSameSite,
       secure: cookieSecure,
+      path: "/",
     },
   })
 );
