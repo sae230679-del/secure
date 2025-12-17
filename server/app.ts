@@ -87,17 +87,15 @@ if (!isTest) {
   console.log(`[CONFIG] Environment: ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}`);
 }
 
-let allowInsecureLocalhost = process.env.ALLOW_INSECURE_LOCALHOST_COOKIES === "true" || isTest;
-if (isProduction && process.env.ALLOW_INSECURE_LOCALHOST_COOKIES === "true") {
-  console.error("[CONFIG] WARNING: ALLOW_INSECURE_LOCALHOST_COOKIES is set in production, ignoring.");
-  allowInsecureLocalhost = false;
-}
+let allowInsecureCookies = process.env.ALLOW_INSECURE_LOCALHOST_COOKIES === "true" || 
+                          process.env.ALLOW_HTTP_COOKIES === "true" || 
+                          isTest;
 
-const cookieSecure = allowInsecureLocalhost ? false : true;
-const cookieSameSite = allowInsecureLocalhost ? "lax" as const : "none" as const;
+const cookieSecure = allowInsecureCookies ? false : true;
+const cookieSameSite = allowInsecureCookies ? "lax" as const : "none" as const;
 
 if (!isTest) {
-  console.log(`[CONFIG] Cookie settings: sameSite=${cookieSameSite}, secure=${cookieSecure}, insecureLocalhost=${allowInsecureLocalhost}`);
+  console.log(`[CONFIG] Cookie settings: sameSite=${cookieSameSite}, secure=${cookieSecure}, allowInsecureCookies=${allowInsecureCookies}`);
 }
 
 const sessionStore = new PgSession({
