@@ -28,7 +28,12 @@ if (!sessionSecret && !isTest) {
 const allowedOrigins = [
   "https://securelex.ru",
   "https://www.securelex.ru",
+  "http://securelex.ru",
+  "http://www.securelex.ru",
+  "http://95.163.227.214",
+  "https://95.163.227.214",
   process.env.REPLIT_URL,
+  process.env.CORS_ORIGIN,
 ].filter(Boolean) as string[];
 
 app.use(
