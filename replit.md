@@ -121,6 +121,14 @@ npm run test:watch    # Run tests in watch mode
 
 ## Deployment
 
+### VPS Deployment Guide
+See **[docs/VPS_DEPLOYMENT_GUIDE.md](docs/VPS_DEPLOYMENT_GUIDE.md)** for comprehensive VPS deployment instructions including:
+- Server setup (Node.js, PostgreSQL, PM2, Nginx)
+- SSL certificate configuration (Let's Encrypt, GlobalSign)
+- SMTP/Email troubleshooting (self-signed certificate fixes)
+- DNS configuration (reg.ru)
+- Common errors and solutions
+
 ### Scripts
 ```bash
 npm run build         # Build frontend + backend
