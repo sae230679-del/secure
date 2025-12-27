@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import DOMPurify from "dompurify";
 
 type PublicSettings = {
   siteName: string;
@@ -27,9 +28,15 @@ export function YandexMetrika() {
       existingScript.remove();
     }
 
+    const sanitizedCode = DOMPurify.sanitize(metrikaCode, {
+      ADD_TAGS: ["script", "noscript", "img"],
+      ADD_ATTR: ["src", "async", "defer", "type", "alt"],
+      FORCE_BODY: true,
+    });
+
     const container = document.createElement("div");
     container.id = "yandex-metrika-script";
-    container.innerHTML = metrikaCode;
+    container.innerHTML = sanitizedCode;
 
     const scripts = container.querySelectorAll("script");
     scripts.forEach((oldScript) => {

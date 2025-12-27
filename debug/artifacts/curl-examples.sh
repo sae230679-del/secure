@@ -37,7 +37,7 @@ curl -s -X POST "$BASE_URL/api/auth/register" \
   -H "Content-Type: application/json" \
   -d '{
     "email": "test@example.com",
-    "password": "password123",
+    "password": "YOUR_PASSWORD_HERE",
     "name": "Тест Пользователь"
   }' | jq .
 
