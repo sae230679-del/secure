@@ -28,6 +28,7 @@ import SuperAdminSettingsPage from "@/pages/superadmin-settings";
 import SuperAdminThemesPage from "@/pages/superadmin-themes";
 import SuperAdminLogsPage from "@/pages/superadmin-logs";
 import SuperAdminPromoCodesPage from "@/pages/superadmin-promo-codes";
+import AdminPromotionsPage from "@/pages/admin-promotions";
 import SuperAdminEmailSettingsPage from "@/pages/superadmin-email-settings";
 import SuperAdminPaymentSettingsPage from "@/pages/superadmin-payment-settings";
 import SuperAdminServicesPage from "@/pages/superadmin-services";
@@ -338,6 +339,16 @@ function Router() {
           <AdminRoute>
             <DashboardLayout>
               <AdminPackagesPage />
+            </DashboardLayout>
+          </AdminRoute>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/promotions">
+        <ProtectedRoute>
+          <AdminRoute>
+            <DashboardLayout>
+              <AdminPromotionsPage />
             </DashboardLayout>
           </AdminRoute>
         </ProtectedRoute>

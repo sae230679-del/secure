@@ -71,6 +71,7 @@ export function AppSidebar() {
     { title: "Панель управления", url: "/admin", icon: BarChart3 },
     { title: "Оплаченные аудиты", url: "/admin/audits", icon: FileSearch },
     { title: "Управление пакетами", url: "/admin/packages", icon: Package },
+    { title: "Акции", url: "/admin/promotions", icon: Gift },
     { title: "Реквизиты и контакты", url: "/admin/company", icon: Building2 },
   ];
 
