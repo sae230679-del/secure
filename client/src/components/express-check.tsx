@@ -208,7 +208,9 @@ export function ExpressCheck() {
   const [showInnModal, setShowInnModal] = useState(false);
   const [innInput, setInnInput] = useState("");
   const [isCheckingInn, setIsCheckingInn] = useState(false);
+  const [privacyConsent, setPrivacyConsent] = useState(false);
   const [pdnConsent, setPdnConsent] = useState(false);
+  const [offerConsent, setOfferConsent] = useState(false);
   const { isAuthenticated } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -371,7 +373,9 @@ export function ExpressCheck() {
     setCheckStatus(null);
     setError(null);
     setWebsiteUrl("");
+    setPrivacyConsent(false);
     setPdnConsent(false);
+    setOfferConsent(false);
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
       pollingRef.current = null;
@@ -690,31 +694,70 @@ export function ExpressCheck() {
                 onChange={setWebsiteUrl}
               />
 
-              <div className="flex items-start gap-2 pt-1">
-                <Checkbox
-                  id="pdn-consent-express"
-                  checked={pdnConsent}
-                  onCheckedChange={(checked) => setPdnConsent(checked === true)}
-                  disabled={isChecking}
-                  data-testid="checkbox-pdn-consent-express"
-                />
-                <label
-                  htmlFor="pdn-consent-express"
-                  className="text-xs leading-tight cursor-pointer text-muted-foreground"
-                >
-                  Я даю согласие на обработку персональных данных в соответствии с{" "}
-                  <Link href="/privacy-policy" className="text-primary hover:underline">
-                    Политикой конфиденциальности
-                  </Link>{" "}
-                  <span className="text-destructive">*</span>
-                </label>
+              <div className="space-y-2 pt-1">
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="privacy-consent-express"
+                    checked={privacyConsent}
+                    onCheckedChange={(checked) => setPrivacyConsent(checked === true)}
+                    disabled={isChecking}
+                    data-testid="checkbox-privacy-consent-express"
+                  />
+                  <label
+                    htmlFor="privacy-consent-express"
+                    className="text-xs leading-tight cursor-pointer text-muted-foreground"
+                  >
+                    Я ознакомлен с{" "}
+                    <Link href="/privacy-policy" className="text-primary hover:underline">
+                      политикой конфиденциальности
+                    </Link>
+                  </label>
+                </div>
+
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="pdn-consent-express"
+                    checked={pdnConsent}
+                    onCheckedChange={(checked) => setPdnConsent(checked === true)}
+                    disabled={isChecking}
+                    data-testid="checkbox-pdn-consent-express"
+                  />
+                  <label
+                    htmlFor="pdn-consent-express"
+                    className="text-xs leading-tight cursor-pointer text-muted-foreground"
+                  >
+                    Даю{" "}
+                    <Link href="/personal-data" className="text-primary hover:underline">
+                      согласие на обработку персональных данных
+                    </Link>
+                  </label>
+                </div>
+
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="offer-consent-express"
+                    checked={offerConsent}
+                    onCheckedChange={(checked) => setOfferConsent(checked === true)}
+                    disabled={isChecking}
+                    data-testid="checkbox-offer-consent-express"
+                  />
+                  <label
+                    htmlFor="offer-consent-express"
+                    className="text-xs leading-tight cursor-pointer text-muted-foreground"
+                  >
+                    Принимаю условия{" "}
+                    <Link href="/offer" className="text-primary hover:underline">
+                      договора оферты
+                    </Link>
+                  </label>
+                </div>
               </div>
 
               <Button 
                 className="w-full" 
                 size="lg" 
                 onClick={runExpressCheck}
-                disabled={!websiteUrl || isChecking || !pdnConsent}
+                disabled={!websiteUrl || isChecking || !privacyConsent || !pdnConsent || !offerConsent}
                 data-testid="button-start-express-check"
               >
                 {isChecking ? (

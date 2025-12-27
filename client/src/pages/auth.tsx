@@ -56,8 +56,9 @@ export default function AuthPage() {
     email: "",
     phone: "",
     password: "",
-    offerAccepted: false,
+    privacyConsent: false,
     pdnConsent: false,
+    offerConsent: false,
     marketingConsent: false,
   });
   const [pendingVerifyEmail, setPendingVerifyEmail] = useState("");
@@ -549,26 +550,25 @@ export default function AuthPage() {
 
                 {/* ФЗ-152: Чекбоксы согласий при регистрации */}
                 <div className="space-y-3 pt-2 border-t">
-                  {/* Обязательное принятие оферты */}
+                  {/* Ознакомление с политикой конфиденциальности */}
                   <div className="flex items-start gap-2">
                     <Checkbox
-                      id="offer-consent"
-                      checked={registerData.offerAccepted}
+                      id="privacy-consent"
+                      checked={registerData.privacyConsent}
                       onCheckedChange={(checked) => 
-                        setRegisterData({ ...registerData, offerAccepted: checked === true })
+                        setRegisterData({ ...registerData, privacyConsent: checked === true })
                       }
                       disabled={isLoading}
-                      data-testid="checkbox-offer-consent"
+                      data-testid="checkbox-privacy-consent"
                     />
                     <label
-                      htmlFor="offer-consent"
+                      htmlFor="privacy-consent"
                       className="text-sm leading-tight cursor-pointer"
                     >
-                      Я принимаю условия{" "}
-                      <Link href="/user-agreement" className="text-primary hover:underline">
-                        Пользовательского соглашения
-                      </Link>{" "}
-                      (оферты) <span className="text-destructive">*</span>
+                      Я ознакомлен с{" "}
+                      <Link href="/privacy-policy" className="text-primary hover:underline">
+                        политикой конфиденциальности
+                      </Link>
                     </label>
                   </div>
 
@@ -587,11 +587,32 @@ export default function AuthPage() {
                       htmlFor="pdn-consent"
                       className="text-sm leading-tight cursor-pointer"
                     >
-                      Я даю согласие на обработку моих персональных данных и подтверждаю, что ознакомлен(а) с{" "}
-                      <Link href="/privacy-policy" className="text-primary hover:underline">
-                        Политикой конфиденциальности
-                      </Link>{" "}
-                      <span className="text-destructive">*</span>
+                      Даю{" "}
+                      <Link href="/personal-data" className="text-primary hover:underline">
+                        согласие на обработку персональных данных
+                      </Link>
+                    </label>
+                  </div>
+
+                  {/* Принятие оферты */}
+                  <div className="flex items-start gap-2">
+                    <Checkbox
+                      id="offer-consent"
+                      checked={registerData.offerConsent}
+                      onCheckedChange={(checked) => 
+                        setRegisterData({ ...registerData, offerConsent: checked === true })
+                      }
+                      disabled={isLoading}
+                      data-testid="checkbox-offer-consent"
+                    />
+                    <label
+                      htmlFor="offer-consent"
+                      className="text-sm leading-tight cursor-pointer"
+                    >
+                      Принимаю условия{" "}
+                      <Link href="/offer" className="text-primary hover:underline">
+                        договора оферты
+                      </Link>
                     </label>
                   </div>
                   
@@ -618,7 +639,7 @@ export default function AuthPage() {
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={isLoading || !registerData.offerAccepted || !registerData.pdnConsent}
+                  disabled={isLoading || !registerData.privacyConsent || !registerData.pdnConsent || !registerData.offerConsent}
                   data-testid="button-register"
                 >
                   {isLoading ? (

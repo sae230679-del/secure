@@ -73,8 +73,9 @@ export default function CheckoutPage() {
   const [promoError, setPromoError] = useState<string | null>(null);
   const [installmentsModalOpen, setInstallmentsModalOpen] = useState(false);
   
-  const [offerAccepted, setOfferAccepted] = useState(false);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [pdnConsentAccepted, setPdnConsentAccepted] = useState(false);
+  const [offerAccepted, setOfferAccepted] = useState(false);
 
   const { data: installmentsSettings } = useQuery<InstallmentsSettings>({
     queryKey: ["/api/public/installments-settings"],
@@ -198,7 +199,7 @@ export default function CheckoutPage() {
 
   const handlePayment = async () => {
     if (!auditId) return;
-    if (!offerAccepted || !pdnConsentAccepted) {
+    if (!privacyAccepted || !pdnConsentAccepted || !offerAccepted) {
       toast({
         title: "Необходимо принять условия",
         description: "Для продолжения оплаты примите оферту и согласие на обработку персональных данных",
@@ -528,20 +529,20 @@ export default function CheckoutPage() {
                     <div className="space-y-3">
                       <div className="flex items-start gap-3">
                         <Checkbox 
-                          id="offer-consent"
-                          checked={offerAccepted}
-                          onCheckedChange={(checked) => setOfferAccepted(checked === true)}
-                          data-testid="checkbox-offer"
+                          id="privacy-consent"
+                          checked={privacyAccepted}
+                          onCheckedChange={(checked) => setPrivacyAccepted(checked === true)}
+                          data-testid="checkbox-privacy"
                         />
-                        <Label htmlFor="offer-consent" className="text-sm leading-tight cursor-pointer">
-                          Принимаю условия{" "}
+                        <Label htmlFor="privacy-consent" className="text-sm leading-tight cursor-pointer">
+                          Я ознакомлен с{" "}
                           <a 
-                            href="/user-agreement" 
+                            href="/privacy-policy" 
                             target="_blank" 
                             className="text-primary underline"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            публичной оферты
+                            политикой конфиденциальности
                           </a>
                         </Label>
                       </div>
@@ -554,14 +555,34 @@ export default function CheckoutPage() {
                           data-testid="checkbox-pdn-consent"
                         />
                         <Label htmlFor="pdn-consent" className="text-sm leading-tight cursor-pointer">
-                          Даю согласие на{" "}
+                          Даю{" "}
                           <a 
-                            href="/personal-data-consent" 
+                            href="/personal-data" 
                             target="_blank" 
                             className="text-primary underline"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            обработку персональных данных
+                            согласие на обработку персональных данных
+                          </a>
+                        </Label>
+                      </div>
+                      
+                      <div className="flex items-start gap-3">
+                        <Checkbox 
+                          id="offer-consent"
+                          checked={offerAccepted}
+                          onCheckedChange={(checked) => setOfferAccepted(checked === true)}
+                          data-testid="checkbox-offer"
+                        />
+                        <Label htmlFor="offer-consent" className="text-sm leading-tight cursor-pointer">
+                          Принимаю условия{" "}
+                          <a 
+                            href="/offer" 
+                            target="_blank" 
+                            className="text-primary underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            договора оферты
                           </a>
                         </Label>
                       </div>
@@ -576,7 +597,7 @@ export default function CheckoutPage() {
                   className="w-full" 
                   size="lg"
                   onClick={handlePayment}
-                  disabled={paymentStatus === "processing" || !audit || !offerAccepted || !pdnConsentAccepted}
+                  disabled={paymentStatus === "processing" || !audit || !privacyAccepted || !pdnConsentAccepted || !offerAccepted}
                   data-testid="button-pay"
                 >
                   {paymentStatus === "processing" ? (

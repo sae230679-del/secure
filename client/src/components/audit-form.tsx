@@ -120,8 +120,12 @@ export function AuditForm() {
   const [expressError, setExpressError] = useState<string | null>(null);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const [quickPrivacyConsent, setQuickPrivacyConsent] = useState(false);
   const [quickPdnConsent, setQuickPdnConsent] = useState(false);
+  const [quickOfferConsent, setQuickOfferConsent] = useState(false);
+  const [fullPrivacyConsent, setFullPrivacyConsent] = useState(false);
   const [fullPdnConsent, setFullPdnConsent] = useState(false);
+  const [fullOfferConsent, setFullOfferConsent] = useState(false);
 
   useEffect(() => {
     if (!expressCheckToken || !isExpressChecking) return;
@@ -376,26 +380,65 @@ export function AuditForm() {
                   </p>
                 </div>
                 <URLInput value={websiteUrl} onChange={setWebsiteUrl} error={urlError} />
-                <div className="flex items-start gap-2">
-                  <Checkbox
-                    id="pdn-consent-quick"
-                    checked={quickPdnConsent}
-                    onCheckedChange={(checked) => setQuickPdnConsent(checked === true)}
-                    disabled={isExpressChecking}
-                    data-testid="checkbox-pdn-consent-quick"
-                  />
-                  <label
-                    htmlFor="pdn-consent-quick"
-                    className="text-xs leading-tight cursor-pointer text-muted-foreground"
-                  >
-                    Я даю согласие на обработку персональных данных в соответствии с{" "}
-                    <Link href="/privacy-policy" className="text-primary hover:underline">
-                      Политикой конфиденциальности
-                    </Link>{" "}
-                    <span className="text-destructive">*</span>
-                  </label>
+                <div className="space-y-2">
+                  <div className="flex items-start gap-2">
+                    <Checkbox
+                      id="privacy-consent-quick"
+                      checked={quickPrivacyConsent}
+                      onCheckedChange={(checked) => setQuickPrivacyConsent(checked === true)}
+                      disabled={isExpressChecking}
+                      data-testid="checkbox-privacy-consent-quick"
+                    />
+                    <label
+                      htmlFor="privacy-consent-quick"
+                      className="text-xs leading-tight cursor-pointer text-muted-foreground"
+                    >
+                      Я ознакомлен с{" "}
+                      <Link href="/privacy-policy" className="text-primary hover:underline">
+                        политикой конфиденциальности
+                      </Link>
+                    </label>
+                  </div>
+
+                  <div className="flex items-start gap-2">
+                    <Checkbox
+                      id="pdn-consent-quick"
+                      checked={quickPdnConsent}
+                      onCheckedChange={(checked) => setQuickPdnConsent(checked === true)}
+                      disabled={isExpressChecking}
+                      data-testid="checkbox-pdn-consent-quick"
+                    />
+                    <label
+                      htmlFor="pdn-consent-quick"
+                      className="text-xs leading-tight cursor-pointer text-muted-foreground"
+                    >
+                      Даю{" "}
+                      <Link href="/personal-data" className="text-primary hover:underline">
+                        согласие на обработку персональных данных
+                      </Link>
+                    </label>
+                  </div>
+
+                  <div className="flex items-start gap-2">
+                    <Checkbox
+                      id="offer-consent-quick"
+                      checked={quickOfferConsent}
+                      onCheckedChange={(checked) => setQuickOfferConsent(checked === true)}
+                      disabled={isExpressChecking}
+                      data-testid="checkbox-offer-consent-quick"
+                    />
+                    <label
+                      htmlFor="offer-consent-quick"
+                      className="text-xs leading-tight cursor-pointer text-muted-foreground"
+                    >
+                      Принимаю условия{" "}
+                      <Link href="/offer" className="text-primary hover:underline">
+                        договора оферты
+                      </Link>
+                    </label>
+                  </div>
                 </div>
-                <Button className="w-full" size="lg" onClick={runExpressCheck} disabled={!websiteUrl || isExpressChecking || !quickPdnConsent} data-testid="button-run-express-dashboard">
+                <Button className="w-full" size="lg" onClick={runExpressCheck} disabled={!websiteUrl || isExpressChecking || !quickPrivacyConsent || !quickPdnConsent || !quickOfferConsent} data-testid="button-run-express-dashboard">
                   {isExpressChecking ? (
                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Проверка...</>
                   ) : (
@@ -420,26 +463,65 @@ export function AuditForm() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <URLInput value={websiteUrl} onChange={setWebsiteUrl} error={urlError} disabled={createAuditMutation.isPending} />
               <PackageSelector value={packageType} onChange={setPackageType} disabled={createAuditMutation.isPending} />
-              <div className="flex items-start gap-2">
-                <Checkbox
-                  id="pdn-consent-full"
-                  checked={fullPdnConsent}
-                  onCheckedChange={(checked) => setFullPdnConsent(checked === true)}
-                  disabled={createAuditMutation.isPending}
-                  data-testid="checkbox-pdn-consent-full"
-                />
-                <label
-                  htmlFor="pdn-consent-full"
-                  className="text-xs leading-tight cursor-pointer text-muted-foreground"
-                >
-                  Я даю согласие на обработку персональных данных в соответствии с{" "}
-                  <Link href="/privacy-policy" className="text-primary hover:underline">
-                    Политикой конфиденциальности
-                  </Link>{" "}
-                  <span className="text-destructive">*</span>
-                </label>
+              <div className="space-y-2">
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="privacy-consent-full"
+                    checked={fullPrivacyConsent}
+                    onCheckedChange={(checked) => setFullPrivacyConsent(checked === true)}
+                    disabled={createAuditMutation.isPending}
+                    data-testid="checkbox-privacy-consent-full"
+                  />
+                  <label
+                    htmlFor="privacy-consent-full"
+                    className="text-xs leading-tight cursor-pointer text-muted-foreground"
+                  >
+                    Я ознакомлен с{" "}
+                    <Link href="/privacy-policy" className="text-primary hover:underline">
+                      политикой конфиденциальности
+                    </Link>
+                  </label>
+                </div>
+
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="pdn-consent-full"
+                    checked={fullPdnConsent}
+                    onCheckedChange={(checked) => setFullPdnConsent(checked === true)}
+                    disabled={createAuditMutation.isPending}
+                    data-testid="checkbox-pdn-consent-full"
+                  />
+                  <label
+                    htmlFor="pdn-consent-full"
+                    className="text-xs leading-tight cursor-pointer text-muted-foreground"
+                  >
+                    Даю{" "}
+                    <Link href="/personal-data" className="text-primary hover:underline">
+                      согласие на обработку персональных данных
+                    </Link>
+                  </label>
+                </div>
+
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="offer-consent-full"
+                    checked={fullOfferConsent}
+                    onCheckedChange={(checked) => setFullOfferConsent(checked === true)}
+                    disabled={createAuditMutation.isPending}
+                    data-testid="checkbox-offer-consent-full"
+                  />
+                  <label
+                    htmlFor="offer-consent-full"
+                    className="text-xs leading-tight cursor-pointer text-muted-foreground"
+                  >
+                    Принимаю условия{" "}
+                    <Link href="/offer" className="text-primary hover:underline">
+                      договора оферты
+                    </Link>
+                  </label>
+                </div>
               </div>
-              <Button type="submit" size="lg" className="w-full" disabled={createAuditMutation.isPending || !fullPdnConsent} data-testid="button-start-audit">
+              <Button type="submit" size="lg" className="w-full" disabled={createAuditMutation.isPending || !fullPrivacyConsent || !fullPdnConsent || !fullOfferConsent} data-testid="button-start-audit">
                 {createAuditMutation.isPending ? (
                   <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Создание аудита...</>
                 ) : (
