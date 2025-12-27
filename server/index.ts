@@ -2,20 +2,7 @@ import { app, httpServer, initializeApp, runPdnDestructionJob, log } from "./app
 import { serveStatic } from "./static";
 import { runNoSimulationGuard } from "./policy/noSimulationGuard";
 
-// Health check endpoint - responds immediately even during initialization
-let appReady = false;
-app.get("/health", (_req, res) => {
-  if (appReady) {
-    res.status(200).json({ status: "ok", ready: true });
-  } else {
-    res.status(200).json({ status: "starting", ready: false });
-  }
-});
-
-// Also add a simple root health check for Cloud Run
-app.get("/_health", (_req, res) => {
-  res.status(200).send("OK");
-});
+// Health check endpoints are now in app.ts to ensure they're first in middleware stack
 
 (async () => {
   const port = parseInt(process.env.PORT || "5000", 10);
@@ -49,8 +36,6 @@ app.get("/_health", (_req, res) => {
           await setupVite(httpServer, app);
         }
         
-        // Mark app as ready after initialization
-        appReady = true;
         log("Application fully initialized");
 
         if (process.env.NODE_ENV === "production") {
@@ -63,7 +48,6 @@ app.get("/_health", (_req, res) => {
         }
       } catch (error) {
         console.error("[INIT ERROR]", error);
-        appReady = false;
       }
     },
   );

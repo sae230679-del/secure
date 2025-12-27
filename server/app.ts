@@ -12,6 +12,15 @@ import { storage } from "./storage";
 export const app = express();
 export const httpServer = createServer(app);
 
+// Health check endpoints MUST be first - before any middleware
+// These respond immediately for Cloud Run health checks
+app.get("/health", (_req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+app.get("/_health", (_req, res) => {
+  res.status(200).send("OK");
+});
+
 app.set('trust proxy', 1);
 
 const isProduction = process.env.NODE_ENV === "production";
