@@ -165,12 +165,14 @@ export default function LandingPage() {
                   </Link>
                 </Button>
               </div>
-              <div className="pt-2">
-                <Link href="/tools" className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors text-sm" data-testid="link-tools">
-                  <FileCode className="h-4 w-4 mr-1" />
-                  Бесплатные инструменты и генераторы
-                  <ArrowRight className="ml-1 h-3 w-3" />
-                </Link>
+              <div className="pt-3">
+                <Button variant="outline" size="lg" asChild className="group" data-testid="link-tools">
+                  <Link href="/tools">
+                    <FileCode className="h-5 w-5 mr-2 animate-pulse text-primary" />
+                    Бесплатные инструменты и генераторы
+                    <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                  </Link>
+                </Button>
               </div>
               <div className="flex items-center gap-6 pt-4 text-sm text-muted-foreground flex-wrap">
                 <div className="flex items-center gap-1">

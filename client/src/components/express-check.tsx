@@ -663,8 +663,16 @@ export function ExpressCheck() {
                       <span className="truncate">{criterion.name}</span>
                     </div>
                   ))}
-                  <div className="text-muted-foreground/60">
-                    + ещё {AUDIT_CRITERIA.length - 5} критериев
+                </div>
+                <div className="mt-2 p-2 rounded border-2 border-rose-500/50 bg-rose-500/10">
+                  <div className="text-xs font-medium text-rose-600 dark:text-rose-400 mb-1">+ ещё 4 критерия:</div>
+                  <div className="grid grid-cols-1 gap-1 text-xs text-muted-foreground">
+                    {AUDIT_CRITERIA.slice(5).map((criterion) => (
+                      <div key={criterion.id} className="flex items-center gap-1.5">
+                        <criterion.icon className="w-3 h-3 shrink-0 text-rose-500" />
+                        <span className="truncate">{criterion.name}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
