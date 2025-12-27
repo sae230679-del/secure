@@ -52,7 +52,8 @@ Preferred communication style: Simple, everyday language.
 - **Type**: PostgreSQL
 - **ORM**: Drizzle ORM with drizzle-zod for schema validation
 - **Schema**: Defined in `shared/schema.ts`
-- **Key Tables**: users, audit_packages, audits, audit_results, payments, reports, contracts, referrals, promo_codes, themes, audit_logs, pdn_consent_events, pdn_destruction_tasks, pdn_destruction_acts, seo_pages, express_audit_limits, tool_configs, tool_usage, service_configs, guide_articles, guide_events, guide_settings.
+- **Key Tables**: users, audit_packages, audits, audit_results, payments, reports, contracts, referrals, promo_codes, themes, audit_logs, pdn_consent_events, pdn_destruction_tasks, pdn_destruction_acts, seo_pages, express_audit_limits, tool_configs, tool_usage, service_configs, guide_articles, guide_events, guide_settings, promotions.
+- **Promotions System**: Time-limited promotional campaigns with banner/popup display on landing page. Managed via `/admin/promotions`. Features: priority sorting, countdown timer, configurable display options (banner, popup), date range validation.
 - **Guide Feature**: Educational articles about data protection laws (152-ФЗ, 149-ФЗ). SuperAdmin manages articles via `/superadmin/guide`. Public pages at `/guide` and `/guide/:slug`.
 
 ### Role-Based Access Control
