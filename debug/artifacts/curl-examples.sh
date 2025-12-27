@@ -48,7 +48,7 @@ curl -s -X POST "$BASE_URL/api/auth/login" \
   -c cookies.txt \
   -d '{
     "email": "test@example.com",
-    "password": "password123"
+    "password": "YOUR_PASSWORD_HERE"
   }' | jq .
 
 # 8. Создание аудита (требует авторизации)
