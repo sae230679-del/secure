@@ -4746,5 +4746,257 @@ export async function registerRoutes(
     }
   });
 
+  // =====================================================
+  // Email Subscription Routes
+  // =====================================================
+  const { emailSubscriptionService } = await import("./email-subscription-service");
+
+  // Initialize email service settings on startup
+  (async () => {
+    try {
+      const settings = await storage.getEmailServiceSettings();
+      if (settings) {
+        emailSubscriptionService.configure(settings);
+        console.log(`[EMAIL] Service configured: ${settings.provider}, active: ${settings.isActive}`);
+      }
+    } catch (error) {
+      console.error("[EMAIL] Failed to load settings:", error);
+    }
+  })();
+
+  // Subscribe to newsletter (public endpoint)
+  const subscribeSchema = z.object({
+    email: z.string().email("Некорректный email"),
+    name: z.string().optional(),
+    source: z.string().optional(),
+  });
+
+  app.post("/api/subscribe", async (req, res) => {
+    try {
+      const result = subscribeSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ error: result.error.flatten() });
+      }
+
+      const { email, name, source } = result.data;
+      const normalizedEmail = email.toLowerCase().trim();
+
+      // Check if already subscribed
+      const existing = await storage.getEmailSubscriptionByEmail(normalizedEmail);
+      if (existing) {
+        if (existing.status === "confirmed") {
+          return res.status(400).json({ error: "Вы уже подписаны на рассылку" });
+        }
+        if (existing.status === "pending") {
+          return res.json({ success: true, message: "Проверьте почту для подтверждения подписки" });
+        }
+      }
+
+      // Generate confirmation token
+      const confirmationToken = crypto.randomBytes(32).toString("hex");
+      const ipAddress = req.headers["x-forwarded-for"]?.toString().split(",")[0] || req.socket.remoteAddress || undefined;
+
+      // Create subscription
+      await storage.createEmailSubscription({
+        email: normalizedEmail,
+        name,
+        confirmationToken,
+        source: source || "website",
+        ipAddress,
+      });
+
+      // Send confirmation email
+      const baseUrl = process.env.BASE_URL || `https://${req.headers.host}`;
+      const confirmUrl = `${baseUrl}/confirm-subscription?token=${confirmationToken}`;
+      
+      const emailResult = await emailSubscriptionService.sendConfirmationEmail(normalizedEmail, confirmUrl);
+      
+      if (!emailResult.success) {
+        console.error("[SUBSCRIBE] Failed to send confirmation email:", emailResult.error);
+      }
+
+      res.json({ 
+        success: true, 
+        message: "Проверьте почту для подтверждения подписки",
+        emailSent: emailResult.success
+      });
+    } catch (error: any) {
+      console.error("[SUBSCRIBE] Error:", error?.message);
+      res.status(500).json({ error: "Ошибка оформления подписки" });
+    }
+  });
+
+  // Confirm subscription (public endpoint)
+  app.get("/api/confirm-subscription", async (req, res) => {
+    try {
+      const token = req.query.token as string;
+      if (!token) {
+        return res.status(400).json({ error: "Токен не указан" });
+      }
+
+      const subscription = await storage.getEmailSubscriptionByToken(token);
+      if (!subscription) {
+        return res.status(404).json({ error: "Подписка не найдена или уже подтверждена" });
+      }
+
+      if (subscription.status === "confirmed") {
+        return res.json({ success: true, message: "Подписка уже подтверждена", alreadyConfirmed: true });
+      }
+
+      // Confirm subscription
+      const confirmed = await storage.confirmEmailSubscription(token);
+      if (!confirmed) {
+        return res.status(500).json({ error: "Ошибка подтверждения подписки" });
+      }
+
+      // Send welcome email
+      const welcomeResult = await emailSubscriptionService.sendWelcomeEmail(confirmed.email);
+      if (!welcomeResult.success) {
+        console.error("[SUBSCRIBE] Failed to send welcome email:", welcomeResult.error);
+      }
+
+      // Add to external mailing list
+      const listResult = await emailSubscriptionService.addSubscriberToList(confirmed.email, confirmed.name || undefined);
+      if (!listResult.success) {
+        console.error("[SUBSCRIBE] Failed to add to list:", listResult.error);
+      }
+
+      res.json({ success: true, message: "Подписка подтверждена!" });
+    } catch (error: any) {
+      console.error("[CONFIRM] Error:", error?.message);
+      res.status(500).json({ error: "Ошибка подтверждения подписки" });
+    }
+  });
+
+  // Unsubscribe (public endpoint)
+  app.post("/api/unsubscribe", async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ error: "Email не указан" });
+      }
+
+      const subscription = await storage.unsubscribeEmail(email);
+      if (!subscription) {
+        return res.status(404).json({ error: "Подписка не найдена" });
+      }
+
+      res.json({ success: true, message: "Вы успешно отписались от рассылки" });
+    } catch (error: any) {
+      console.error("[UNSUBSCRIBE] Error:", error?.message);
+      res.status(500).json({ error: "Ошибка отписки" });
+    }
+  });
+
+  // Admin: Get email subscriptions
+  app.get("/api/admin/email-subscriptions", requireSuperAdmin, async (req, res) => {
+    try {
+      const status = req.query.status as string | undefined;
+      const subscriptions = await storage.getEmailSubscriptions(status);
+      res.json(subscriptions);
+    } catch (error: any) {
+      console.error("[ADMIN] Error fetching subscriptions:", error?.message);
+      res.status(500).json({ error: "Ошибка загрузки подписок" });
+    }
+  });
+
+  // Admin: Get email service settings
+  app.get("/api/admin/email-service-settings", requireSuperAdmin, async (req, res) => {
+    try {
+      const settings = await storage.getEmailServiceSettings();
+      // Mask API keys for security
+      if (settings) {
+        res.json({
+          ...settings,
+          apiKey: settings.apiKey ? "***" + settings.apiKey.slice(-4) : null,
+          apiSecret: settings.apiSecret ? "***" + settings.apiSecret.slice(-4) : null,
+        });
+      } else {
+        res.json(null);
+      }
+    } catch (error: any) {
+      console.error("[ADMIN] Error fetching email settings:", error?.message);
+      res.status(500).json({ error: "Ошибка загрузки настроек" });
+    }
+  });
+
+  // Admin: Update email service settings
+  const emailSettingsSchema = z.object({
+    provider: z.enum(["sendpulse", "unisender", "dashamail", "none"]),
+    apiKey: z.string().optional().nullable(),
+    apiSecret: z.string().optional().nullable(),
+    senderEmail: z.string().email().optional().nullable(),
+    senderName: z.string().optional().nullable(),
+    listId: z.string().optional().nullable(),
+    confirmationSubject: z.string().optional().nullable(),
+    confirmationTemplate: z.string().optional().nullable(),
+    welcomeSubject: z.string().optional().nullable(),
+    welcomeTemplate: z.string().optional().nullable(),
+    isActive: z.boolean().optional(),
+  });
+
+  app.put("/api/admin/email-service-settings", requireSuperAdmin, async (req, res) => {
+    try {
+      const result = emailSettingsSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ error: result.error.flatten() });
+      }
+
+      // Don't overwrite API keys if they're masked (not changed)
+      const data = { ...result.data };
+      if (data.apiKey?.startsWith("***")) {
+        delete data.apiKey;
+      }
+      if (data.apiSecret?.startsWith("***")) {
+        delete data.apiSecret;
+      }
+
+      const settings = await storage.updateEmailServiceSettings(data);
+      
+      // Reconfigure service with new settings
+      const fullSettings = await storage.getEmailServiceSettings();
+      if (fullSettings) {
+        emailSubscriptionService.configure(fullSettings);
+      }
+
+      res.json({
+        ...settings,
+        apiKey: settings.apiKey ? "***" + settings.apiKey.slice(-4) : null,
+        apiSecret: settings.apiSecret ? "***" + settings.apiSecret.slice(-4) : null,
+      });
+    } catch (error: any) {
+      console.error("[ADMIN] Error updating email settings:", error?.message);
+      res.status(500).json({ error: "Ошибка сохранения настроек" });
+    }
+  });
+
+  // Admin: Test email service connection
+  app.post("/api/admin/email-service-settings/test", requireSuperAdmin, async (req, res) => {
+    try {
+      const { testEmail } = req.body;
+      if (!testEmail) {
+        return res.status(400).json({ error: "Укажите email для тестирования" });
+      }
+
+      if (!emailSubscriptionService.isConfigured()) {
+        return res.status(400).json({ error: "Сервис рассылки не настроен или отключен" });
+      }
+
+      const testResult = await emailSubscriptionService.sendConfirmationEmail(
+        testEmail,
+        "https://example.com/test-confirmation"
+      );
+
+      if (testResult.success) {
+        res.json({ success: true, message: "Тестовое письмо отправлено" });
+      } else {
+        res.status(400).json({ error: testResult.error || "Ошибка отправки" });
+      }
+    } catch (error: any) {
+      console.error("[ADMIN] Error testing email service:", error?.message);
+      res.status(500).json({ error: "Ошибка тестирования сервиса" });
+    }
+  });
+
   return httpServer;
 }

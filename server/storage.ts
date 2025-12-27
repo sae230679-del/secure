@@ -141,6 +141,18 @@ export interface IStorage {
   createPromotion(data: schema.InsertPromotion): Promise<schema.Promotion>;
   updatePromotion(id: number, data: Partial<schema.InsertPromotion>): Promise<schema.Promotion | undefined>;
   deletePromotion(id: number): Promise<boolean>;
+
+  // Email Subscriptions
+  createEmailSubscription(data: schema.InsertEmailSubscription): Promise<schema.EmailSubscription>;
+  getEmailSubscriptionByEmail(email: string): Promise<schema.EmailSubscription | undefined>;
+  getEmailSubscriptionByToken(token: string): Promise<schema.EmailSubscription | undefined>;
+  confirmEmailSubscription(token: string): Promise<schema.EmailSubscription | undefined>;
+  unsubscribeEmail(email: string): Promise<schema.EmailSubscription | undefined>;
+  getEmailSubscriptions(status?: string): Promise<schema.EmailSubscription[]>;
+
+  // Email Service Settings
+  getEmailServiceSettings(): Promise<schema.EmailServiceSettings | undefined>;
+  updateEmailServiceSettings(data: Partial<schema.InsertEmailServiceSettings>): Promise<schema.EmailServiceSettings>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2378,6 +2390,99 @@ export class DatabaseStorage implements IStorage {
       .from(schema.guideArticles)
       .where(eq(schema.guideArticles.topicId, topicId))
       .orderBy(desc(schema.guideArticles.createdAt));
+  }
+
+  // =====================================================
+  // Email Subscriptions
+  // =====================================================
+  async createEmailSubscription(data: schema.InsertEmailSubscription): Promise<schema.EmailSubscription> {
+    const [subscription] = await db
+      .insert(schema.emailSubscriptions)
+      .values(data)
+      .returning();
+    return subscription;
+  }
+
+  async getEmailSubscriptionByEmail(email: string): Promise<schema.EmailSubscription | undefined> {
+    const [subscription] = await db
+      .select()
+      .from(schema.emailSubscriptions)
+      .where(eq(schema.emailSubscriptions.email, email.toLowerCase()));
+    return subscription;
+  }
+
+  async getEmailSubscriptionByToken(token: string): Promise<schema.EmailSubscription | undefined> {
+    const [subscription] = await db
+      .select()
+      .from(schema.emailSubscriptions)
+      .where(eq(schema.emailSubscriptions.confirmationToken, token));
+    return subscription;
+  }
+
+  async confirmEmailSubscription(token: string): Promise<schema.EmailSubscription | undefined> {
+    const [subscription] = await db
+      .update(schema.emailSubscriptions)
+      .set({
+        status: "confirmed",
+        confirmedAt: new Date(),
+        confirmationToken: null,
+      })
+      .where(eq(schema.emailSubscriptions.confirmationToken, token))
+      .returning();
+    return subscription;
+  }
+
+  async unsubscribeEmail(email: string): Promise<schema.EmailSubscription | undefined> {
+    const [subscription] = await db
+      .update(schema.emailSubscriptions)
+      .set({
+        status: "unsubscribed",
+        unsubscribedAt: new Date(),
+      })
+      .where(eq(schema.emailSubscriptions.email, email.toLowerCase()))
+      .returning();
+    return subscription;
+  }
+
+  async getEmailSubscriptions(status?: string): Promise<schema.EmailSubscription[]> {
+    if (status) {
+      return db
+        .select()
+        .from(schema.emailSubscriptions)
+        .where(eq(schema.emailSubscriptions.status, status as any))
+        .orderBy(desc(schema.emailSubscriptions.createdAt));
+    }
+    return db
+      .select()
+      .from(schema.emailSubscriptions)
+      .orderBy(desc(schema.emailSubscriptions.createdAt));
+  }
+
+  // =====================================================
+  // Email Service Settings
+  // =====================================================
+  async getEmailServiceSettings(): Promise<schema.EmailServiceSettings | undefined> {
+    const [settings] = await db.select().from(schema.emailServiceSettings).limit(1);
+    return settings;
+  }
+
+  async updateEmailServiceSettings(data: Partial<schema.InsertEmailServiceSettings>): Promise<schema.EmailServiceSettings> {
+    const existing = await this.getEmailServiceSettings();
+    
+    if (existing) {
+      const [updated] = await db
+        .update(schema.emailServiceSettings)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(schema.emailServiceSettings.id, existing.id))
+        .returning();
+      return updated;
+    }
+    
+    const [created] = await db
+      .insert(schema.emailServiceSettings)
+      .values(data as schema.InsertEmailServiceSettings)
+      .returning();
+    return created;
   }
 }
 
