@@ -1073,3 +1073,68 @@ export const guideSettings = pgTable("guide_settings", {
 });
 
 export type GuideSettings = typeof guideSettings.$inferSelect;
+
+// =====================================================
+// Email Subscriptions - подписки на рассылку
+// =====================================================
+export const emailSubscriptionStatusEnum = pgEnum("email_subscription_status", [
+  "pending", "confirmed", "unsubscribed"
+]);
+
+export const emailSubscriptions = pgTable("email_subscriptions", {
+  id: serial("id").primaryKey(),
+  email: varchar("email", { length: 255 }).notNull(),
+  name: varchar("name", { length: 255 }),
+  confirmationToken: varchar("confirmation_token", { length: 100 }).unique(),
+  status: emailSubscriptionStatusEnum("status").default("pending").notNull(),
+  source: varchar("source", { length: 50 }).default("website"),
+  ipAddress: varchar("ip_address", { length: 45 }),
+  confirmedAt: timestamp("confirmed_at"),
+  unsubscribedAt: timestamp("unsubscribed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("email_subscriptions_email_idx").on(table.email),
+  index("email_subscriptions_status_idx").on(table.status),
+  index("email_subscriptions_token_idx").on(table.confirmationToken),
+]);
+
+export const insertEmailSubscriptionSchema = createInsertSchema(emailSubscriptions).omit({
+  id: true,
+  createdAt: true,
+  confirmedAt: true,
+  unsubscribedAt: true,
+});
+
+export type EmailSubscription = typeof emailSubscriptions.$inferSelect;
+export type InsertEmailSubscription = z.infer<typeof insertEmailSubscriptionSchema>;
+
+// =====================================================
+// Email Service Settings - настройки сервисов рассылки
+// =====================================================
+export const emailServiceProviderEnum = pgEnum("email_service_provider", [
+  "sendpulse", "unisender", "dashamail", "none"
+]);
+
+export const emailServiceSettings = pgTable("email_service_settings", {
+  id: serial("id").primaryKey(),
+  provider: emailServiceProviderEnum("provider").default("none").notNull(),
+  apiKey: text("api_key"),
+  apiSecret: text("api_secret"),
+  senderEmail: varchar("sender_email", { length: 255 }),
+  senderName: varchar("sender_name", { length: 255 }),
+  listId: varchar("list_id", { length: 100 }),
+  confirmationSubject: varchar("confirmation_subject", { length: 500 }).default("Подтвердите подписку на рассылку"),
+  confirmationTemplate: text("confirmation_template"),
+  welcomeSubject: varchar("welcome_subject", { length: 500 }).default("Добро пожаловать!"),
+  welcomeTemplate: text("welcome_template"),
+  isActive: boolean("is_active").default(false).notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertEmailServiceSettingsSchema = createInsertSchema(emailServiceSettings).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type EmailServiceSettings = typeof emailServiceSettings.$inferSelect;
+export type InsertEmailServiceSettings = z.infer<typeof insertEmailServiceSettingsSchema>;
