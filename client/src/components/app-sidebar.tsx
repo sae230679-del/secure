@@ -49,6 +49,8 @@ import {
   Wallet,
   FileText,
   BookOpen,
+  History,
+  ClipboardList,
 } from "lucide-react";
 
 export function AppSidebar() {
@@ -81,12 +83,15 @@ export function AppSidebar() {
     { title: "Услуги и инструменты", url: "/superadmin/services", icon: Package },
     { title: "Настройки сайта", url: "/superadmin/settings", icon: Settings },
     { title: "Email / SMTP", url: "/superadmin/email-settings", icon: Mail },
+    { title: "OAuth авторизация", url: "/superadmin/oauth-settings", icon: Users },
     { title: "Платежи / ЮKassa", url: "/superadmin/payment-settings", icon: Wallet },
     { title: "Темы дизайна", url: "/superadmin/themes", icon: Palette },
     { title: "Промокоды", url: "/superadmin/promo-codes", icon: Tag },
     { title: "Управление ПДн", url: "/superadmin/pdn", icon: Shield },
     { title: "SEO-страницы", url: "/superadmin/seo-pages", icon: FileText },
     { title: "Справочник", url: "/superadmin/guide", icon: BookOpen },
+    { title: "Журнал изменений", url: "/superadmin/changelog", icon: History },
+    { title: "ТЗ для ИИ-агента", url: "/superadmin/technical-specs", icon: ClipboardList },
     { title: "Журнал действий", url: "/superadmin/logs", icon: Activity },
   ];
 

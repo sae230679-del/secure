@@ -16,7 +16,7 @@ export default function UserAgreementPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-2xl" data-testid="text-page-title">
+            <CardTitle className="text-xl sm:text-2xl" data-testid="text-page-title">
               Пользовательское соглашение
             </CardTitle>
           </CardHeader>

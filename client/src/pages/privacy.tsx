@@ -28,18 +28,22 @@ export default function PrivacyPolicyPage() {
         </header>
         
         <main className="container mx-auto px-4 py-8 max-w-4xl">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-3 bg-primary/10 rounded-full">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
+            <div className="p-3 bg-primary/10 rounded-full w-fit">
               <Shield className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">Политика конфиденциальности</h1>
-              <p className="text-sm text-muted-foreground flex items-center gap-2 mt-1">
-                <FileText className="h-4 w-4" />
-                Версия {DOCUMENT_VERSION}
+              <h1 className="text-xl sm:text-2xl font-bold">Политика конфиденциальности</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground flex flex-wrap items-center gap-2 mt-1">
+                <span className="flex items-center gap-1">
+                  <FileText className="h-4 w-4" />
+                  Версия {DOCUMENT_VERSION}
+                </span>
                 <span className="text-muted-foreground/50">|</span>
-                <Calendar className="h-4 w-4" />
-                {DOCUMENT_DATE}
+                <span className="flex items-center gap-1">
+                  <Calendar className="h-4 w-4" />
+                  {DOCUMENT_DATE}
+                </span>
               </p>
             </div>
           </div>

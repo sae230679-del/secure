@@ -4,11 +4,6 @@ import crypto from "crypto";
 
 const router = Router();
 
-const VK_APP_ID = process.env.VK_APP_ID;
-const VK_APP_SECRET = process.env.VK_APP_SECRET;
-const YANDEX_CLIENT_ID = process.env.YANDEX_CLIENT_ID;
-const YANDEX_CLIENT_SECRET = process.env.YANDEX_CLIENT_SECRET;
-
 function getBaseUrl(): string {
   if (process.env.REPLIT_DEV_DOMAIN) {
     return `https://${process.env.REPLIT_DEV_DOMAIN}`;
@@ -19,9 +14,21 @@ function getBaseUrl(): string {
   return process.env.BASE_URL || "https://securelex.ru";
 }
 
-router.get("/vk", (req: Request, res: Response) => {
-  if (!VK_APP_ID) {
-    return res.status(500).json({ error: "VK OAuth не настроен" });
+async function getOAuthConfig(provider: "vk" | "yandex") {
+  const setting = await storage.getOAuthSetting(provider);
+  if (!setting || !setting.enabled || !setting.clientId || !setting.clientSecret) {
+    return null;
+  }
+  return {
+    clientId: setting.clientId,
+    clientSecret: setting.clientSecret,
+  };
+}
+
+router.get("/vk", async (req: Request, res: Response) => {
+  const config = await getOAuthConfig("vk");
+  if (!config) {
+    return res.status(500).json({ error: "VK OAuth не настроен или отключён" });
   }
 
   const state = crypto.randomBytes(16).toString("hex");
@@ -31,7 +38,7 @@ router.get("/vk", (req: Request, res: Response) => {
   const scope = "email";
   const vkVersion = "5.131";
 
-  const authUrl = `https://oauth.vk.com/authorize?client_id=${VK_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&display=page&scope=${scope}&response_type=code&v=${vkVersion}&state=${state}`;
+  const authUrl = `https://oauth.vk.com/authorize?client_id=${config.clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&display=page&scope=${scope}&response_type=code&v=${vkVersion}&state=${state}`;
 
   res.redirect(authUrl);
 });
@@ -56,12 +63,13 @@ router.get("/vk/callback", async (req: Request, res: Response) => {
 
     delete req.session.oauthState;
 
-    if (!VK_APP_ID || !VK_APP_SECRET) {
+    const config = await getOAuthConfig("vk");
+    if (!config) {
       return res.redirect("/auth?error=vk_not_configured");
     }
 
     const redirectUri = `${getBaseUrl()}/api/oauth/vk/callback`;
-    const tokenUrl = `https://oauth.vk.com/access_token?client_id=${VK_APP_ID}&client_secret=${VK_APP_SECRET}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${code}`;
+    const tokenUrl = `https://oauth.vk.com/access_token?client_id=${config.clientId}&client_secret=${config.clientSecret}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${code}`;
 
     const tokenResponse = await fetch(tokenUrl);
     const tokenData = await tokenResponse.json();
@@ -122,9 +130,10 @@ router.get("/vk/callback", async (req: Request, res: Response) => {
   }
 });
 
-router.get("/yandex", (req: Request, res: Response) => {
-  if (!YANDEX_CLIENT_ID) {
-    return res.status(500).json({ error: "Яндекс OAuth не настроен" });
+router.get("/yandex", async (req: Request, res: Response) => {
+  const config = await getOAuthConfig("yandex");
+  if (!config) {
+    return res.status(500).json({ error: "Яндекс OAuth не настроен или отключён" });
   }
 
   const state = crypto.randomBytes(16).toString("hex");
@@ -132,7 +141,7 @@ router.get("/yandex", (req: Request, res: Response) => {
 
   const redirectUri = `${getBaseUrl()}/api/oauth/yandex/callback`;
 
-  const authUrl = `https://oauth.yandex.ru/authorize?response_type=code&client_id=${YANDEX_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
+  const authUrl = `https://oauth.yandex.ru/authorize?response_type=code&client_id=${config.clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
 
   res.redirect(authUrl);
 });
@@ -157,7 +166,8 @@ router.get("/yandex/callback", async (req: Request, res: Response) => {
 
     delete req.session.oauthState;
 
-    if (!YANDEX_CLIENT_ID || !YANDEX_CLIENT_SECRET) {
+    const config = await getOAuthConfig("yandex");
+    if (!config) {
       return res.redirect("/auth?error=yandex_not_configured");
     }
 
@@ -171,8 +181,8 @@ router.get("/yandex/callback", async (req: Request, res: Response) => {
       body: new URLSearchParams({
         grant_type: "authorization_code",
         code,
-        client_id: YANDEX_CLIENT_ID,
-        client_secret: YANDEX_CLIENT_SECRET,
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
         redirect_uri: redirectUri,
       }),
     });
@@ -240,10 +250,15 @@ router.get("/yandex/callback", async (req: Request, res: Response) => {
   }
 });
 
-router.get("/status", (req: Request, res: Response) => {
+router.get("/status", async (req: Request, res: Response) => {
+  const [vkConfig, yandexConfig] = await Promise.all([
+    getOAuthConfig("vk"),
+    getOAuthConfig("yandex"),
+  ]);
+  
   res.json({
-    vk: !!VK_APP_ID && !!VK_APP_SECRET,
-    yandex: !!YANDEX_CLIENT_ID && !!YANDEX_CLIENT_SECRET,
+    vk: !!vkConfig,
+    yandex: !!yandexConfig,
   });
 });
 

@@ -1,7 +1,11 @@
+import { useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Shield, Mail, Phone, MessageCircle } from "lucide-react";
+import { Shield, Mail, Phone, MessageCircle, ChevronDown } from "lucide-react";
 import { SiTelegram, SiWhatsapp, SiVk } from "react-icons/si";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { cn } from "@/lib/utils";
 
 type PublicSettings = {
   siteName: string;
@@ -167,19 +171,58 @@ function PaymentMethodsDisplay({ showB2B = false }: { size?: "sm" | "md"; showB2
   );
 }
 
+interface FooterSectionProps {
+  title: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}
+
+function FooterSection({ title, children, defaultOpen = false }: FooterSectionProps) {
+  const isMobile = useIsMobile();
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  if (!isMobile) {
+    return (
+      <div>
+        <h4 className="font-semibold mb-4">{title}</h4>
+        {children}
+      </div>
+    );
+  }
+
+  return (
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <CollapsibleTrigger className="flex items-center justify-between w-full py-2 text-left">
+        <h4 className="font-semibold">{title}</h4>
+        <ChevronDown className={cn(
+          "h-4 w-4 text-muted-foreground transition-transform",
+          isOpen && "rotate-180"
+        )} />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="pt-2 pb-4">
+        {children}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 export function Footer() {
   const { data: settings } = useQuery<PublicSettings>({
     queryKey: ["/api/settings/public"],
   });
+  const isMobile = useIsMobile();
 
   const contacts = settings?.contacts;
   const requisites = settings?.requisites;
 
   return (
-    <footer className="border-t py-12 bg-card/50" data-testid="footer">
+    <footer className="border-t py-8 sm:py-12 bg-card/50" data-testid="footer">
       <div className="max-w-7xl mx-auto px-4 sm:px-8 lg:px-12">
-        <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-8">
-          <div className="space-y-4">
+        <div className={cn(
+          "grid gap-6 sm:gap-8",
+          isMobile ? "grid-cols-1 divide-y divide-border" : "sm:grid-cols-2 lg:grid-cols-6"
+        )}>
+          <div className="space-y-4 pb-4 sm:pb-0">
             <div className="flex items-center gap-2">
               <Shield className="h-6 w-6 animate-traffic-light-text" />
               <span className="font-bold">{settings?.siteName || "SecureLex.ru"}</span>
@@ -189,8 +232,7 @@ export function Footer() {
             </p>
           </div>
           
-          <div>
-            <h4 className="font-semibold mb-4">Сервис</h4>
+          <FooterSection title="Сервис">
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li>
                 <Link href="/#check" className="hover:text-foreground transition-colors" data-testid="link-footer-check">
@@ -208,10 +250,9 @@ export function Footer() {
                 </Link>
               </li>
             </ul>
-          </div>
+          </FooterSection>
           
-          <div>
-            <h4 className="font-semibold mb-4">Информация</h4>
+          <FooterSection title="Информация">
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li>
                 <Link href="/criteria" className="hover:text-foreground transition-colors" data-testid="link-footer-fz152">
@@ -223,14 +264,14 @@ export function Footer() {
                   Справочник
                 </Link>
               </li>
+            </ul>
+          </FooterSection>
+          
+          <FooterSection title="Документы">
+            <ul className="space-y-2 text-sm text-muted-foreground">
               <li>
                 <Link href="/privacy-policy" className="hover:text-foreground transition-colors" data-testid="link-footer-privacy-policy">
                   Политика конфиденциальности
-                </Link>
-              </li>
-              <li>
-                <Link href="/cookies-policy" className="hover:text-foreground transition-colors" data-testid="link-footer-cookies">
-                  Политика cookies
                 </Link>
               </li>
               <li>
@@ -238,11 +279,25 @@ export function Footer() {
                   Пользовательское соглашение
                 </Link>
               </li>
+              <li>
+                <Link href="/personal-data-agreement" className="hover:text-foreground transition-colors" data-testid="link-footer-pdn-agreement">
+                  Согласие на обработку ПДн
+                </Link>
+              </li>
+              <li>
+                <Link href="/offer" className="hover:text-foreground transition-colors" data-testid="link-footer-offer">
+                  Договор-оферта
+                </Link>
+              </li>
+              <li>
+                <Link href="/cookies-policy" className="hover:text-foreground transition-colors" data-testid="link-footer-cookies">
+                  Политика cookies
+                </Link>
+              </li>
             </ul>
-          </div>
+          </FooterSection>
           
-          <div>
-            <h4 className="font-semibold mb-4">Контакты</h4>
+          <FooterSection title="Контакты" defaultOpen={true}>
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li className="flex items-center gap-2">
                 <Mail className="h-4 w-4 shrink-0" />
@@ -263,6 +318,20 @@ export function Footer() {
                 >
                   {contacts?.phone || "+7 (800) 555-35-35"}
                 </a>
+              </li>
+              <li className="flex items-start gap-2 pt-2 border-t border-border/50 mt-2">
+                <Shield className="h-4 w-4 shrink-0 mt-0.5" />
+                <div>
+                  <span className="text-xs text-muted-foreground/80">Ответственный за ПДн:</span>
+                  <br />
+                  <a 
+                    href="mailto:privacy@securelex.ru"
+                    className="hover:text-foreground transition-colors"
+                    data-testid="link-footer-pdn-email"
+                  >
+                    privacy@securelex.ru
+                  </a>
+                </div>
               </li>
             </ul>
             {(contacts?.telegram || contacts?.whatsapp || contacts?.vk || contacts?.maxMessenger) && (
@@ -313,10 +382,9 @@ export function Footer() {
                 )}
               </div>
             )}
-          </div>
+          </FooterSection>
           
-          <div>
-            <h4 className="font-semibold mb-4">Реквизиты</h4>
+          <FooterSection title="Реквизиты" defaultOpen={true}>
             {requisites ? (
               <ul className="space-y-1 text-sm text-muted-foreground">
                 <li className="font-medium text-foreground">{requisites.companyName}</li>
@@ -327,7 +395,7 @@ export function Footer() {
             ) : (
               <p className="text-sm text-muted-foreground">Реквизиты не указаны</p>
             )}
-          </div>
+          </FooterSection>
         </div>
         
         <div className="mt-8 pt-8 border-t">
@@ -339,7 +407,7 @@ export function Footer() {
               </div>
               <PaymentMethodsDisplay size="sm" showB2B={true} />
             </div>
-            <div className="text-right space-y-2">
+            <div className="text-left sm:text-right space-y-2">
               <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                 <Link href="/privacy-policy" className="hover:text-foreground transition-colors" data-testid="link-footer-privacy">
                   Политика конфиденциальности

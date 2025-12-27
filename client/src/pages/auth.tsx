@@ -588,7 +588,7 @@ export default function AuthPage() {
                       className="text-sm leading-tight cursor-pointer"
                     >
                       Даю{" "}
-                      <Link href="/personal-data" className="text-primary hover:underline">
+                      <Link href="/personal-data-agreement" className="text-primary hover:underline">
                         согласие на обработку персональных данных
                       </Link>
                     </label>

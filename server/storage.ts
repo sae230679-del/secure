@@ -62,6 +62,11 @@ export interface IStorage {
   getSystemSetting(key: string): Promise<SystemSetting | undefined>;
   upsertSystemSetting(key: string, value: string): Promise<SystemSetting>;
 
+  // OAuth Settings
+  getOAuthSettings(): Promise<schema.OAuthSetting[]>;
+  getOAuthSetting(provider: string): Promise<schema.OAuthSetting | undefined>;
+  upsertOAuthSetting(provider: string, data: { enabled?: boolean; clientId?: string; clientSecret?: string; updatedBy?: number }): Promise<schema.OAuthSetting>;
+
   getDesignThemes(): Promise<DesignTheme[]>;
   getActiveTheme(): Promise<DesignTheme | undefined>;
   createDesignTheme(data: { name: string; key: string; description?: string; preset: schema.ThemePreset; createdBy?: number }): Promise<DesignTheme>;
@@ -153,6 +158,19 @@ export interface IStorage {
   // Email Service Settings
   getEmailServiceSettings(): Promise<schema.EmailServiceSettings | undefined>;
   updateEmailServiceSettings(data: Partial<schema.InsertEmailServiceSettings>): Promise<schema.EmailServiceSettings>;
+
+  // Changelog - Журнал изменений
+  getChangelogEntries(): Promise<schema.ChangelogEntry[]>;
+  getChangelogEntryById(id: number): Promise<schema.ChangelogEntry | undefined>;
+  createChangelogEntry(data: schema.InsertChangelogEntry): Promise<schema.ChangelogEntry>;
+  updateChangelogEntry(id: number, data: Partial<schema.InsertChangelogEntry>): Promise<schema.ChangelogEntry | undefined>;
+  deleteChangelogEntry(id: number): Promise<boolean>;
+
+  // Technical Specs - ТЗ для ИИ-агента
+  getTechnicalSpecs(): Promise<schema.TechnicalSpec[]>;
+  getTechnicalSpecByKey(key: string): Promise<schema.TechnicalSpec | undefined>;
+  upsertTechnicalSpec(data: schema.InsertTechnicalSpec): Promise<schema.TechnicalSpec>;
+  deleteTechnicalSpec(id: number): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -600,6 +618,45 @@ export class DatabaseStorage implements IStorage {
     const [created] = await db
       .insert(schema.systemSettings)
       .values({ key, value })
+      .returning();
+    return created;
+  }
+
+  // OAuth Settings methods
+  async getOAuthSettings(): Promise<schema.OAuthSetting[]> {
+    return db.select().from(schema.oauthSettings);
+  }
+
+  async getOAuthSetting(provider: string): Promise<schema.OAuthSetting | undefined> {
+    const [setting] = await db.select().from(schema.oauthSettings).where(eq(schema.oauthSettings.provider, provider));
+    return setting;
+  }
+
+  async upsertOAuthSetting(provider: string, data: { enabled?: boolean; clientId?: string; clientSecret?: string; updatedBy?: number }): Promise<schema.OAuthSetting> {
+    const existing = await this.getOAuthSetting(provider);
+    if (existing) {
+      const updateData: Partial<schema.OAuthSetting> = { updatedAt: new Date() };
+      if (data.enabled !== undefined) updateData.enabled = data.enabled;
+      if (data.clientId !== undefined) updateData.clientId = data.clientId;
+      if (data.clientSecret !== undefined) updateData.clientSecret = data.clientSecret;
+      if (data.updatedBy !== undefined) updateData.updatedBy = data.updatedBy;
+      
+      const [updated] = await db
+        .update(schema.oauthSettings)
+        .set(updateData)
+        .where(eq(schema.oauthSettings.provider, provider))
+        .returning();
+      return updated;
+    }
+    const [created] = await db
+      .insert(schema.oauthSettings)
+      .values({
+        provider,
+        enabled: data.enabled ?? false,
+        clientId: data.clientId || null,
+        clientSecret: data.clientSecret || null,
+        updatedBy: data.updatedBy || null,
+      })
       .returning();
     return created;
   }
@@ -2483,6 +2540,92 @@ export class DatabaseStorage implements IStorage {
       .values(data as schema.InsertEmailServiceSettings)
       .returning();
     return created;
+  }
+
+  // =====================================================
+  // Changelog - Журнал изменений
+  // =====================================================
+  async getChangelogEntries(): Promise<schema.ChangelogEntry[]> {
+    return db
+      .select()
+      .from(schema.changelogEntries)
+      .orderBy(desc(schema.changelogEntries.publishedAt));
+  }
+
+  async getChangelogEntryById(id: number): Promise<schema.ChangelogEntry | undefined> {
+    const [entry] = await db
+      .select()
+      .from(schema.changelogEntries)
+      .where(eq(schema.changelogEntries.id, id));
+    return entry;
+  }
+
+  async createChangelogEntry(data: schema.InsertChangelogEntry): Promise<schema.ChangelogEntry> {
+    const [entry] = await db
+      .insert(schema.changelogEntries)
+      .values(data)
+      .returning();
+    return entry;
+  }
+
+  async updateChangelogEntry(id: number, data: Partial<schema.InsertChangelogEntry>): Promise<schema.ChangelogEntry | undefined> {
+    const [entry] = await db
+      .update(schema.changelogEntries)
+      .set(data)
+      .where(eq(schema.changelogEntries.id, id))
+      .returning();
+    return entry;
+  }
+
+  async deleteChangelogEntry(id: number): Promise<boolean> {
+    const result = await db
+      .delete(schema.changelogEntries)
+      .where(eq(schema.changelogEntries.id, id));
+    return true;
+  }
+
+  // =====================================================
+  // Technical Specs - ТЗ для ИИ-агента
+  // =====================================================
+  async getTechnicalSpecs(): Promise<schema.TechnicalSpec[]> {
+    return db
+      .select()
+      .from(schema.technicalSpecs)
+      .orderBy(schema.technicalSpecs.sortOrder);
+  }
+
+  async getTechnicalSpecByKey(key: string): Promise<schema.TechnicalSpec | undefined> {
+    const [spec] = await db
+      .select()
+      .from(schema.technicalSpecs)
+      .where(eq(schema.technicalSpecs.sectionKey, key));
+    return spec;
+  }
+
+  async upsertTechnicalSpec(data: schema.InsertTechnicalSpec): Promise<schema.TechnicalSpec> {
+    const existing = await this.getTechnicalSpecByKey(data.sectionKey);
+    
+    if (existing) {
+      const [updated] = await db
+        .update(schema.technicalSpecs)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(schema.technicalSpecs.id, existing.id))
+        .returning();
+      return updated;
+    }
+    
+    const [created] = await db
+      .insert(schema.technicalSpecs)
+      .values(data)
+      .returning();
+    return created;
+  }
+
+  async deleteTechnicalSpec(id: number): Promise<boolean> {
+    await db
+      .delete(schema.technicalSpecs)
+      .where(eq(schema.technicalSpecs.id, id));
+    return true;
   }
 }
 

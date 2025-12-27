@@ -16,7 +16,7 @@ export default function CookiesPolicyPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-2xl" data-testid="text-page-title">
+            <CardTitle className="text-xl sm:text-2xl" data-testid="text-page-title">
               Политика использования cookies
             </CardTitle>
           </CardHeader>

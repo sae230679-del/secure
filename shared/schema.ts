@@ -261,6 +261,25 @@ export const secureSettings = pgTable("secure_settings", {
 
 export type SecureSetting = typeof secureSettings.$inferSelect;
 
+// OAuth Settings - настройки авторизации через соцсети
+export const oauthSettings = pgTable("oauth_settings", {
+  id: serial("id").primaryKey(),
+  provider: varchar("provider", { length: 50 }).notNull().unique(), // 'yandex', 'vk'
+  enabled: boolean("enabled").default(false).notNull(),
+  clientId: text("client_id"),
+  clientSecret: text("client_secret"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  updatedBy: integer("updated_by").references(() => users.id),
+});
+
+export const insertOAuthSettingSchema = createInsertSchema(oauthSettings).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type OAuthSetting = typeof oauthSettings.$inferSelect;
+export type InsertOAuthSetting = z.infer<typeof insertOAuthSettingSchema>;
+
 export const auditLogs = pgTable("audit_logs", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").references(() => users.id),
@@ -759,7 +778,7 @@ export const briefHighlightSchema = z.object({
 
 export const briefScoreSchema = z.object({
   percent: z.number().min(0).max(100),
-  severity: z.enum(["low", "medium", "high"]),
+  severity: z.enum(["critical", "high", "medium", "low", "excellent"]),
   totals: z.object({
     checks: z.number(),
     ok: z.number(),
@@ -1144,3 +1163,48 @@ export const insertEmailServiceSettingsSchema = createInsertSchema(emailServiceS
 
 export type EmailServiceSettings = typeof emailServiceSettings.$inferSelect;
 export type InsertEmailServiceSettings = z.infer<typeof insertEmailServiceSettingsSchema>;
+
+// =====================================================
+// Changelog - Журнал изменений сайта
+// =====================================================
+export const changelogEntries = pgTable("changelog_entries", {
+  id: serial("id").primaryKey(),
+  title: varchar("title", { length: 500 }).notNull(),
+  description: text("description"),
+  affectedUrl: varchar("affected_url", { length: 500 }),
+  actions: text("actions").array(),
+  authorId: integer("author_id").references(() => users.id),
+  publishedAt: timestamp("published_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("changelog_entries_published_at_idx").on(table.publishedAt),
+]);
+
+export const insertChangelogEntrySchema = createInsertSchema(changelogEntries).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ChangelogEntry = typeof changelogEntries.$inferSelect;
+export type InsertChangelogEntry = z.infer<typeof insertChangelogEntrySchema>;
+
+// =====================================================
+// Technical Specification - ТЗ для ИИ-агента
+// =====================================================
+export const technicalSpecs = pgTable("technical_specs", {
+  id: serial("id").primaryKey(),
+  sectionKey: varchar("section_key", { length: 100 }).notNull().unique(),
+  sectionTitle: varchar("section_title", { length: 255 }).notNull(),
+  content: text("content").notNull(),
+  sortOrder: integer("sort_order").default(0),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  updatedById: integer("updated_by_id").references(() => users.id),
+});
+
+export const insertTechnicalSpecSchema = createInsertSchema(technicalSpecs).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type TechnicalSpec = typeof technicalSpecs.$inferSelect;
+export type InsertTechnicalSpec = z.infer<typeof insertTechnicalSpecSchema>;

@@ -299,7 +299,7 @@ export interface AuditReport {
   url: string;
   checks: AuditCheckResult[];
   scorePercent: number;
-  severity: "low" | "medium" | "high";
+  severity: "critical" | "high" | "medium" | "low" | "excellent";
   passedCount: number;
   warningCount: number;
   failedCount: number;
@@ -831,6 +831,9 @@ function checkPrivacyPolicy(html: string): AuditCheckResult {
     { pattern: /href\s*=\s*["'][^"']*privacy[^"']*["']/i, name: "ссылка с 'privacy' в URL" },
     { pattern: /href\s*=\s*["'][^"']*policy[^"']*["']/i, name: "ссылка с 'policy' в URL" },
     { pattern: /href\s*=\s*["'][^"']*конфиденциальност[^"']*["']/i, name: "ссылка с 'конфиденциальность' в URL" },
+    { pattern: /href\s*=\s*["']\/privacy-policy["']/i, name: "ссылка '/privacy-policy'" },
+    { pattern: /href\s*=\s*["']\/personal-data[^"']*["']/i, name: "ссылка '/personal-data'" },
+    { pattern: /Политика\s+конфиденциальности/i, name: "текст 'Политика конфиденциальности'" },
   ];
 
   const foundPatterns: string[] = [];
@@ -969,6 +972,10 @@ function checkCookieBanner(html: string): AuditCheckResult {
     { pattern: /<[^>]*>Cookies<\/[^>]*>/i, name: "'Cookies заголовок'" },
     { pattern: /data-tilda-cookie/i, name: "'Tilda cookie system'" },
     { pattern: /cookiename/i, name: "'cookie popup'" },
+    { pattern: /data-cookie-notice/i, name: "'cookie notice attribute'" },
+    { pattern: /href\s*=\s*["']\/cookies-policy["']/i, name: "ссылка '/cookies-policy'" },
+    { pattern: /Политика\s+cookies/i, name: "текст 'Политика cookies'" },
+    { pattern: /используем\s+cookie/i, name: "'используем cookie'" },
   ];
 
   const foundPatterns: string[] = [];
@@ -1510,27 +1517,56 @@ ${evidenceJson}`;
 
 function calculateScore(checks: AuditCheckResult[]): { 
   scorePercent: number; 
-  severity: "low" | "medium" | "high";
+  severity: "critical" | "high" | "medium" | "low" | "excellent";
   passedCount: number;
   warningCount: number;
   failedCount: number;
+  criticalCount: number;
 } {
   const passedCount = checks.filter(c => c.status === "passed").length;
   const warningCount = checks.filter(c => c.status === "warning").length;
   const failedCount = checks.filter(c => c.status === "failed").length;
   const totalCount = checks.length;
+  
+  // Count critical errors (failed checks with critical severity indicators)
+  const criticalCount = failedCount;
 
+  // Base score calculation
   let score = 0;
   if (totalCount > 0) {
     score = Math.round(((passedCount * 1 + warningCount * 0.5) / totalCount) * 100);
     score = Math.max(0, Math.min(100, score));
   }
 
-  let severity: "low" | "medium" | "high" = "low";
-  if (failedCount >= 5 || score < 50) severity = "high";
-  else if (failedCount >= 2 || score < 70) severity = "medium";
+  // Apply critical error penalties:
+  // 2+ critical errors -> score capped at 19 (very critical)
+  // 1 critical error -> score capped at 39 (critical)
+  if (criticalCount >= 2) {
+    score = Math.min(score, 19);
+  } else if (criticalCount === 1) {
+    score = Math.min(score, 39);
+  }
 
-  return { scorePercent: score, severity, passedCount, warningCount, failedCount };
+  // Determine severity level based on score:
+  // 1-20: very critical (critical)
+  // 20-40: critical (high)
+  // 40-60: needs attention (medium)
+  // 60-80: satisfactory (low)
+  // 80-100: excellent (excellent)
+  let severity: "critical" | "high" | "medium" | "low" | "excellent" = "excellent";
+  if (score < 20) {
+    severity = "critical";
+  } else if (score < 40) {
+    severity = "high";
+  } else if (score < 60) {
+    severity = "medium";
+  } else if (score < 80) {
+    severity = "low";
+  } else {
+    severity = "excellent";
+  }
+
+  return { scorePercent: score, severity, passedCount, warningCount, failedCount, criticalCount };
 }
 
 function extractDomain(url: string): string {
@@ -1545,12 +1581,44 @@ function extractDomain(url: string): string {
 function buildBriefResults(
   url: string,
   checks: AuditCheckResult[],
-  scores: { scorePercent: number; severity: "low" | "medium" | "high"; passedCount: number; warningCount: number; failedCount: number },
+  scores: { scorePercent: number; severity: "critical" | "high" | "medium" | "low" | "excellent"; passedCount: number; warningCount: number; failedCount: number; criticalCount?: number },
   hostingCheck: HostingCheckResult
 ): BriefResults {
   const domain = extractDomain(url);
   
-  const highlights: BriefHighlight[] = checks.slice(0, 12).map(check => {
+  const highlights: BriefHighlight[] = [];
+  
+  // Add hosting check as CRITICAL error if foreign
+  if (hostingCheck.status === "foreign") {
+    highlights.push({
+      id: "HOSTING-001",
+      title: "Иностранный хостинг",
+      status: "fail",
+      severity: "critical",
+      summary: `Сайт размещён на иностранном хостинге (${hostingCheck.providerGuess || "зарубежный провайдер"})`,
+      howToFixShort: "Перенести сайт на российский хостинг (Timeweb, Beget, REG.RU и др.)",
+      law: [
+        { act: "152-ФЗ", ref: "ст. 18 ч. 5 (Локализация ПДн граждан РФ на территории РФ)" },
+      ],
+    });
+    scores.failedCount++;
+    scores.scorePercent = Math.max(0, scores.scorePercent - 15);
+  } else if (hostingCheck.status === "ru") {
+    highlights.push({
+      id: "HOSTING-001",
+      title: "Российский хостинг",
+      status: "ok",
+      severity: "low",
+      summary: `Сайт размещён на российском хостинге (${hostingCheck.providerGuess || "РФ"})`,
+      howToFixShort: undefined,
+      law: [
+        { act: "152-ФЗ", ref: "ст. 18 ч. 5 (Локализация ПДн)" },
+      ],
+    });
+  }
+  
+  // Add regular checks
+  const regularHighlights = checks.slice(0, 11).map(check => {
     let status: "ok" | "warn" | "fail" | "na" = "na";
     if (check.status === "passed") status = "ok";
     else if (check.status === "warning") status = "warn";
@@ -1576,6 +1644,8 @@ function buildBriefResults(
       law: lawRefs,
     };
   });
+  
+  highlights.push(...regularHighlights);
 
   const hostingInfo: HostingInfo = {
     status: hostingCheck.status,
@@ -1585,6 +1655,11 @@ function buildBriefResults(
     evidence: hostingCheck.evidence,
     ai: hostingCheck.ai,
   };
+  
+  // Adjust severity if hosting is foreign
+  if (hostingCheck.status === "foreign") {
+    scores.severity = "high";
+  }
 
   return {
     version: "1.0",
@@ -1595,8 +1670,8 @@ function buildBriefResults(
       percent: scores.scorePercent,
       severity: scores.severity,
       totals: {
-        checks: checks.length,
-        ok: scores.passedCount,
+        checks: checks.length + (hostingCheck.status === "foreign" ? 1 : 0),
+        ok: scores.passedCount + (hostingCheck.status === "ru" ? 1 : 0),
         warn: scores.warningCount,
         fail: scores.failedCount,
         na: 0,

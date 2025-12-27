@@ -19,6 +19,13 @@ No foreign services: The platform does not use or support foreign data protectio
 - **Theming**: Comprehensive preset-based system with light/dark modes, 19 semantic color tokens, and SuperAdmin theme management.
 - **Express Audit Results UI**: `AuditResultsView` component (`client/src/components/audit/AuditResultsView.tsx`) displays BriefResults with score circle, stats summary (OK/Warn/Fail counts with icons), hosting info block, expandable highlights accordion, CTA for PDF download and full report purchase, and reset button.
 - **Full Audit Page**: Dedicated `/full-audit` route (`client/src/pages/full-audit.tsx`) for site type selection with expandable package grid, moved from landing page anchor for cleaner UX.
+- **Legal Pages**: All legal documents available at dedicated routes:
+  - `/privacy-policy` - Политика конфиденциальности
+  - `/user-agreement` - Пользовательское соглашение
+  - `/personal-data-agreement` - Согласие на обработку ПДн (ответственный: privacy@securelex.ru)
+  - `/offer` - Договор-оферта
+  - `/cookies-policy` - Политика cookies
+- **Footer**: 6-column layout (Logo, Сервис, Информация, Документы, Контакты, Реквизиты) with all legal document links.
 
 ### Backend
 - **Runtime**: Node.js with Express.js

@@ -16,6 +16,7 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [pdnConsent, setPdnConsent] = useState(false);
+  const [privacyConsent, setPrivacyConsent] = useState(false);
 
   const forgotPasswordMutation = useMutation({
     mutationFn: async (data: { email: string }) => {
@@ -32,6 +33,14 @@ export default function ForgotPasswordPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!privacyConsent || !pdnConsent) {
+      toast({
+        title: "Необходимо согласие",
+        description: "Пожалуйста, подтвердите ознакомление с политикой конфиденциальности и дайте согласие на обработку персональных данных.",
+        variant: "destructive",
+      });
+      return;
+    }
     forgotPasswordMutation.mutate({ email });
   };
 
@@ -114,30 +123,50 @@ export default function ForgotPasswordPage() {
                 </div>
               </div>
 
-              <div className="flex items-start gap-2 pt-2">
-                <Checkbox
-                  id="pdn-consent-forgot"
-                  checked={pdnConsent}
-                  onCheckedChange={(checked) => setPdnConsent(checked === true)}
-                  disabled={forgotPasswordMutation.isPending}
-                  data-testid="checkbox-pdn-consent-forgot"
-                />
-                <label
-                  htmlFor="pdn-consent-forgot"
-                  className="text-sm leading-tight cursor-pointer"
-                >
-                  Я даю согласие на обработку моих персональных данных в соответствии с{" "}
-                  <Link href="/privacy-policy" className="text-primary hover:underline">
-                    Политикой конфиденциальности
-                  </Link>{" "}
-                  <span className="text-destructive">*</span>
-                </label>
+              <div className="space-y-3 pt-2 border-t">
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="privacy-consent-forgot"
+                    checked={privacyConsent}
+                    onCheckedChange={(checked) => setPrivacyConsent(checked === true)}
+                    disabled={forgotPasswordMutation.isPending}
+                    data-testid="checkbox-privacy-consent-forgot"
+                  />
+                  <label
+                    htmlFor="privacy-consent-forgot"
+                    className="text-sm leading-tight cursor-pointer"
+                  >
+                    Я ознакомлен с{" "}
+                    <Link href="/privacy-policy" className="text-primary hover:underline">
+                      политикой конфиденциальности
+                    </Link>
+                  </label>
+                </div>
+
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="pdn-consent-forgot"
+                    checked={pdnConsent}
+                    onCheckedChange={(checked) => setPdnConsent(checked === true)}
+                    disabled={forgotPasswordMutation.isPending}
+                    data-testid="checkbox-pdn-consent-forgot"
+                  />
+                  <label
+                    htmlFor="pdn-consent-forgot"
+                    className="text-sm leading-tight cursor-pointer"
+                  >
+                    Даю{" "}
+                    <Link href="/personal-data-agreement" className="text-primary hover:underline">
+                      согласие на обработку персональных данных
+                    </Link>
+                  </label>
+                </div>
               </div>
 
               <Button
                 type="submit"
                 className="w-full"
-                disabled={forgotPasswordMutation.isPending || !pdnConsent}
+                disabled={forgotPasswordMutation.isPending || !pdnConsent || !privacyConsent}
                 data-testid="button-send-reset"
               >
                 {forgotPasswordMutation.isPending ? (

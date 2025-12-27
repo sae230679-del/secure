@@ -30,11 +30,14 @@ import SuperAdminLogsPage from "@/pages/superadmin-logs";
 import SuperAdminPromoCodesPage from "@/pages/superadmin-promo-codes";
 import AdminPromotionsPage from "@/pages/admin-promotions";
 import SuperAdminEmailSettingsPage from "@/pages/superadmin-email-settings";
+import SuperAdminOAuthSettingsPage from "@/pages/superadmin-oauth-settings";
 import SuperAdminPaymentSettingsPage from "@/pages/superadmin-payment-settings";
 import SuperAdminServicesPage from "@/pages/superadmin-services";
 import PdnManagementPage from "@/pages/superadmin/pdn-management";
 import SeoManagementPage from "@/pages/superadmin/seo-pages";
 import GuideManagementPage from "@/pages/superadmin/guide-management";
+import ChangelogPage from "@/pages/superadmin/changelog";
+import TechnicalSpecsPage from "@/pages/superadmin/technical-specs";
 import ReferralPage from "@/pages/referral";
 import CheckoutPage from "@/pages/checkout";
 import PaymentResultPage from "@/pages/payment-result";
@@ -51,6 +54,7 @@ import PersonalDataPage from "@/pages/personal-data";
 import PrivacyPage from "@/pages/dashboard/privacy";
 import SeoPageView from "@/pages/seo-page";
 import OfferPage from "@/pages/offer";
+import PersonalDataAgreementPage from "@/pages/personal-data-agreement";
 import ToolsPage from "@/pages/tools";
 import FullAuditPage from "@/pages/full-audit";
 import GuidePage from "@/pages/guide";
@@ -232,6 +236,7 @@ function Router() {
       <Route path="/cookies-policy" component={CookiesPolicyPage} />
       <Route path="/user-agreement" component={UserAgreementPage} />
       <Route path="/offer" component={OfferPage} />
+      <Route path="/personal-data-agreement" component={PersonalDataAgreementPage} />
       <Route path="/tools" component={ToolsPage} />
       <Route path="/full-audit" component={FullAuditPage} />
       <Route path="/guide" component={GuidePage} />
@@ -436,6 +441,16 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
+      <Route path="/superadmin/oauth-settings">
+        <ProtectedRoute>
+          <SuperAdminRoute>
+            <DashboardLayout>
+              <SuperAdminOAuthSettingsPage />
+            </DashboardLayout>
+          </SuperAdminRoute>
+        </ProtectedRoute>
+      </Route>
+
       <Route path="/superadmin/payment-settings">
         <ProtectedRoute>
           <SuperAdminRoute>
@@ -481,6 +496,26 @@ function Router() {
           <SuperAdminRoute>
             <DashboardLayout>
               <GuideManagementPage />
+            </DashboardLayout>
+          </SuperAdminRoute>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/superadmin/changelog">
+        <ProtectedRoute>
+          <SuperAdminRoute>
+            <DashboardLayout>
+              <ChangelogPage />
+            </DashboardLayout>
+          </SuperAdminRoute>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/superadmin/technical-specs">
+        <ProtectedRoute>
+          <SuperAdminRoute>
+            <DashboardLayout>
+              <TechnicalSpecsPage />
             </DashboardLayout>
           </SuperAdminRoute>
         </ProtectedRoute>

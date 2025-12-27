@@ -93,21 +93,24 @@ function getHostingStatusDisplay(status: string) {
         icon: <MapPin className="w-5 h-5 text-emerald-500" />, 
         label: "Россия", 
         color: "text-emerald-600",
-        bgColor: "bg-emerald-500/10"
+        bgColor: "bg-emerald-500/10",
+        isCritical: false
       };
     case "foreign":
       return { 
-        icon: <Globe className="w-5 h-5 text-amber-500" />, 
+        icon: <XCircle className="w-5 h-5 text-rose-500" />, 
         label: "Зарубежный", 
-        color: "text-amber-600",
-        bgColor: "bg-amber-500/10"
+        color: "text-rose-600",
+        bgColor: "bg-rose-500/10",
+        isCritical: true
       };
     default:
       return { 
         icon: <HelpCircle className="w-5 h-5 text-muted-foreground" />, 
         label: "Не определено", 
         color: "text-muted-foreground",
-        bgColor: "bg-muted/30"
+        bgColor: "bg-muted/30",
+        isCritical: false
       };
   }
 }
@@ -178,16 +181,21 @@ function HostingInfoBlock({ hosting }: { hosting: HostingInfo }) {
   const needsVerification = hosting.confidence < 0.8;
 
   return (
-    <div className={`rounded-lg p-4 ${statusDisplay.bgColor} border`}>
+    <div className={`rounded-lg p-4 ${statusDisplay.bgColor} border ${statusDisplay.isCritical ? 'border-rose-500' : ''}`}>
       <div className="flex items-center gap-3">
         <div className="shrink-0">
           {statusDisplay.icon}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className={`font-semibold ${statusDisplay.color}`}>
               Хостинг: {statusDisplay.label}
             </span>
+            {statusDisplay.isCritical && (
+              <Badge variant="destructive" className="text-xs">
+                Критично
+              </Badge>
+            )}
             {needsVerification && (
               <Tooltip>
                 <TooltipTrigger>
@@ -202,6 +210,11 @@ function HostingInfoBlock({ hosting }: { hosting: HostingInfo }) {
               </Tooltip>
             )}
           </div>
+          {statusDisplay.isCritical && (
+            <p className="text-xs text-rose-600 mt-1">
+              Нарушение ст. 18 ч. 5 ФЗ-152: ПДн граждан РФ должны храниться на территории РФ
+            </p>
+          )}
           <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground mt-1">
             {hosting.providerGuess && (
               <span>

@@ -557,7 +557,7 @@ export default function CheckoutPage() {
                         <Label htmlFor="pdn-consent" className="text-sm leading-tight cursor-pointer">
                           Даю{" "}
                           <a 
-                            href="/personal-data" 
+                            href="/personal-data-agreement" 
                             target="_blank" 
                             className="text-primary underline"
                             onClick={(e) => e.stopPropagation()}

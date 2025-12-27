@@ -3636,6 +3636,83 @@ export async function registerRoutes(
   });
 
   // =====================================================
+  // OAuth Settings Management
+  // =====================================================
+  app.get("/api/admin/settings/oauth", requireSuperAdmin, async (req, res) => {
+    try {
+      const settings = await storage.getOAuthSettings();
+      // Mask secrets for response
+      const masked = settings.map(s => ({
+        ...s,
+        clientSecret: s.clientSecret ? "****" + s.clientSecret.slice(-4) : null,
+        hasSecret: !!s.clientSecret,
+      }));
+      res.json(masked);
+    } catch (error: any) {
+      console.error("[OAuth Settings] Error fetching:", error?.message);
+      res.status(500).json({ error: "Failed to fetch OAuth settings" });
+    }
+  });
+
+  app.put("/api/admin/settings/oauth/:provider", requireSuperAdmin, async (req, res) => {
+    try {
+      const { provider } = req.params;
+      const { enabled, clientId, clientSecret } = req.body;
+      
+      if (!["yandex", "vk"].includes(provider)) {
+        return res.status(400).json({ error: "Invalid provider. Must be 'yandex' or 'vk'" });
+      }
+
+      const updateData: { enabled?: boolean; clientId?: string; clientSecret?: string; updatedBy?: number } = {
+        updatedBy: (req.user as any)?.id,
+      };
+
+      if (enabled !== undefined) updateData.enabled = enabled;
+      if (clientId !== undefined) updateData.clientId = clientId;
+      // Only update secret if provided (not empty)
+      if (clientSecret && clientSecret !== "" && !clientSecret.startsWith("****")) {
+        updateData.clientSecret = clientSecret;
+      }
+
+      const setting = await storage.upsertOAuthSetting(provider, updateData);
+
+      await storage.createAuditLog({
+        userId: (req.user as any)?.id,
+        action: "oauth_settings_updated",
+        resourceType: "oauth",
+        details: `OAuth settings for ${provider} updated: enabled=${setting.enabled}`,
+      });
+
+      res.json({
+        ...setting,
+        clientSecret: setting.clientSecret ? "****" + setting.clientSecret.slice(-4) : null,
+        hasSecret: !!setting.clientSecret,
+      });
+    } catch (error: any) {
+      console.error("[OAuth Settings] Error updating:", error?.message);
+      res.status(500).json({ error: "Failed to update OAuth settings" });
+    }
+  });
+
+  // Get OAuth status for frontend (public endpoint)
+  app.get("/api/oauth/status", async (req, res) => {
+    try {
+      const settings = await storage.getOAuthSettings();
+      const status: Record<string, boolean> = { yandex: false, vk: false };
+      
+      for (const s of settings) {
+        if (s.enabled && s.clientId && s.clientSecret) {
+          status[s.provider] = true;
+        }
+      }
+      
+      res.json(status);
+    } catch (error) {
+      res.json({ yandex: false, vk: false });
+    }
+  });
+
+  // =====================================================
   // SuperAdmin Password Reset for Admin/SuperAdmin Users
   // =====================================================
   app.post("/api/admin/users/:userId/reset-password", requireSuperAdmin, async (req, res) => {
@@ -4995,6 +5072,117 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("[ADMIN] Error testing email service:", error?.message);
       res.status(500).json({ error: "Ошибка тестирования сервиса" });
+    }
+  });
+
+  // =====================================================
+  // Changelog - Журнал изменений
+  // =====================================================
+  app.get("/api/admin/changelog", requireSuperAdmin, async (req, res) => {
+    try {
+      const entries = await storage.getChangelogEntries();
+      res.json(entries);
+    } catch (error: any) {
+      console.error("[ADMIN] Error fetching changelog:", error?.message);
+      res.status(500).json({ error: "Ошибка получения журнала изменений" });
+    }
+  });
+
+  app.post("/api/admin/changelog", requireSuperAdmin, async (req, res) => {
+    try {
+      const { title, description, affectedUrl, actions } = req.body;
+      if (!title) {
+        return res.status(400).json({ error: "Заголовок обязателен" });
+      }
+      const entry = await storage.createChangelogEntry({
+        title,
+        description: description || null,
+        affectedUrl: affectedUrl || null,
+        actions: actions || [],
+        authorId: (req.user as any)?.id || null,
+        publishedAt: new Date(),
+      });
+      res.json(entry);
+    } catch (error: any) {
+      console.error("[ADMIN] Error creating changelog entry:", error?.message);
+      res.status(500).json({ error: "Ошибка создания записи" });
+    }
+  });
+
+  app.put("/api/admin/changelog/:id", requireSuperAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { title, description, affectedUrl, actions, publishedAt } = req.body;
+      const entry = await storage.updateChangelogEntry(id, {
+        title,
+        description,
+        affectedUrl,
+        actions,
+        publishedAt: publishedAt ? new Date(publishedAt) : undefined,
+      });
+      if (!entry) {
+        return res.status(404).json({ error: "Запись не найдена" });
+      }
+      res.json(entry);
+    } catch (error: any) {
+      console.error("[ADMIN] Error updating changelog entry:", error?.message);
+      res.status(500).json({ error: "Ошибка обновления записи" });
+    }
+  });
+
+  app.delete("/api/admin/changelog/:id", requireSuperAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteChangelogEntry(id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("[ADMIN] Error deleting changelog entry:", error?.message);
+      res.status(500).json({ error: "Ошибка удаления записи" });
+    }
+  });
+
+  // =====================================================
+  // Technical Specs - ТЗ для ИИ-агента
+  // =====================================================
+  app.get("/api/admin/technical-specs", requireSuperAdmin, async (req, res) => {
+    try {
+      const specs = await storage.getTechnicalSpecs();
+      res.json(specs);
+    } catch (error: any) {
+      console.error("[ADMIN] Error fetching technical specs:", error?.message);
+      res.status(500).json({ error: "Ошибка получения ТЗ" });
+    }
+  });
+
+  app.put("/api/admin/technical-specs/:key", requireSuperAdmin, async (req, res) => {
+    try {
+      const { key } = req.params;
+      const { sectionTitle, content, sortOrder } = req.body;
+      if (!sectionTitle || !content) {
+        return res.status(400).json({ error: "Заголовок и содержание обязательны" });
+      }
+      const spec = await storage.upsertTechnicalSpec({
+        sectionKey: key,
+        sectionTitle,
+        content,
+        sortOrder: sortOrder || 0,
+        updatedById: (req.user as any)?.id || null,
+      });
+      res.json(spec);
+    } catch (error: any) {
+      console.error("[ADMIN] Error updating technical spec:", error?.message);
+      res.status(500).json({ error: "Ошибка обновления раздела ТЗ" });
+    }
+  });
+
+  app.delete("/api/admin/technical-specs/:id", requireSuperAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteTechnicalSpec(id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("[ADMIN] Error deleting technical spec:", error?.message);
+      res.status(500).json({ error: "Ошибка удаления раздела ТЗ" });
     }
   });
 
