@@ -128,7 +128,7 @@ export default function AuthPage() {
   });
 
   const registerMutation = useMutation({
-    mutationFn: async (data: { name: string; email: string; phone?: string; password: string; pdnConsent: boolean; marketingConsent: boolean }) => {
+    mutationFn: async (data: { name: string; email: string; phone?: string; password: string; privacyConsent: boolean; pdnConsent: boolean; offerConsent: boolean; marketingConsent: boolean }) => {
       const response = await apiRequest("POST", "/api/auth/register", data);
       return response.json();
     },

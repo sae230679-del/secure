@@ -202,7 +202,7 @@ export default function CheckoutPage() {
     if (!privacyAccepted || !pdnConsentAccepted || !offerAccepted) {
       toast({
         title: "Необходимо принять условия",
-        description: "Для продолжения оплаты примите оферту и согласие на обработку персональных данных",
+        description: "Для продолжения оплаты примите политику конфиденциальности, согласие на обработку персональных данных и договор оферты",
         variant: "destructive",
       });
       return;

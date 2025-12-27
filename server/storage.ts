@@ -28,7 +28,7 @@ import { hash, compare } from "bcryptjs";
 export interface IStorage {
   getUserById(id: number): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
-  createUser(data: { name: string; email: string; phone?: string; password: string; pdnConsent?: boolean; marketingConsent?: boolean }): Promise<User>;
+  createUser(data: { name: string; email: string; phone?: string; password: string; privacyConsent?: boolean; pdnConsent?: boolean; offerConsent?: boolean; marketingConsent?: boolean }): Promise<User>;
   updateUser(id: number, data: Partial<User>): Promise<User | undefined>;
 
   getPackages(): Promise<AuditPackage[]>;
@@ -166,7 +166,7 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async createUser(data: { name: string; email: string; phone?: string; password: string; pdnConsent?: boolean; marketingConsent?: boolean }): Promise<User> {
+  async createUser(data: { name: string; email: string; phone?: string; password: string; privacyConsent?: boolean; pdnConsent?: boolean; offerConsent?: boolean; marketingConsent?: boolean }): Promise<User> {
     const passwordHash = await hash(data.password, 10);
     const [user] = await db
       .insert(schema.users)

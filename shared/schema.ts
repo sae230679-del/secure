@@ -408,8 +408,14 @@ export const registerSchema = z.object({
   email: z.string().email("Invalid email address"),
   phone: z.string().optional(),
   password: z.string().min(6, "Password must be at least 6 characters"),
+  privacyConsent: z.boolean().refine(val => val === true, {
+    message: "Необходимо ознакомиться с политикой конфиденциальности",
+  }),
   pdnConsent: z.boolean().refine(val => val === true, {
     message: "Необходимо согласие на обработку персональных данных",
+  }),
+  offerConsent: z.boolean().refine(val => val === true, {
+    message: "Необходимо принять условия договора оферты",
   }),
   marketingConsent: z.boolean().optional().default(false),
 });
