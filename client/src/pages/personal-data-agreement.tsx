@@ -29,6 +29,7 @@ export default function PersonalDataAgreementPage() {
         </header>
         
         <main className="container mx-auto px-4 py-8 max-w-4xl">
+<<<<<<< HEAD
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
             <div className="p-3 bg-primary/10 rounded-full w-fit">
               <Shield className="h-6 w-6 text-primary" />
@@ -45,6 +46,20 @@ export default function PersonalDataAgreementPage() {
                   <Calendar className="h-4 w-4" />
                   {DOCUMENT_DATE}
                 </span>
+=======
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-3 bg-primary/10 rounded-full">
+              <Shield className="h-6 w-6 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">Согласие на обработку персональных данных</h1>
+              <p className="text-sm text-muted-foreground flex items-center gap-2 mt-1">
+                <FileText className="h-4 w-4" />
+                Версия {DOCUMENT_VERSION}
+                <span className="text-muted-foreground/50">|</span>
+                <Calendar className="h-4 w-4" />
+                {DOCUMENT_DATE}
+>>>>>>> 091c5d9 (Add a new personal data agreement page and update footer links)
               </p>
             </div>
           </div>

@@ -1,16 +1,15 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
 let GITHUB_REPO = process.env.GITHUB_REPO;
 
 if (!GITHUB_TOKEN || !GITHUB_REPO) {
-  console.error('[GitHub Sync] ERROR: GITHUB_TOKEN (or GITHUB_PERSONAL_ACCESS_TOKEN) or GITHUB_REPO not set');
+  console.error('[GitHub Sync] ERROR: GITHUB_TOKEN or GITHUB_REPO not set');
   process.exit(1);
 }
 
-// Normalize GITHUB_REPO - extract owner/repo from various formats
-// Supports: "owner/repo", "https://github.com/owner/repo", "github.com/owner/repo"
 if (GITHUB_REPO.includes('github.com')) {
   const match = GITHUB_REPO.match(/github\.com[\/:]([^\/]+)\/([^\/\s]+)/);
   if (match) {
@@ -18,16 +17,12 @@ if (GITHUB_REPO.includes('github.com')) {
   }
 }
 
-const API_BASE = 'https://api.github.com';
-const headers = {
-  'Authorization': `token ${GITHUB_TOKEN}`,
-  'Accept': 'application/vnd.github.v3+json',
-  'Content-Type': 'application/json',
-};
+const [OWNER, REPO] = GITHUB_REPO.split('/');
+const GRAPHQL_URL = 'https://api.github.com/graphql';
 
-interface FileEntry {
+interface FileAddition {
   path: string;
-  content: string;
+  contents: string;
 }
 
 const IGNORE_PATTERNS = [
@@ -45,6 +40,8 @@ const IGNORE_PATTERNS = [
   '.env.local',
   '*.log',
   'package-lock.json',
+  '.replit.workflows',
+  'attached_assets',
 ];
 
 function shouldIgnore(filePath: string): boolean {
@@ -59,15 +56,15 @@ function shouldIgnore(filePath: string): boolean {
   return false;
 }
 
-function getAllFiles(dir: string, basePath: string = ''): FileEntry[] {
-  const files: FileEntry[] = [];
+function getAllFiles(dir: string, basePath: string = ''): FileAddition[] {
+  const files: FileAddition[] = [];
   
   try {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name);
-      const relativePath = path.join(basePath, entry.name);
+      const relativePath = path.join(basePath, entry.name).replace(/\\/g, '/');
       
       if (shouldIgnore(relativePath)) continue;
       
@@ -76,153 +73,125 @@ function getAllFiles(dir: string, basePath: string = ''): FileEntry[] {
       } else if (entry.isFile()) {
         try {
           const content = fs.readFileSync(fullPath);
-          const base64Content = content.toString('base64');
-          files.push({ path: relativePath, content: base64Content });
+          files.push({ 
+            path: relativePath, 
+            contents: content.toString('base64')
+          });
         } catch (e) {
-          console.log(`[GitHub Sync] Skipping unreadable file: ${relativePath}`);
+          console.log(`[GitHub Sync] Skipping: ${relativePath}`);
         }
       }
     }
   } catch (e) {
-    console.error(`[GitHub Sync] Error reading directory: ${dir}`);
+    console.error(`[GitHub Sync] Error reading: ${dir}`);
   }
   
   return files;
 }
 
-async function getDefaultBranch(): Promise<string> {
-  const response = await fetch(`${API_BASE}/repos/${GITHUB_REPO}`, { headers });
-  if (!response.ok) {
-    return 'main';
-  }
-  const data = await response.json() as { default_branch: string };
-  return data.default_branch || 'main';
-}
-
-async function getLatestCommit(branch: string): Promise<string | null> {
-  const response = await fetch(`${API_BASE}/repos/${GITHUB_REPO}/git/refs/heads/${branch}`, { headers });
-  if (!response.ok) {
-    return null;
-  }
-  const data = await response.json() as { object: { sha: string } };
-  return data.object?.sha || null;
-}
-
-async function createBlob(content: string, retries = 3): Promise<string> {
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    const response = await fetch(`${API_BASE}/repos/${GITHUB_REPO}/git/blobs`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ content, encoding: 'base64' }),
-    });
-    
-    if (response.ok) {
-      const data = await response.json() as { sha: string };
-      return data.sha;
-    }
-    
-    if (response.status === 403 || response.status === 429) {
-      const waitTime = Math.pow(2, attempt) * 2000;
-      console.log(`[GitHub Sync] Rate limited, waiting ${waitTime/1000}s (attempt ${attempt}/${retries})...`);
-      await new Promise(r => setTimeout(r, waitTime));
-      continue;
-    }
-    
-    throw new Error(`Failed to create blob: ${response.statusText}`);
-  }
-  throw new Error('Failed to create blob after retries');
-}
-
-async function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-async function processBatch<T, R>(items: T[], batchSize: number, delayMs: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = [];
-  for (let i = 0; i < items.length; i += batchSize) {
-    const batch = items.slice(i, i + batchSize);
-    const batchResults = await Promise.all(batch.map(fn));
-    results.push(...batchResults);
-    if (i + batchSize < items.length) {
-      await sleep(delayMs);
-    }
-    console.log(`[GitHub Sync] Progress: ${Math.min(i + batchSize, items.length)}/${items.length} files`);
-  }
-  return results;
-}
-
-async function createTree(files: FileEntry[], baseTree: string | null): Promise<string> {
-  const tree = await processBatch(files, 5, 2000, async (file) => ({
-    path: file.path.replace(/\\/g, '/'),
-    mode: '100644' as const,
-    type: 'blob' as const,
-    sha: await createBlob(file.content),
-  }));
-
-  const body: { tree: typeof tree; base_tree?: string } = { tree };
-  if (baseTree) {
-    body.base_tree = baseTree;
-  }
-
-  const response = await fetch(`${API_BASE}/repos/${GITHUB_REPO}/git/trees`, {
+async function graphqlRequest(query: string, variables: Record<string, unknown>): Promise<unknown> {
+  const response = await fetch(GRAPHQL_URL, {
     method: 'POST',
-    headers,
-    body: JSON.stringify(body),
+    headers: {
+      'Authorization': `bearer ${GITHUB_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ query, variables }),
   });
   
-  if (!response.ok) {
-    throw new Error(`Failed to create tree: ${response.statusText}`);
+  const data = await response.json() as { data?: unknown; errors?: Array<{ message: string }> };
+  
+  if (data.errors) {
+    throw new Error(data.errors.map(e => e.message).join(', '));
   }
   
-  const data = await response.json() as { sha: string };
-  return data.sha;
+  return data.data;
 }
 
-async function createCommit(treeSha: string, parentSha: string | null, message: string): Promise<string> {
-  const body: { message: string; tree: string; parents?: string[] } = {
-    message,
-    tree: treeSha,
+async function getDefaultBranchAndOid(): Promise<{ branch: string; oid: string }> {
+  const query = `
+    query($owner: String!, $name: String!) {
+      repository(owner: $owner, name: $name) {
+        defaultBranchRef {
+          name
+          target {
+            oid
+          }
+        }
+      }
+    }
+  `;
+  
+  const result = await graphqlRequest(query, { owner: OWNER, name: REPO }) as {
+    repository: { defaultBranchRef: { name: string; target: { oid: string } } }
   };
   
-  if (parentSha) {
-    body.parents = [parentSha];
-  }
-
-  const response = await fetch(`${API_BASE}/repos/${GITHUB_REPO}/git/commits`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  });
-  
-  if (!response.ok) {
-    throw new Error(`Failed to create commit: ${response.statusText}`);
-  }
-  
-  const data = await response.json() as { sha: string };
-  return data.sha;
+  return {
+    branch: result.repository.defaultBranchRef.name,
+    oid: result.repository.defaultBranchRef.target.oid,
+  };
 }
 
-async function updateRef(branch: string, commitSha: string, force: boolean = false): Promise<void> {
-  const refUrl = `${API_BASE}/repos/${GITHUB_REPO}/git/refs/heads/${branch}`;
+async function createCommitWithFiles(
+  branch: string,
+  expectedHeadOid: string,
+  message: string,
+  files: FileAddition[]
+): Promise<string> {
+  const BATCH_SIZE = 100;
+  let currentOid = expectedHeadOid;
   
-  let response = await fetch(refUrl, {
-    method: 'PATCH',
-    headers,
-    body: JSON.stringify({ sha: commitSha, force }),
-  });
-
-  if (response.status === 404) {
-    response = await fetch(`${API_BASE}/repos/${GITHUB_REPO}/git/refs`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ ref: `refs/heads/${branch}`, sha: commitSha }),
-    });
+  for (let i = 0; i < files.length; i += BATCH_SIZE) {
+    const batch = files.slice(i, i + BATCH_SIZE);
+    const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+    const totalBatches = Math.ceil(files.length / BATCH_SIZE);
+    
+    console.log(`[GitHub Sync] Uploading batch ${batchNum}/${totalBatches} (${batch.length} files)...`);
+    
+    const mutation = `
+      mutation($input: CreateCommitOnBranchInput!) {
+        createCommitOnBranch(input: $input) {
+          commit {
+            oid
+            url
+          }
+        }
+      }
+    `;
+    
+    const batchMessage = totalBatches > 1 
+      ? `${message} (part ${batchNum}/${totalBatches})`
+      : message;
+    
+    const input = {
+      branch: {
+        repositoryNameWithOwner: GITHUB_REPO,
+        branchName: branch,
+      },
+      expectedHeadOid: currentOid,
+      message: { headline: batchMessage },
+      fileChanges: {
+        additions: batch,
+      },
+    };
+    
+    try {
+      const result = await graphqlRequest(mutation, { input }) as {
+        createCommitOnBranch: { commit: { oid: string; url: string } }
+      };
+      
+      currentOid = result.createCommitOnBranch.commit.oid;
+      
+      if (i + BATCH_SIZE < files.length) {
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    } catch (error) {
+      console.error(`[GitHub Sync] Batch ${batchNum} failed:`, error);
+      throw error;
+    }
   }
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Failed to update ref: ${response.statusText} - ${text}`);
-  }
+  
+  return currentOid;
 }
 
 async function main() {
@@ -230,35 +199,26 @@ async function main() {
   console.log(`[GitHub Sync] Repository: ${GITHUB_REPO}`);
 
   try {
-    const branch = await getDefaultBranch();
-    console.log(`[GitHub Sync] Target branch: ${branch}`);
-
-    const latestCommit = await getLatestCommit(branch);
-    console.log(`[GitHub Sync] Latest commit: ${latestCommit || 'none (new repo)'}`);
+    const { branch, oid } = await getDefaultBranchAndOid();
+    console.log(`[GitHub Sync] Branch: ${branch}, HEAD: ${oid.substring(0, 7)}`);
 
     console.log('[GitHub Sync] Collecting files...');
     const files = getAllFiles('.');
-    console.log(`[GitHub Sync] Found ${files.length} files to sync`);
+    console.log(`[GitHub Sync] Found ${files.length} files`);
 
     if (files.length === 0) {
       console.log('[GitHub Sync] No files to sync');
       return;
     }
 
-    console.log('[GitHub Sync] Creating tree...');
-    const treeSha = await createTree(files, latestCommit);
-
     const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
     const message = `Deploy: ${timestamp}`;
 
     console.log('[GitHub Sync] Creating commit...');
-    const commitSha = await createCommit(treeSha, latestCommit, message);
+    const newOid = await createCommitWithFiles(branch, oid, message, files);
 
-    console.log('[GitHub Sync] Updating reference...');
-    await updateRef(branch, commitSha, true);
-
-    console.log('[GitHub Sync] Successfully synchronized to GitHub!');
-    console.log(`[GitHub Sync] Commit: ${commitSha}`);
+    console.log('[GitHub Sync] Success!');
+    console.log(`[GitHub Sync] Commit: ${newOid}`);
     console.log(`[GitHub Sync] View: https://github.com/${GITHUB_REPO}`);
   } catch (error) {
     console.error('[GitHub Sync] Error:', error);
