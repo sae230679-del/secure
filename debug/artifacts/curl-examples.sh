@@ -4,11 +4,7 @@
 # Базовый URL (замените на актуальный)
 BASE_URL="https://your-domain.replit.dev"
 
-# 1. Получить список публичных пакетов
-echo "=== Публичные пакеты ==="
-curl -s "$BASE_URL/api/public/packages" | jq .
-
-# 2. Фильтр по типу сервиса (express_pdf или full_audit)
+# 1. Фильтр по типу сервиса (express_pdf или full_audit)
 echo "=== Экспресс-пакеты ==="
 curl -s "$BASE_URL/api/public/packages?service=express_pdf" | jq .
 
