@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { URLInput } from "./url-input";
 import { PackageSelector } from "./package-selector";
@@ -119,6 +120,8 @@ export function AuditForm() {
   const [expressError, setExpressError] = useState<string | null>(null);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const [quickPdnConsent, setQuickPdnConsent] = useState(false);
+  const [fullPdnConsent, setFullPdnConsent] = useState(false);
 
   useEffect(() => {
     if (!expressCheckToken || !isExpressChecking) return;
@@ -202,6 +205,7 @@ export function AuditForm() {
     setExpressCheckStatus(null);
     setExpressError(null);
     setWebsiteUrl("");
+    setQuickPdnConsent(false);
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
       pollingRef.current = null;
@@ -372,7 +376,26 @@ export function AuditForm() {
                   </p>
                 </div>
                 <URLInput value={websiteUrl} onChange={setWebsiteUrl} error={urlError} />
-                <Button className="w-full" size="lg" onClick={runExpressCheck} disabled={!websiteUrl || isExpressChecking} data-testid="button-run-express-dashboard">
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="pdn-consent-quick"
+                    checked={quickPdnConsent}
+                    onCheckedChange={(checked) => setQuickPdnConsent(checked === true)}
+                    disabled={isExpressChecking}
+                    data-testid="checkbox-pdn-consent-quick"
+                  />
+                  <label
+                    htmlFor="pdn-consent-quick"
+                    className="text-xs leading-tight cursor-pointer text-muted-foreground"
+                  >
+                    Я даю согласие на обработку персональных данных в соответствии с{" "}
+                    <Link href="/privacy-policy" className="text-primary hover:underline">
+                      Политикой конфиденциальности
+                    </Link>{" "}
+                    <span className="text-destructive">*</span>
+                  </label>
+                </div>
+                <Button className="w-full" size="lg" onClick={runExpressCheck} disabled={!websiteUrl || isExpressChecking || !quickPdnConsent} data-testid="button-run-express-dashboard">
                   {isExpressChecking ? (
                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Проверка...</>
                   ) : (
@@ -397,7 +420,26 @@ export function AuditForm() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <URLInput value={websiteUrl} onChange={setWebsiteUrl} error={urlError} disabled={createAuditMutation.isPending} />
               <PackageSelector value={packageType} onChange={setPackageType} disabled={createAuditMutation.isPending} />
-              <Button type="submit" size="lg" className="w-full" disabled={createAuditMutation.isPending} data-testid="button-start-audit">
+              <div className="flex items-start gap-2">
+                <Checkbox
+                  id="pdn-consent-full"
+                  checked={fullPdnConsent}
+                  onCheckedChange={(checked) => setFullPdnConsent(checked === true)}
+                  disabled={createAuditMutation.isPending}
+                  data-testid="checkbox-pdn-consent-full"
+                />
+                <label
+                  htmlFor="pdn-consent-full"
+                  className="text-xs leading-tight cursor-pointer text-muted-foreground"
+                >
+                  Я даю согласие на обработку персональных данных в соответствии с{" "}
+                  <Link href="/privacy-policy" className="text-primary hover:underline">
+                    Политикой конфиденциальности
+                  </Link>{" "}
+                  <span className="text-destructive">*</span>
+                </label>
+              </div>
+              <Button type="submit" size="lg" className="w-full" disabled={createAuditMutation.isPending || !fullPdnConsent} data-testid="button-start-audit">
                 {createAuditMutation.isPending ? (
                   <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Создание аудита...</>
                 ) : (

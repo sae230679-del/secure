@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { URLInput } from "@/components/url-input";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -207,6 +208,7 @@ export function ExpressCheck() {
   const [showInnModal, setShowInnModal] = useState(false);
   const [innInput, setInnInput] = useState("");
   const [isCheckingInn, setIsCheckingInn] = useState(false);
+  const [pdnConsent, setPdnConsent] = useState(false);
   const { isAuthenticated } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -363,6 +365,7 @@ export function ExpressCheck() {
     setCheckStatus(null);
     setError(null);
     setWebsiteUrl("");
+    setPdnConsent(false);
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
       pollingRef.current = null;
@@ -681,11 +684,31 @@ export function ExpressCheck() {
                 onChange={setWebsiteUrl}
               />
 
+              <div className="flex items-start gap-2 pt-1">
+                <Checkbox
+                  id="pdn-consent-express"
+                  checked={pdnConsent}
+                  onCheckedChange={(checked) => setPdnConsent(checked === true)}
+                  disabled={isChecking}
+                  data-testid="checkbox-pdn-consent-express"
+                />
+                <label
+                  htmlFor="pdn-consent-express"
+                  className="text-xs leading-tight cursor-pointer text-muted-foreground"
+                >
+                  Я даю согласие на обработку персональных данных в соответствии с{" "}
+                  <Link href="/privacy-policy" className="text-primary hover:underline">
+                    Политикой конфиденциальности
+                  </Link>{" "}
+                  <span className="text-destructive">*</span>
+                </label>
+              </div>
+
               <Button 
                 className="w-full" 
                 size="lg" 
                 onClick={runExpressCheck}
-                disabled={!websiteUrl || isChecking}
+                disabled={!websiteUrl || isChecking || !pdnConsent}
                 data-testid="button-start-express-check"
               >
                 {isChecking ? (

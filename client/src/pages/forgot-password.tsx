@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Shield, Loader2, Mail, ArrowLeft, CheckCircle } from "lucide-react";
@@ -14,6 +15,7 @@ export default function ForgotPasswordPage() {
   const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [pdnConsent, setPdnConsent] = useState(false);
 
   const forgotPasswordMutation = useMutation({
     mutationFn: async (data: { email: string }) => {
@@ -112,10 +114,30 @@ export default function ForgotPasswordPage() {
                 </div>
               </div>
 
+              <div className="flex items-start gap-2 pt-2">
+                <Checkbox
+                  id="pdn-consent-forgot"
+                  checked={pdnConsent}
+                  onCheckedChange={(checked) => setPdnConsent(checked === true)}
+                  disabled={forgotPasswordMutation.isPending}
+                  data-testid="checkbox-pdn-consent-forgot"
+                />
+                <label
+                  htmlFor="pdn-consent-forgot"
+                  className="text-sm leading-tight cursor-pointer"
+                >
+                  Я даю согласие на обработку моих персональных данных в соответствии с{" "}
+                  <Link href="/privacy-policy" className="text-primary hover:underline">
+                    Политикой конфиденциальности
+                  </Link>{" "}
+                  <span className="text-destructive">*</span>
+                </label>
+              </div>
+
               <Button
                 type="submit"
                 className="w-full"
-                disabled={forgotPasswordMutation.isPending}
+                disabled={forgotPasswordMutation.isPending || !pdnConsent}
                 data-testid="button-send-reset"
               >
                 {forgotPasswordMutation.isPending ? (

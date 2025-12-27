@@ -56,6 +56,7 @@ export default function AuthPage() {
     email: "",
     phone: "",
     password: "",
+    offerAccepted: false,
     pdnConsent: false,
     marketingConsent: false,
   });
@@ -548,6 +549,29 @@ export default function AuthPage() {
 
                 {/* ФЗ-152: Чекбоксы согласий при регистрации */}
                 <div className="space-y-3 pt-2 border-t">
+                  {/* Обязательное принятие оферты */}
+                  <div className="flex items-start gap-2">
+                    <Checkbox
+                      id="offer-consent"
+                      checked={registerData.offerAccepted}
+                      onCheckedChange={(checked) => 
+                        setRegisterData({ ...registerData, offerAccepted: checked === true })
+                      }
+                      disabled={isLoading}
+                      data-testid="checkbox-offer-consent"
+                    />
+                    <label
+                      htmlFor="offer-consent"
+                      className="text-sm leading-tight cursor-pointer"
+                    >
+                      Я принимаю условия{" "}
+                      <Link href="/user-agreement" className="text-primary hover:underline">
+                        Пользовательского соглашения
+                      </Link>{" "}
+                      (оферты) <span className="text-destructive">*</span>
+                    </label>
+                  </div>
+
                   {/* Обязательное согласие на обработку ПДн */}
                   <div className="flex items-start gap-2">
                     <Checkbox
@@ -594,7 +618,7 @@ export default function AuthPage() {
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={isLoading || !registerData.pdnConsent}
+                  disabled={isLoading || !registerData.offerAccepted || !registerData.pdnConsent}
                   data-testid="button-register"
                 >
                   {isLoading ? (
