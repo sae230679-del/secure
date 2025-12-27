@@ -24,15 +24,15 @@ export function WidgetScript() {
       existingWidget.remove();
     }
 
-    const sanitizedCode = DOMPurify.sanitize(widgetCode, {
+    const sanitizedFragment = DOMPurify.sanitize(widgetCode, {
       ADD_TAGS: ["script", "iframe"],
       ADD_ATTR: ["src", "async", "defer", "type", "allow", "allowfullscreen", "frameborder"],
-      FORCE_BODY: true,
+      RETURN_DOM_FRAGMENT: true,
     });
 
     const container = document.createElement("div");
     container.id = "consultant-widget-script";
-    container.innerHTML = sanitizedCode;
+    container.appendChild(sanitizedFragment);
 
     const scripts = container.querySelectorAll("script");
     scripts.forEach((oldScript) => {

@@ -28,15 +28,15 @@ export function YandexMetrika() {
       existingScript.remove();
     }
 
-    const sanitizedCode = DOMPurify.sanitize(metrikaCode, {
+    const sanitizedFragment = DOMPurify.sanitize(metrikaCode, {
       ADD_TAGS: ["script", "noscript", "img"],
       ADD_ATTR: ["src", "async", "defer", "type", "alt"],
-      FORCE_BODY: true,
+      RETURN_DOM_FRAGMENT: true,
     });
 
     const container = document.createElement("div");
     container.id = "yandex-metrika-script";
-    container.innerHTML = sanitizedCode;
+    container.appendChild(sanitizedFragment);
 
     const scripts = container.querySelectorAll("script");
     scripts.forEach((oldScript) => {
