@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import DOMPurify from "dompurify";
 
 type PublicSettings = {
   siteName: string;
@@ -23,9 +24,15 @@ export function WidgetScript() {
       existingWidget.remove();
     }
 
+    const sanitizedCode = DOMPurify.sanitize(widgetCode, {
+      ADD_TAGS: ["script", "iframe"],
+      ADD_ATTR: ["src", "async", "defer", "type", "allow", "allowfullscreen", "frameborder"],
+      FORCE_BODY: true,
+    });
+
     const container = document.createElement("div");
     container.id = "consultant-widget-script";
-    container.innerHTML = widgetCode;
+    container.innerHTML = sanitizedCode;
 
     const scripts = container.querySelectorAll("script");
     scripts.forEach((oldScript) => {
