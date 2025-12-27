@@ -4,6 +4,7 @@ import http from "http";
 import { URL } from "url";
 import { checkHosting, type HostingCheckResult } from "./hosting-checker";
 import type { BriefResults, BriefHighlight, HostingInfo } from "@shared/schema";
+import { fetchRenderedPage } from "./playwright-fetcher";
 
 const OPENAI_MODEL = "gpt-4o-mini";
 const isProduction = process.env.NODE_ENV === "production";
@@ -569,6 +570,98 @@ export async function fetchWebsite(urlString: string, timeout = 15000): Promise<
       });
     }
   });
+}
+
+function isSpaShell(html: string): boolean {
+  if (!html || html.length < 500) return true;
+  
+  const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  if (!bodyMatch) return false;
+  
+  const bodyContent = bodyMatch[1]
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  
+  if (bodyContent.length < 100) return true;
+  
+  const spaIndicators = [
+    /<div[^>]*id=["'](?:root|app|__next|__nuxt)["'][^>]*>\s*<\/div>/i,
+    /<div[^>]*id=["'](?:root|app)["'][^>]*>[\s\n]*<\/div>/i,
+  ];
+  
+  return spaIndicators.some(pattern => pattern.test(html));
+}
+
+export async function fetchWebsiteWithPlaywright(urlString: string, timeout = 30000): Promise<WebsiteData> {
+  const startTime = Date.now();
+  
+  let parsed: URL;
+  try {
+    parsed = new URL(urlString);
+  } catch {
+    return {
+      url: urlString,
+      html: "",
+      statusCode: 0,
+      headers: {},
+      responseTime: Date.now() - startTime,
+      error: "Некорректный URL",
+    };
+  }
+
+  if (parsed.hostname === "localhost" || isPrivateIp(parsed.hostname)) {
+    return {
+      url: urlString,
+      html: "",
+      statusCode: 0,
+      headers: {},
+      responseTime: Date.now() - startTime,
+      error: "Запрещён доступ к локальным/внутренним адресам",
+    };
+  }
+  
+  try {
+    console.log(`[Audit] Fetching with Playwright: ${urlString}`);
+    const result = await fetchRenderedPage(urlString, timeout);
+    
+    if (result.error) {
+      console.log(`[Audit] Playwright failed: ${result.error}, falling back to static fetch`);
+      return fetchWebsite(urlString, 15000);
+    }
+    
+    console.log(`[Audit] Playwright success, HTML length: ${result.html.length}`);
+    
+    return {
+      url: urlString,
+      html: result.html,
+      statusCode: result.statusCode,
+      headers: {},
+      responseTime: Date.now() - startTime,
+    };
+  } catch (error: any) {
+    console.log(`[Audit] Playwright exception: ${error.message}, falling back to static fetch`);
+    return fetchWebsite(urlString, 15000);
+  }
+}
+
+export async function fetchWebsiteSmart(urlString: string): Promise<WebsiteData> {
+  const staticResult = await fetchWebsite(urlString, 15000);
+  
+  if (staticResult.error) {
+    return staticResult;
+  }
+  
+  if (isSpaShell(staticResult.html)) {
+    console.log(`[Audit] Detected SPA shell for ${urlString}, trying Playwright...`);
+    return fetchWebsiteWithPlaywright(urlString, 30000);
+  }
+  
+  return staticResult;
 }
 
 function checkHttps(data: WebsiteData): AuditCheckResult {
@@ -1555,7 +1648,7 @@ export async function runAudit(
     throw new Error(existsCheck.error || "Сайт недоступен");
   }
 
-  const websiteData = await fetchWebsite(url);
+  const websiteData = await fetchWebsiteSmart(url);
   
   onProgress?.(1, []);
 
