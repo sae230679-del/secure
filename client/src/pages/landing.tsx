@@ -102,39 +102,6 @@ export default function LandingPage() {
     }
   };
 
-  const features = [
-    {
-      icon: Shield,
-      title: "ФЗ-149 ФЗ-152 Проверка",
-      description: "Полная проверка на соответствие закону о персональных данных",
-    },
-    {
-      icon: Globe,
-      title: "Российское законодательство",
-      description: "Полное соответствие требованиям законодательства РФ",
-    },
-    {
-      icon: FileText,
-      title: "Детальные отчеты",
-      description: "Подробные рекомендации по исправлению нарушений",
-    },
-    {
-      icon: Clock,
-      title: "Быстрая проверка",
-      description: "Результаты за 15-60 минут в зависимости от типа сайта",
-    },
-    {
-      icon: Lock,
-      title: "SSL/HTTPS анализ",
-      description: "Проверка безопасности соединения и сертификатов",
-    },
-    {
-      icon: Users,
-      title: "Экспертная поддержка",
-      description: "Консультации юристов по вопросам compliance",
-    },
-  ];
-
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -222,37 +189,6 @@ export default function LandingPage() {
             </div>
 
             <ExpressCheck />
-          </div>
-        </div>
-      </section>
-
-      <section className="py-16 bg-muted/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-8 lg:px-12">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold mb-4">Почему SecureLex.ru?</h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Мы предлагаем полную автоматизированную проверку вашего сайта на соответствие 
-              российскому и международному законодательству
-            </p>
-          </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((feature, index) => (
-              <Card key={index} className="hover-elevate">
-                <CardContent className="pt-6">
-                  <feature.icon className="h-10 w-10 text-primary mb-4" />
-                  <h3 className="font-semibold text-lg mb-2">{feature.title}</h3>
-                  <p className="text-muted-foreground text-sm">{feature.description}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          <div className="mt-8 text-center">
-            <Button variant="outline" asChild data-testid="button-criteria-features">
-              <Link href="/criteria">
-                Критерии проверки
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
           </div>
         </div>
       </section>
