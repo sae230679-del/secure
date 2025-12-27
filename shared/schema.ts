@@ -31,6 +31,10 @@ export const users = pgTable("users", {
   emailVerifySentAt: timestamp("email_verify_sent_at"),
   passwordResetTokenHash: text("password_reset_token_hash"),
   passwordResetTokenExpiresAt: timestamp("password_reset_token_expires_at"),
+  vkId: varchar("vk_id", { length: 50 }),
+  yandexId: varchar("yandex_id", { length: 50 }),
+  oauthProvider: varchar("oauth_provider", { length: 20 }),
+  avatarUrl: text("avatar_url"),
 });
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -347,6 +351,32 @@ export const rknRegistryCache = pgTable("rkn_registry_cache", {
 });
 
 export type RknRegistryEntry = typeof rknRegistryCache.$inferSelect;
+
+export const promotions = pgTable("promotions", {
+  id: serial("id").primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  bannerImageUrl: text("banner_image_url"),
+  ctaText: varchar("cta_text", { length: 100 }),
+  ctaLink: varchar("cta_link", { length: 255 }),
+  promoCodeId: integer("promo_code_id").references(() => promoCodes.id),
+  discountText: varchar("discount_text", { length: 100 }),
+  showPopup: boolean("show_popup").default(true).notNull(),
+  showInMenu: boolean("show_in_menu").default(true).notNull(),
+  showOnLanding: boolean("show_on_landing").default(false).notNull(),
+  startDate: timestamp("start_date").defaultNow().notNull(),
+  endDate: timestamp("end_date"),
+  showCountdown: boolean("show_countdown").default(false).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  priority: integer("priority").default(0).notNull(),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type Promotion = typeof promotions.$inferSelect;
+export const insertPromotionSchema = createInsertSchema(promotions).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertPromotion = z.infer<typeof insertPromotionSchema>;
 
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,

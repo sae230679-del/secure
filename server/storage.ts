@@ -130,6 +130,17 @@ export interface IStorage {
   updateGuideSettings(data: Partial<schema.GuideSettings>): Promise<schema.GuideSettings | undefined>;
 
   seedPackages(): Promise<void>;
+
+  getUserByVkId(vkId: string): Promise<User | undefined>;
+  getUserByYandexId(yandexId: string): Promise<User | undefined>;
+  createOAuthUser(data: { name: string; email: string; vkId?: string; yandexId?: string; avatarUrl?: string; oauthProvider?: string }): Promise<User>;
+
+  getPromotions(): Promise<schema.Promotion[]>;
+  getActivePromotions(): Promise<schema.Promotion[]>;
+  getPromotionById(id: number): Promise<schema.Promotion | undefined>;
+  createPromotion(data: schema.InsertPromotion): Promise<schema.Promotion>;
+  updatePromotion(id: number, data: Partial<schema.InsertPromotion>): Promise<schema.Promotion | undefined>;
+  deletePromotion(id: number): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -358,6 +369,83 @@ export class DatabaseStorage implements IStorage {
 
   async seedPackages(): Promise<void> {
     await this.ensureDefaultPackages();
+  }
+
+  async getUserByVkId(vkId: string): Promise<User | undefined> {
+    const [user] = await db.select().from(schema.users).where(eq(schema.users.vkId, vkId));
+    return user;
+  }
+
+  async getUserByYandexId(yandexId: string): Promise<User | undefined> {
+    const [user] = await db.select().from(schema.users).where(eq(schema.users.yandexId, yandexId));
+    return user;
+  }
+
+  async createOAuthUser(data: { name: string; email: string; vkId?: string; yandexId?: string; avatarUrl?: string; oauthProvider?: string }): Promise<User> {
+    const randomPassword = crypto.randomBytes(32).toString("hex");
+    const passwordHash = await hash(randomPassword, 10);
+    const [user] = await db
+      .insert(schema.users)
+      .values({
+        name: data.name,
+        email: data.email.toLowerCase(),
+        passwordHash,
+        role: "user",
+        vkId: data.vkId || null,
+        yandexId: data.yandexId || null,
+        avatarUrl: data.avatarUrl || null,
+        oauthProvider: data.oauthProvider || null,
+        emailVerifiedAt: new Date(),
+      })
+      .returning();
+    return user;
+  }
+
+  async getPromotions(): Promise<schema.Promotion[]> {
+    return db.select().from(schema.promotions).orderBy(desc(schema.promotions.priority));
+  }
+
+  async getActivePromotions(): Promise<schema.Promotion[]> {
+    const now = new Date();
+    const promos = await db.select().from(schema.promotions)
+      .where(
+        and(
+          eq(schema.promotions.isActive, true),
+          or(
+            sql`${schema.promotions.startDate} <= ${now}`,
+            sql`${schema.promotions.startDate} IS NULL`
+          ),
+          or(
+            sql`${schema.promotions.endDate} >= ${now}`,
+            sql`${schema.promotions.endDate} IS NULL`
+          )
+        )
+      )
+      .orderBy(desc(schema.promotions.priority));
+    return promos;
+  }
+
+  async getPromotionById(id: number): Promise<schema.Promotion | undefined> {
+    const [promo] = await db.select().from(schema.promotions).where(eq(schema.promotions.id, id));
+    return promo;
+  }
+
+  async createPromotion(data: schema.InsertPromotion): Promise<schema.Promotion> {
+    const [promo] = await db.insert(schema.promotions).values(data).returning();
+    return promo;
+  }
+
+  async updatePromotion(id: number, data: Partial<schema.InsertPromotion>): Promise<schema.Promotion | undefined> {
+    const [promo] = await db.update(schema.promotions)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(schema.promotions.id, id))
+      .returning();
+    return promo;
+  }
+
+  async deletePromotion(id: number): Promise<boolean> {
+    const result = await db.delete(schema.promotions).where(eq(schema.promotions.id, id));
+    return true;
   }
 
   async seedServicesAndTools(): Promise<void> {

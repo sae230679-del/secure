@@ -18,6 +18,7 @@ import fs from "fs";
 import { runExpressAudit, runAudit, checkWebsiteExists, runDebugAudit } from "./audit-engine";
 import { generatePdfReport } from "./pdf-generator";
 import { toolsRouter } from "./tools-routes";
+import oauthRouter from "./oauth";
 import { maskEmail } from "./utils/pii";
 
 // GUARD: Mock mode forbidden in production
@@ -29,6 +30,7 @@ if (auditMockMode && process.env.NODE_ENV === "production") {
 declare module "express-session" {
   interface SessionData {
     userId?: number;
+    oauthState?: string;
   }
 }
 
@@ -196,6 +198,9 @@ export async function registerRoutes(
 
   // Tools API router (10 paid tools for compliance checking)
   app.use("/api/tools", toolsRouter);
+
+  // OAuth authentication routes (VK, Yandex)
+  app.use("/api/oauth", oauthRouter);
 
   app.post("/api/auth/register", async (req, res) => {
     try {
@@ -2339,6 +2344,86 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Failed to apply promo code:", error);
       res.status(500).json({ error: "Failed to apply promo code" });
+    }
+  });
+
+  // Promotions Routes (public - active promotions only)
+  app.get("/api/promotions/active", async (req, res) => {
+    try {
+      const promotions = await storage.getActivePromotions();
+      res.json(promotions);
+    } catch (error) {
+      console.error("Failed to fetch active promotions:", error);
+      res.status(500).json({ error: "Failed to fetch promotions" });
+    }
+  });
+
+  // Admin: Get all promotions
+  app.get("/api/admin/promotions", requireAdmin, async (req, res) => {
+    try {
+      const promotions = await storage.getPromotions();
+      res.json(promotions);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch promotions" });
+    }
+  });
+
+  // Admin: Create promotion
+  app.post("/api/admin/promotions", requireAdmin, async (req, res) => {
+    try {
+      const data = req.body;
+      const promotion = await storage.createPromotion({
+        ...data,
+        createdBy: req.session.userId,
+      });
+      
+      await storage.createAuditLog({
+        userId: req.session.userId,
+        action: "create_promotion",
+        resourceType: "promotion",
+        resourceId: promotion.id,
+        details: JSON.stringify({ title: promotion.title }),
+      });
+      
+      res.json(promotion);
+    } catch (error) {
+      console.error("Failed to create promotion:", error);
+      res.status(500).json({ error: "Failed to create promotion" });
+    }
+  });
+
+  // Admin: Update promotion
+  app.patch("/api/admin/promotions/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const promotion = await storage.updatePromotion(id, req.body);
+      
+      if (!promotion) {
+        return res.status(404).json({ error: "Promotion not found" });
+      }
+      
+      res.json(promotion);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update promotion" });
+    }
+  });
+
+  // Admin: Delete promotion
+  app.delete("/api/admin/promotions/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deletePromotion(id);
+      
+      await storage.createAuditLog({
+        userId: req.session.userId,
+        action: "delete_promotion",
+        resourceType: "promotion",
+        resourceId: id,
+      });
+      
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete promotion" });
     }
   });
 
