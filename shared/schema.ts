@@ -1,8 +1,20 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, boolean, jsonb, serial, pgEnum, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, boolean, jsonb, serial, pgEnum, index, json } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
+
+// =====================================================
+// Session table (managed by connect-pg-simple)
+// Must be defined in Drizzle schema to prevent migration issues
+// =====================================================
+export const session = pgTable("session", {
+  sid: varchar("sid", { length: 255 }).primaryKey(),
+  sess: json("sess").notNull(),
+  expire: timestamp("expire", { precision: 6 }).notNull(),
+}, (table) => [
+  index("IDX_session_expire").on(table.expire),
+]);
 
 // =====================================================
 // PDN (Personal Data) & Limits Enums
