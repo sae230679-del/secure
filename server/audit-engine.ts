@@ -960,6 +960,15 @@ function checkCookieBanner(html: string): AuditCheckResult {
     { pattern: /использу[ео][тм]\s*cookie/i, name: "'используем cookie'" },
     { pattern: /мы\s*используем\s*cookie/i, name: "'мы используем cookie'" },
     { pattern: /файл[аов]*\s*cookie/i, name: "'файлы cookie'" },
+    { pattern: /обработк[аиу]\s*cookie/i, name: "'обработка cookie'" },
+    { pattern: /условия[ми]*\s*.*cookie/i, name: "'условия cookie'" },
+    { pattern: /запретить\s*.*cookie/i, name: "'запретить cookie'" },
+    { pattern: /соглас[а-я]*\s*.*cookie/i, name: "'согласие cookie'" },
+    { pattern: /настрой[а-я]*\s*cookie/i, name: "'настройки cookie'" },
+    { pattern: /политик[аи]\s*cookie/i, name: "'политика cookie'" },
+    { pattern: /<[^>]*>Cookies<\/[^>]*>/i, name: "'Cookies заголовок'" },
+    { pattern: /data-tilda-cookie/i, name: "'Tilda cookie system'" },
+    { pattern: /cookiename/i, name: "'cookie popup'" },
   ];
 
   const foundPatterns: string[] = [];
@@ -1924,6 +1933,15 @@ function checkCookieBannerWithEvidence(html: string, url: string): DebugCheckRes
     { pattern: /использу[ео][тм]\s*cookie/i, label: "используем cookie" },
     { pattern: /мы\s*используем\s*cookie/i, label: "мы используем cookie" },
     { pattern: /файл[аов]*\s*cookie/i, label: "файлы cookie" },
+    { pattern: /обработк[аиу]\s*cookie/i, label: "обработка cookie" },
+    { pattern: /условия[ми]*\s*.*cookie/i, label: "условия cookie" },
+    { pattern: /запретить\s*.*cookie/i, label: "запретить cookie" },
+    { pattern: /соглас[а-я]*\s*.*cookie/i, label: "согласие cookie" },
+    { pattern: /настрой[а-я]*\s*cookie/i, label: "настройки cookie" },
+    { pattern: /политик[аи]\s*cookie/i, label: "политика cookie" },
+    { pattern: /<[^>]*>Cookies<\/[^>]*>/i, label: "Cookies заголовок" },
+    { pattern: /data-tilda-cookie/i, label: "Tilda cookie system" },
+    { pattern: /cookiename/i, label: "cookie popup" },
   ];
 
   const foundMarkers: string[] = [];
