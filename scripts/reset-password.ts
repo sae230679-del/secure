@@ -27,7 +27,6 @@ async function resetPassword() {
     } else {
       console.log(`Password updated successfully for: ${result.rows[0].email}`);
       console.log(`User ID: ${result.rows[0].id}, Role: ${result.rows[0].role}`);
-      console.log(`\nNew password: ${newPassword}`);
     }
   } catch (error) {
     console.error('Error:', error);

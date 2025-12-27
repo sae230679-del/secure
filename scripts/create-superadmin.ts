@@ -36,7 +36,6 @@ async function createSuperAdmin() {
     console.log(`Email: ${result.rows[0].email}`);
     console.log(`Role: ${result.rows[0].role}`);
     console.log(`Master Admin: ${result.rows[0].is_master_admin}`);
-    console.log(`\nPassword: ${password}`);
   } catch (error) {
     console.error('Error:', error);
   } finally {
