@@ -1537,6 +1537,53 @@ toolsRouter.post("/hosting-check", createPaywallGuard("hosting-recommendations")
   }
 });
 
+// RKN Registry Check Tool (paid)
+toolsRouter.post("/rkn-check", createPaywallGuard("rkn-check"), async (req: Request, res: Response) => {
+  try {
+    const { inn } = z.object({ inn: z.string().min(10).max(12) }).parse(req.body);
+    const cleanInn = inn.replace(/\D/g, "");
+    
+    const { checkRknRegistry } = await import("./rkn-parser");
+    const result = await checkRknRegistry(cleanInn);
+    
+    await consumePaymentIfExists(req);
+    
+    await logToolUsage({
+      toolKey: "rkn-check",
+      userId: req.session.userId || null,
+      sessionId: req.sessionID,
+      inputData: { inn: cleanInn.slice(0, 4) + "****" },
+      outputData: { isRegistered: result.isRegistered, confidence: result.confidence },
+      isPaid: true,
+    });
+    
+    res.json({
+      success: true,
+      isRegistered: result.isRegistered,
+      companyName: result.companyName,
+      registrationNumber: result.registrationNumber,
+      registrationDate: result.registrationDate,
+      confidence: result.confidence,
+      details: result.details,
+      fromCache: result.fromCache,
+      recommendations: result.isRegistered 
+        ? ["Организация зарегистрирована как оператор ПДн"]
+        : [
+            "Организация не найдена в реестре операторов ПДн",
+            "Согласно ст. 22 ФЗ-152 необходимо подать уведомление",
+            "Подать уведомление: pd.rkn.gov.ru",
+          ],
+      lawBasis: "152-ФЗ ст. 22",
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ success: false, errors: error.errors });
+    }
+    console.error("[TOOLS] rkn-check error:", error);
+    res.status(500).json({ success: false, error: "Ошибка проверки реестра РКН" });
+  }
+});
+
 // Get all available tools
 toolsRouter.get("/", async (req: Request, res: Response) => {
   const tools = await storage.getAllToolConfigs();

@@ -268,6 +268,12 @@ export function ExpressCheck() {
   };
 
   useEffect(() => {
+    if (result?.rknCheck?.needsCompanyDetails && !showInnModal) {
+      setShowInnModal(true);
+    }
+  }, [result?.rknCheck?.needsCompanyDetails]);
+
+  useEffect(() => {
     if (!checkToken || !isChecking) return;
 
     const pollStatus = async () => {
@@ -737,7 +743,7 @@ export function ExpressCheck() {
           <DialogHeader>
             <DialogTitle>Проверка в реестре РКН</DialogTitle>
             <DialogDescription>
-              Введите ИНН организации для проверки регистрации в качестве оператора персональных данных
+              ИНН организации не обнаружен на сайте. Введите ИНН для проверки регистрации в качестве оператора персональных данных.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -748,8 +754,41 @@ export function ExpressCheck() {
               maxLength={12}
               data-testid="input-inn"
             />
+            <div className="p-3 rounded-lg bg-muted/50 text-xs text-muted-foreground space-y-1">
+              <p>ИНН можно найти:</p>
+              <ul className="list-disc list-inside space-y-0.5">
+                <li>В подвале сайта (реквизиты)</li>
+                <li>На странице «О компании» или «Контакты»</li>
+                <li>В публичной оферте или договоре</li>
+              </ul>
+            </div>
           </div>
           <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button 
+              variant="ghost" 
+              onClick={() => {
+                setResult((prev) => prev ? {
+                  ...prev,
+                  rknCheck: {
+                    status: "not_checked",
+                    confidence: "none",
+                    used: "manual",
+                    query: {},
+                    details: "Проверка пропущена. Требуется ручная проверка в реестре РКН.",
+                    needsCompanyDetails: false,
+                    evidence: {},
+                  },
+                } : null);
+                setShowInnModal(false);
+                toast({
+                  title: "Проверка пропущена",
+                  description: "Отчёт отмечен как требующий ручной проверки в реестре РКН",
+                });
+              }}
+              data-testid="button-skip-inn"
+            >
+              Пропустить
+            </Button>
             <Button 
               variant="outline" 
               onClick={() => setShowInnModal(false)}
