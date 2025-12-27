@@ -272,7 +272,7 @@ class PdfReportGenerator {
         Title: `${reportType === "express" ? "Экспресс-отчёт" : "Полный отчёт"} - ${data.websiteUrl}`,
         Author: "SecureLex.ru",
         Subject: "Аудит соответствия законодательству РФ",
-        Keywords: "ФЗ-152, ФЗ-149, аудит, персональные данные, GDPR",
+        Keywords: "ФЗ-152, ФЗ-149, аудит, персональные данные",
       },
     });
     

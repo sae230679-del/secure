@@ -589,7 +589,7 @@ toolsRouter.post("/cookie-banner", createPaywallGuard("cookie-banner"), async (r
       center: "top: 50%; left: 50%; transform: translate(-50%, -50%); max-width: 500px;"
     };
     
-    const html = `<!-- Cookie Consent Banner - 152-ФЗ / GDPR Compliant -->
+    const html = `<!-- Cookie Consent Banner - 152-ФЗ Compliant -->
 <div id="cookie-consent-banner" class="cookie-banner cookie-banner--${input.theme}" style="position: fixed; ${positionStyles[input.position]} z-index: 99999; padding: 16px; background: var(--cookie-bg, #fff); box-shadow: 0 -2px 10px rgba(0,0,0,0.1); display: none;">
   <div class="cookie-banner__content">
     <h3 class="cookie-banner__title">${texts.title}</h3>
@@ -714,7 +714,7 @@ toolsRouter.post("/cookie-banner", createPaywallGuard("cookie-banner"), async (r
       html, 
       css, 
       js,
-      lawBasis: "152-ФЗ, GDPR Art. 6-7"
+      lawBasis: "152-ФЗ"
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

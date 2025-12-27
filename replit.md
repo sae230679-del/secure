@@ -2,11 +2,12 @@
 
 ## Overview
 
-SecureLex.ru is a website compliance checking platform that automatically audits websites for adherence to Russian data protection laws (ФЗ-152, ФЗ-149), GDPR, and other relevant regulations. Users can submit their website URL, select from various audit packages, make payments, and receive detailed compliance reports utilizing a traffic-light severity system. The platform supports three distinct user roles: regular users for self-audits, admins for managing paid audits, and superadmins for comprehensive system control, including theme customization and system settings.
+SecureLex.ru is a website compliance checking platform that automatically audits websites for adherence to Russian data protection laws (ФЗ-152, ФЗ-149) and other relevant regulations of the Russian Federation. Users can submit their website URL, select from various audit packages, make payments, and receive detailed compliance reports utilizing a traffic-light severity system. The platform supports three distinct user roles: regular users for self-audits, admins for managing paid audits, and superadmins for comprehensive system control, including theme customization and system settings.
 
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
+No foreign services: The platform does not use or support foreign data protection regulations (GDPR, etc.) - only Russian laws (ФЗ-152, ФЗ-149).
 
 ## System Architecture
 
@@ -27,9 +28,9 @@ Preferred communication style: Simple, everyday language.
 - **Password Reset**: Public endpoint for regular users with 3/hour rate limiting, 1-hour token expiry. Admin/superadmin password reset requires SuperAdmin access with PIN confirmation.
 - **Compliance Features**:
     - **PDN Consent Tracking**: Full lifecycle management including versioning, IP/user-agent logging, pre-payment consent, and withdrawal with a 30-day destruction schedule. Background jobs process destruction tasks, with SuperAdmin legal hold capability.
-    - **Cookie Consent**: GDPR/152-ФЗ compliant banner with granular preferences.
+    - **Cookie Consent**: 152-ФЗ compliant banner with granular preferences.
     - **Legal Pages**: Versioned /offer and /privacy pages.
-- **Audit Engine**: Expanded to 60+ criteria for premium packages, covering FZ-152, FZ-149, GDPR, cookies, technical aspects, legal, content, and security. Enhanced with structured evidence arrays and law basis references (AuditCheckResult interface).
+- **Audit Engine**: Expanded to 60+ criteria for premium packages, covering ФЗ-152, ФЗ-149, cookies, technical aspects, legal, content, and security. Enhanced with structured evidence arrays and law basis references (AuditCheckResult interface).
 - **Hosting Detection**: 2-layer Russian hosting detection (`server/hosting-checker.ts`):
   - **Layer 1 (Deterministic)**: DNS→IP→PTR lookup with dictionary matching (timeweb, beget, reg.ru, etc.)
   - **Layer 2 (AI)**: WHOIS analysis via AI when Layer 1 is uncertain (saves API costs)
