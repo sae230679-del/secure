@@ -47,7 +47,12 @@ No foreign services: The platform does not use or support foreign data protectio
   - Payments marked with `usedAt` timestamp after consumption (single-use tokens)
   - PII protection: sessionId never logged, emails/INN/passport masked via `redactObject()`
   - Free tool: hosting-recommendations (Russian hosting directory)
+  - **RKN Registry Check**: Checks if organization is registered as personal data operator in Roskomnadzor registry (pd.rkn.gov.ru). Validates INN checksum, caches results for 24h. Endpoint: `/api/tools/rkn-check`. Also integrated into express check flow with auto-popup INN modal when data not found on site.
   - **User Agreement Generator**: Modular generator for website user agreements with support for 10 site types (content, services, saas, ecommerce, marketplace, ugc, onlineSchool, servicesAggregator, classifieds, crmSaas). Output format: {html, text, blocks[], json, evidence[], limitations[]}. Generator module: `server/generators/user-agreement-generator.ts`
+- **Express Check RKN Integration**: When express audit cannot find INN on website, shows automatic popup asking user to enter INN. User can:
+  - Enter INN → runs RKN registry check → results added to report
+  - Skip → report marked "requires manual verification in RKN registry"
+  - Cancel → closes modal, can reopen via button
 
 ### Database
 - **Type**: PostgreSQL
