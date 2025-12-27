@@ -4,7 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { URLInput } from "@/components/url-input";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Shield, ArrowRight, Loader2, AlertTriangle, CheckCircle2, XCircle, FileText, CreditCard, Zap, Building2, HelpCircle, Search, Lock, Cookie, FileCheck, Globe, Users, UserCheck, ClipboardList } from "lucide-react";
+import { Shield, ArrowRight, Loader2, AlertTriangle, CheckCircle2, XCircle, FileText, CreditCard, Zap, Building2, HelpCircle, Search, Lock, Cookie, FileCheck, Globe, Users, UserCheck, ClipboardList, ChevronDown } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ScoreIndicator, FineEstimate, ResultsSummary } from "@/components/score-indicator";
 import { AuditResultsView } from "@/components/audit/AuditResultsView";
 import { Link, useLocation } from "wouter";
@@ -651,36 +652,33 @@ export function ExpressCheck() {
             )
           ) : (
             <>
-              <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                <div className="flex items-center gap-2 font-medium text-emerald-700 dark:text-emerald-400 mb-2">
-                  <Zap className="w-4 h-4" />
-                  9 критериев проверки
-                </div>
-                <div className="grid grid-cols-1 gap-1 text-xs text-muted-foreground">
-                  {AUDIT_CRITERIA.slice(0, 5).map((criterion) => (
-                    <div key={criterion.id} className="flex items-center gap-1.5">
-                      <criterion.icon className="w-3 h-3 shrink-0" />
-                      <span className="truncate">{criterion.name}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-2 p-2 rounded border-2 border-rose-500/50 bg-rose-500/10">
-                  <div className="text-xs font-medium text-rose-600 dark:text-rose-400 mb-1">+ ещё 4 критерия:</div>
-                  <div className="grid grid-cols-1 gap-1 text-xs text-muted-foreground">
-                    {AUDIT_CRITERIA.slice(5).map((criterion) => (
-                      <div key={criterion.id} className="flex items-center gap-1.5">
-                        <criterion.icon className="w-3 h-3 shrink-0 text-rose-500" />
-                        <span className="truncate">{criterion.name}</span>
+              <Collapsible defaultOpen={false}>
+                <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                  <CollapsibleTrigger className="w-full">
+                    <div className="flex items-center justify-between gap-2 font-medium text-emerald-700 dark:text-emerald-400">
+                      <div className="flex items-center gap-2">
+                        <Zap className="w-4 h-4 shrink-0" />
+                        <span className="text-sm sm:text-base">9 критериев проверки</span>
                       </div>
-                    ))}
-                  </div>
+                      <ChevronDown className="w-4 h-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                    </div>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mt-3 text-xs sm:text-sm text-muted-foreground">
+                      {AUDIT_CRITERIA.map((criterion) => (
+                        <div key={criterion.id} className="flex items-center gap-1.5 py-0.5">
+                          <criterion.icon className="w-3 h-3 sm:w-4 sm:h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                          <span className="truncate">{criterion.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </CollapsibleContent>
                 </div>
-              </div>
+              </Collapsible>
 
               <URLInput 
                 value={websiteUrl} 
                 onChange={setWebsiteUrl}
-                placeholder="Введите адрес сайта (например, example.ru)"
               />
 
               <Button 
