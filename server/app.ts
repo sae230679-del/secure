@@ -12,15 +12,6 @@ import { storage } from "./storage";
 export const app = express();
 export const httpServer = createServer(app);
 
-// Health check endpoints MUST be first - before any middleware
-// These respond immediately for Cloud Run health checks
-app.get("/health", (_req, res) => {
-  res.status(200).json({ status: "ok" });
-});
-app.get("/_health", (_req, res) => {
-  res.status(200).send("OK");
-});
-
 app.set('trust proxy', 1);
 
 const isProduction = process.env.NODE_ENV === "production";
@@ -93,6 +84,15 @@ app.use((_req, res, next) => {
     "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(self), usb=()"
   );
   next();
+});
+
+// Health check endpoints - after security headers but before heavy middleware (session, rate limiting)
+// This ensures Cloud Run health checks pass quickly while still having security headers
+app.get("/health", (_req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+app.get("/_health", (_req, res) => {
+  res.status(200).send("OK");
 });
 
 if (!isTest) {
