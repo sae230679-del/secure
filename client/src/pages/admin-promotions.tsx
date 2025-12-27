@@ -141,7 +141,7 @@ export default function AdminPromotionsPage() {
     if (editingId) {
       updateMutation.mutate({ id: editingId, data });
     } else {
-      createMutation.mutate(form);
+      createMutation.mutate(data);
     }
   };
 
