@@ -31,7 +31,11 @@ export function decrypt(encryptedText: string): string {
   const authTag = Buffer.from(parts[1], 'hex');
   const encrypted = parts[2];
   
-  const decipher = crypto.createDecipheriv(ALGORITHM, getEncryptionKey(), iv);
+  if (authTag.length !== AUTH_TAG_LENGTH) {
+    throw new Error('Invalid authentication tag length');
+  }
+  
+  const decipher = crypto.createDecipheriv(ALGORITHM, getEncryptionKey(), iv, { authTagLength: AUTH_TAG_LENGTH });
   decipher.setAuthTag(authTag);
   
   let decrypted = decipher.update(encrypted, 'hex', 'utf8');
