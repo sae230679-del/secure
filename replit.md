@@ -53,6 +53,12 @@ No foreign services: The platform does not use or support foreign data protectio
   - Enter INN → runs RKN registry check → results added to report
   - Skip → report marked "requires manual verification in RKN registry"
   - Cancel → closes modal, can reopen via button
+- **Email Subscription Service**: Newsletter subscription system with Russian email provider support:
+  - **Providers**: SendPulse, Unisender, Dashamail API integrations (`server/email-subscription-service.ts`)
+  - **Double Opt-in**: Confirmation tokens with 24h expiry, `/confirm-subscription` page for user confirmation
+  - **Endpoints**: `/api/subscribe` (public), `/api/confirm-subscription`, `/api/unsubscribe`
+  - **Admin Config**: Newsletter tab in SuperAdmin email settings (`/superadmin/email-settings`) with provider selection, API key management, email templates (confirmation + welcome)
+  - **Database**: `email_subscriptions` table (pending/confirmed/unsubscribed status), `email_service_settings` table for provider config
 
 ### Database
 - **Type**: PostgreSQL
