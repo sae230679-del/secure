@@ -56,7 +56,8 @@ export function VKIDWidget() {
           
           oAuthList.render({
             container: containerRef.current,
-            oauthList: [VKID.OAuthName.VK, VKID.OAuthName.OK, VKID.OAuthName.MAIL],
+            scheme: VKID.Scheme.DARK,
+            oauthList: [VKID.OAuthName.VK, VKID.OAuthName.MAIL, VKID.OAuthName.OK],
           });
 
           oAuthList.on(VKID.WidgetEvents.ERROR, (error: unknown) => {
