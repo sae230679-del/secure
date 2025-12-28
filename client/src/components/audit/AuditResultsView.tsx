@@ -21,7 +21,6 @@ import {
   Server,
   Globe,
   FileText,
-  Download,
   CreditCard,
   Loader2,
   Shield,
@@ -45,10 +44,8 @@ interface SiteTypeInfo {
 interface AuditResultsViewProps {
   results: BriefResults;
   isExpress?: boolean;
-  onDownloadPdf?: () => void;
   onPurchaseFullReport?: () => void;
   onReset?: () => void;
-  isDownloading?: boolean;
   isPurchasing?: boolean;
   siteType?: SiteTypeInfo | null;
   fullReportPrice?: number;
@@ -310,15 +307,11 @@ function HighlightsTable({ highlights }: { highlights: BriefHighlight[] }) {
 
 function CtaBlock({
   cta,
-  onDownloadPdf,
   onPurchaseFullReport,
-  isDownloading,
   isPurchasing,
 }: {
   cta: { fullReportPriceRub: number; fullReportIncludes: string[] };
-  onDownloadPdf?: () => void;
   onPurchaseFullReport?: () => void;
-  isDownloading?: boolean;
   isPurchasing?: boolean;
 }) {
   return (
@@ -331,22 +324,6 @@ function CtaBlock({
       </div>
 
       <div className="grid gap-3">
-        {onDownloadPdf && (
-          <Button
-            variant="outline"
-            onClick={onDownloadPdf}
-            disabled={isDownloading}
-            className="w-full"
-            data-testid="button-download-brief-pdf"
-          >
-            {isDownloading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="mr-2 h-4 w-4" />
-            )}
-            Скачать краткий PDF
-          </Button>
-        )}
 
         <div className="p-4 rounded-lg border-2 border-primary/30 bg-primary/5 space-y-3">
           <div className="flex items-center justify-between gap-2">
@@ -397,10 +374,8 @@ function CtaBlock({
 export function AuditResultsView({
   results,
   isExpress = true,
-  onDownloadPdf,
   onPurchaseFullReport,
   onReset,
-  isDownloading,
   isPurchasing,
   siteType,
   fullReportPrice = 900,
@@ -455,9 +430,7 @@ export function AuditResultsView({
       {isExpress && results.cta && (
         <CtaBlock
           cta={results.cta}
-          onDownloadPdf={onDownloadPdf}
           onPurchaseFullReport={onPurchaseFullReport}
-          isDownloading={isDownloading}
           isPurchasing={isPurchasing}
         />
       )}

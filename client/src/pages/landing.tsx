@@ -256,7 +256,7 @@ export default function LandingPage() {
                     </div>
                     <div className="p-3 sm:p-4 rounded-md bg-muted">
                       <div className="flex items-center justify-between gap-2 sm:gap-4 mb-2">
-                        <span className="font-semibold text-sm sm:text-base">Полный PDF отчёт</span>
+                        <span className="font-semibold text-sm sm:text-base">Полный отчёт</span>
                         <span className="text-xl sm:text-2xl font-bold">{formatPrice(EXPRESS_PACKAGE.price)}</span>
                       </div>
                       <ul className="space-y-1 text-xs sm:text-sm text-muted-foreground">

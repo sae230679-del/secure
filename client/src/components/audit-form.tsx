@@ -339,7 +339,7 @@ export function AuditForm() {
                 </div>
                 <div className="p-3 rounded-lg border-2 border-primary/30 bg-primary/5 space-y-3">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold">Полный PDF отчёт</span>
+                    <span className="font-semibold">Полный отчёт</span>
                     <span className="text-xl font-bold text-primary">{formatPrice(EXPRESS_PACKAGE.price)}</span>
                   </div>
                   <ul className="text-xs text-muted-foreground space-y-1">
@@ -376,7 +376,7 @@ export function AuditForm() {
                     Бесплатная экспресс-проверка
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Быстрый анализ основных требований. После проверки можно купить полный PDF-отчёт за {formatPrice(EXPRESS_PACKAGE.price)}
+                    Быстрый анализ основных требований. После проверки можно купить полный отчёт за {formatPrice(EXPRESS_PACKAGE.price)}
                   </p>
                 </div>
                 <URLInput value={websiteUrl} onChange={setWebsiteUrl} error={urlError} />

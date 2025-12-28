@@ -118,7 +118,7 @@ export default function AdminExpressAuditsPage() {
           Быстрая проверка
         </h1>
         <p className="text-muted-foreground mt-1">
-          Экспресс-проверки сайтов (бесплатные и с заказом PDF-отчета)
+          Экспресс-проверки сайтов (бесплатные с кратким результатом)
         </p>
       </div>
 

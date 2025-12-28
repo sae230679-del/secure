@@ -202,7 +202,7 @@ export default function AuditDetailPage() {
               <ul className="text-sm text-muted-foreground space-y-2">
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
-                  PDF с детальным разбором каждого нарушения
+                  Детальный разбор каждого нарушения
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
@@ -312,7 +312,7 @@ export default function AuditDetailPage() {
                 <div className="p-4 border rounded-lg space-y-3">
                   <div className="flex items-center justify-between gap-4">
                     <div>
-                      <p className="font-medium">Полный отчет (PDF)</p>
+                      <p className="font-medium">Полный отчет</p>
                       <p className="text-sm text-muted-foreground">
                         Детальный анализ с рекомендациями по исправлению
                       </p>
@@ -337,16 +337,11 @@ export default function AuditDetailPage() {
                       Предложение полного юридического сопровождения
                     </li>
                   </ul>
-                  <Button 
-                    className="w-full" 
-                    onClick={() => {
-                      window.open(`/api/audits/${auditId}/pdf`, '_blank');
-                    }}
-                    data-testid="button-download-pdf"
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Скачать полный отчет (PDF)
-                  </Button>
+                  <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                    <p className="text-sm text-amber-700 dark:text-amber-400 text-center font-medium">
+                      Отчёт будет отправлен на ваш email в течение 24 часов
+                    </p>
+                  </div>
                 </div>
               </CardContent>
             </Card>

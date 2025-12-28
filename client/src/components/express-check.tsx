@@ -594,7 +594,7 @@ export function ExpressCheck() {
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <FileText className="w-5 h-5 text-primary" />
-                        <span className="font-semibold">Полный PDF отчёт</span>
+                        <span className="font-semibold">Полный отчёт</span>
                       </div>
                       <span className="text-2xl font-bold text-primary">{result.fullReportPrice || 900} ₽</span>
                     </div>
