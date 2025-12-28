@@ -194,7 +194,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
               <ColorModeToggle />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="md:hidden" data-testid="button-mobile-menu">
+                  <Button variant="ghost" size="icon" data-testid="button-header-menu">
                     <Avatar className="h-8 w-8">
                       <AvatarFallback className="text-xs">
                         {user?.name ? getInitials(user.name) : "U"}
@@ -208,7 +208,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
                     Профиль
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => logout()} className="text-destructive" data-testid="button-mobile-logout">
+                  <DropdownMenuItem onClick={() => logout()} className="text-destructive" data-testid="button-header-logout">
                     <LogOut className="h-4 w-4 mr-2" />
                     Выйти
                   </DropdownMenuItem>
