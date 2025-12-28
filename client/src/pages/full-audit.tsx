@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { ColorModeToggle } from "@/components/color-mode-toggle";
 import { Footer } from "@/components/footer";
 import { FULL_AUDIT_PACKAGES, formatPrice } from "@/lib/packages-data";
 import { useAuth } from "@/lib/auth-context";
+import { useToast } from "@/hooks/use-toast";
 import {
   Shield,
   CheckCircle2,
@@ -25,11 +27,67 @@ import {
   Stethoscope,
   Baby,
   Users,
+  Loader2,
+  Globe,
+  Sparkles,
 } from "lucide-react";
+
+type SiteTypeResult = {
+  type: string;
+  typeName: string;
+  confidence: number;
+  recommendedPackagePrice: number;
+  signals: string[];
+};
 
 export default function FullAuditPage() {
   const { isAuthenticated } = useAuth();
+  const { toast } = useToast();
   const [showAllPackages, setShowAllPackages] = useState(false);
+  const [detectUrl, setDetectUrl] = useState("");
+  const [isDetecting, setIsDetecting] = useState(false);
+  const [detectedResult, setDetectedResult] = useState<SiteTypeResult | null>(null);
+
+  const handleDetectSiteType = async () => {
+    if (!detectUrl.trim()) {
+      toast({
+        title: "Введите URL",
+        description: "Укажите адрес сайта для автоопределения типа",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsDetecting(true);
+    setDetectedResult(null);
+    try {
+      const response = await fetch("/api/public/detect-site-type", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: detectUrl }),
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Ошибка определения типа");
+      }
+      
+      const result = await response.json();
+      setDetectedResult(result);
+      toast({
+        title: "Тип сайта определён",
+        description: `${result.typeName} (${Math.round(result.confidence * 100)}% уверенность)`,
+      });
+    } catch (err: any) {
+      toast({
+        title: "Ошибка",
+        description: err.message || "Не удалось определить тип сайта",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDetecting(false);
+    }
+  };
 
   const siteTypeInfo: Record<string, { icon: typeof FileCode; subtitle: string }> = {
     landing: { icon: FileCode, subtitle: "до 3 страниц" },
@@ -127,6 +185,81 @@ export default function FullAuditPage() {
               <span>Консультация юриста</span>
             </div>
           </div>
+
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                Автоопределение типа сайта
+              </CardTitle>
+              <CardDescription>
+                Укажите URL вашего сайта, и мы автоматически определим его тип и подберём оптимальный пакет
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1">
+                  <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="url"
+                    placeholder="example.com"
+                    value={detectUrl}
+                    onChange={(e) => setDetectUrl(e.target.value)}
+                    className="pl-10"
+                    data-testid="input-detect-url"
+                  />
+                </div>
+                <Button 
+                  onClick={handleDetectSiteType} 
+                  disabled={isDetecting}
+                  data-testid="button-detect-site-type"
+                >
+                  {isDetecting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Анализ...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      Определить тип
+                    </>
+                  )}
+                </Button>
+              </div>
+              
+              {detectedResult && (
+                <div className="mt-4 p-4 bg-primary/5 rounded-lg border border-primary/20">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge variant="outline" className="bg-primary/10">
+                          {detectedResult.typeName}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          ({Math.round(detectedResult.confidence * 100)}% уверенность)
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Рекомендуемый пакет: <span className="font-semibold text-foreground">{formatPrice(detectedResult.recommendedPackagePrice)}</span>
+                      </p>
+                    </div>
+                    <Button asChild data-testid="button-order-detected-type">
+                      <Link href={isAuthenticated ? `/dashboard?siteType=${detectedResult.type}` : `/auth?redirect=/dashboard?siteType=${detectedResult.type}`}>
+                        Заказать аудит
+                        <ArrowRight className="h-4 w-4 ml-2" />
+                      </Link>
+                    </Button>
+                  </div>
+                  {detectedResult.signals.length > 0 && (
+                    <div className="mt-3 text-xs text-muted-foreground">
+                      <span className="font-medium">Обнаружены признаки:</span> {detectedResult.signals.slice(0, 3).join(", ")}
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {packagesToShow.map(([key, pkg]) => {
