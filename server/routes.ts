@@ -2569,16 +2569,30 @@ export async function registerRoutes(
           }
 
           console.log(`[EXPRESS] Calling runExpressAudit for ${normalizedUrl}...`);
-          const report = await runExpressAudit(normalizedUrl, async (stage, passed, warnings, failed) => {
-            const adjustedStage = Math.min(3 + stage, 6);
-            await storage.updatePublicAuditProgress(token, {
-              stageIndex: adjustedStage,
-              passedCount: passed,
-              warningCount: warnings,
-              failedCount: failed,
-              totalCount: passed + warnings + failed,
-            });
-          });
+          const report = await runExpressAudit(
+            normalizedUrl, 
+            async (stage, passed, warnings, failed) => {
+              const adjustedStage = Math.min(3 + stage, 6);
+              await storage.updatePublicAuditProgress(token, {
+                stageIndex: adjustedStage,
+                passedCount: passed,
+                warningCount: warnings,
+                failedCount: failed,
+                totalCount: passed + warnings + failed,
+              });
+            },
+            async (attempt, maxAttempts) => {
+              const currentAudit = await storage.getPublicAuditByToken(token);
+              const existingSummary = (currentAudit?.summaryJson as any) || {};
+              await storage.updatePublicAuditProgress(token, {
+                summaryJson: {
+                  ...existingSummary,
+                  rknAttempt: attempt,
+                  rknMaxAttempts: maxAttempts,
+                },
+              });
+            }
+          );
           console.log(`[EXPRESS] runExpressAudit completed: scorePercent=${report.scorePercent}, checks.length=${report.checks?.length || 0}`);
 
           for (let i = 4; i <= 6; i++) {
@@ -2673,6 +2687,8 @@ export async function registerRoutes(
       const rknCheck = summaryData?.rknCheck || null;
       const briefResults = summaryData?.briefResults || null;
       const hostingInfo = summaryData?.hostingInfo || null;
+      const rknAttempt = summaryData?.rknAttempt || 0;
+      const rknMaxAttempts = summaryData?.rknMaxAttempts || 5;
 
       res.json({
         token: audit.token,
@@ -2689,6 +2705,8 @@ export async function registerRoutes(
         rknCheck: rknCheck,
         briefResults: briefResults,
         hostingInfo: hostingInfo,
+        rknAttempt: rknAttempt,
+        rknMaxAttempts: rknMaxAttempts,
         createdAt: audit.createdAt,
         completedAt: audit.completedAt,
       });

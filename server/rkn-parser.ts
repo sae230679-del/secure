@@ -76,7 +76,65 @@ async function saveCacheEntry(
   }
 }
 
-export async function checkRknRegistry(inn: string): Promise<RknCheckResult> {
+export interface RknRetryCallback {
+  onAttempt?: (attemptNumber: number, maxAttempts: number) => void;
+  onSuccess?: () => void;
+  onAllFailed?: () => void;
+}
+
+const MAX_RKN_ATTEMPTS = 5;
+const RETRY_DELAY_MS = 2000;
+
+async function fetchRknWithRetry(
+  searchUrl: string, 
+  cleanInn: string,
+  callbacks?: RknRetryCallback
+): Promise<{ success: boolean; html?: string; error?: string }> {
+  for (let attempt = 1; attempt <= MAX_RKN_ATTEMPTS; attempt++) {
+    try {
+      console.log(`[RKN] Attempt ${attempt}/${MAX_RKN_ATTEMPTS} for INN ${cleanInn}...`);
+      callbacks?.onAttempt?.(attempt, MAX_RKN_ATTEMPTS);
+      
+      const response = await fetch(searchUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
+        },
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!response.ok) {
+        console.error(`[RKN] HTTP error on attempt ${attempt}: ${response.status}`);
+        if (attempt < MAX_RKN_ATTEMPTS) {
+          await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+          continue;
+        }
+        return { success: false, error: `http_${response.status}` };
+      }
+
+      const html = await response.text();
+      callbacks?.onSuccess?.();
+      return { success: true, html };
+    } catch (error: any) {
+      console.error(`[RKN] Attempt ${attempt} failed:`, error?.message || error);
+      if (attempt < MAX_RKN_ATTEMPTS) {
+        await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+        continue;
+      }
+      callbacks?.onAllFailed?.();
+      return { success: false, error: error?.message || "unknown_error" };
+    }
+  }
+  
+  callbacks?.onAllFailed?.();
+  return { success: false, error: "max_attempts_reached" };
+}
+
+export async function checkRknRegistry(
+  inn: string, 
+  callbacks?: RknRetryCallback
+): Promise<RknCheckResult & { attemptsMade?: number; manualCheckUrl?: string }> {
   if (!inn || inn.length < 10 || inn.length > 12) {
     return {
       isRegistered: false,
@@ -105,33 +163,33 @@ export async function checkRknRegistry(inn: string): Promise<RknCheckResult> {
     };
   }
 
-  try {
-    console.log(`[RKN] Fetching registry for INN ${cleanInn}...`);
-    
-    const searchUrl = `${RKN_REGISTRY_URL}?inn=${encodeURIComponent(cleanInn)}`;
-    
-    const response = await fetch(searchUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
-      },
-      signal: AbortSignal.timeout(15000),
+  console.log(`[RKN] Fetching registry for INN ${cleanInn}...`);
+  
+  const searchUrl = `${RKN_REGISTRY_URL}?inn=${encodeURIComponent(cleanInn)}`;
+  const manualCheckUrl = `https://pd.rkn.gov.ru/operators-registry/operators-list/?inn=${cleanInn}`;
+  
+  const fetchResult = await fetchRknWithRetry(searchUrl, cleanInn, callbacks);
+  
+  if (!fetchResult.success || !fetchResult.html) {
+    await saveCacheEntry(cleanInn, false, undefined, undefined, undefined, {
+      error: fetchResult.error,
+      timestamp: new Date().toISOString(),
+      attemptsMade: MAX_RKN_ATTEMPTS,
     });
 
-    if (!response.ok) {
-      console.error(`[RKN] HTTP error: ${response.status}`);
-      return {
-        isRegistered: false,
-        confidence: "none",
-        details: "Не удалось проверить реестр РКН (ошибка сервера)",
-        fromCache: false,
-        error: `http_${response.status}`,
-      };
-    }
+    return {
+      isRegistered: false,
+      confidence: "none",
+      details: `Не удалось проверить реестр РКН после ${MAX_RKN_ATTEMPTS} попыток. Проверьте вручную на сайте pd.rkn.gov.ru`,
+      fromCache: false,
+      error: fetchResult.error,
+      attemptsMade: MAX_RKN_ATTEMPTS,
+      manualCheckUrl,
+    };
+  }
 
-    const html = await response.text();
-    const $ = cheerio.load(html);
+  try {
+    const $ = cheerio.load(fetchResult.html);
     
     const tableRows = $("table tbody tr, .registry-table tr, .operators-list tr");
     
@@ -192,22 +250,19 @@ export async function checkRknRegistry(inn: string): Promise<RknCheckResult> {
         confidence: "medium",
         details: "Организация не найдена в реестре операторов персональных данных Роскомнадзора",
         fromCache: false,
+        manualCheckUrl,
       };
     }
   } catch (error: any) {
-    console.error("[RKN] Registry check error:", error?.message || error);
+    console.error("[RKN] Registry parse error:", error?.message || error);
     
-    await saveCacheEntry(cleanInn, false, undefined, undefined, undefined, {
-      error: error?.message,
-      timestamp: new Date().toISOString(),
-    });
-
     return {
       isRegistered: false,
       confidence: "none",
-      details: "Не удалось проверить реестр РКН (сервис временно недоступен)",
+      details: "Ошибка при разборе ответа от реестра РКН",
       fromCache: false,
-      error: error?.message || "unknown_error",
+      error: error?.message || "parse_error",
+      manualCheckUrl,
     };
   }
 }

@@ -300,6 +300,7 @@ export interface RknCheckResult {
     registrationNumber?: string;
     registrationDate?: string;
     error?: string;
+    manualCheckUrl?: string;
   };
 }
 
@@ -327,6 +328,7 @@ export interface AuditOptions {
   level2?: boolean;
   aiMode?: AuditAiMode;
   onProgress?: (stage: number, checks: AuditCheckResult[]) => void;
+  onRknAttempt?: (attempt: number, maxAttempts: number) => void;
 }
 
 function truncateSnippet(text: string, maxLen = 350): string {
@@ -1795,7 +1797,7 @@ export async function runAudit(
   url: string, 
   options: AuditOptions = {}
 ): Promise<AuditReport> {
-  const { level2 = true, aiMode = "gigachat_only", onProgress } = options;
+  const { level2 = true, aiMode = "gigachat_only", onProgress, onRknAttempt } = options;
 
   onProgress?.(0, []);
 
@@ -1819,7 +1821,19 @@ export async function runAudit(
   if (rknCheck.query.inn) {
     try {
       const { checkRknRegistry } = await import("./rkn-parser");
-      const registryResult = await checkRknRegistry(rknCheck.query.inn);
+      const registryResult = await checkRknRegistry(rknCheck.query.inn, {
+        onAttempt: (attempt, maxAttempts) => {
+          console.log(`[AUDIT] RKN attempt ${attempt}/${maxAttempts}`);
+          onRknAttempt?.(attempt, maxAttempts);
+        },
+        onSuccess: () => {
+          onRknAttempt?.(0, 5);
+        },
+        onAllFailed: () => {
+          console.log("[AUDIT] All RKN attempts failed");
+          onRknAttempt?.(0, 5);
+        },
+      });
       
       rknCheck = {
         ...rknCheck,
@@ -1831,12 +1845,14 @@ export async function runAudit(
           registrationNumber: registryResult.registrationNumber,
           registrationDate: registryResult.registrationDate,
           error: registryResult.error,
+          manualCheckUrl: registryResult.manualCheckUrl,
         },
       };
       
       console.log(`[AUDIT] RKN registry check for INN ${rknCheck.query.inn}: ${registryResult.isRegistered ? "REGISTERED" : "NOT REGISTERED"}`);
     } catch (error) {
       console.error("[AUDIT] RKN registry check error:", error);
+      onRknAttempt?.(0, 5);
       rknCheck = {
         ...rknCheck,
         registryCheck: {
@@ -1913,7 +1929,8 @@ export async function runAudit(
 
 export async function runExpressAudit(
   url: string,
-  onProgress?: (stage: number, passedCount: number, warningCount: number, failedCount: number) => void
+  onProgress?: (stage: number, passedCount: number, warningCount: number, failedCount: number) => void,
+  onRknAttempt?: (attempt: number, maxAttempts: number) => void
 ): Promise<AuditReport> {
   const stages = [
     "Подключение к сайту",
@@ -1936,6 +1953,7 @@ export async function runExpressAudit(
       const failed = checks.filter(c => c.status === "failed").length;
       onProgress?.(stage, passed, warnings, failed);
     },
+    onRknAttempt,
   });
 
   return report;
