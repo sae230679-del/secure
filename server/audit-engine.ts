@@ -3,8 +3,9 @@ import https from "https";
 import http from "http";
 import { URL } from "url";
 import { checkHosting, type HostingCheckResult } from "./hosting-checker";
-import type { BriefResults, BriefHighlight, HostingInfo } from "@shared/schema";
+import type { BriefResults, BriefHighlight, HostingInfo, BriefPenaltySummary } from "@shared/schema";
 import { fetchRenderedPage } from "./playwright-fetcher";
+import { PENALTY_MAP } from "./penalties-map";
 
 const OPENAI_MODEL = "gpt-4o-mini";
 const isProduction = process.env.NODE_ENV === "production";
@@ -1812,6 +1813,9 @@ function buildBriefResults(
     scores.severity = "high";
   }
 
+  // Calculate penalty summary from failed/warning checks
+  const penaltySummary = calculatePenaltySummary(checks, hostingCheck);
+
   return {
     version: "1.0",
     reportType: "express",
@@ -1839,6 +1843,69 @@ function buildBriefResults(
         "Приложения и ссылки на официальные источники",
       ],
     },
+    penaltySummary,
+  };
+}
+
+function calculatePenaltySummary(checks: AuditCheckResult[], hostingCheck: HostingCheckResult): BriefPenaltySummary | undefined {
+  let citizenMin = 0, citizenMax = 0;
+  let ipMin = 0, ipMax = 0;
+  let legalMin = 0, legalMax = 0;
+  let violationsCount = 0;
+
+  const processedAggregationKeys = new Set<string>();
+
+  for (const check of checks) {
+    if (check.status !== "failed" && check.status !== "warning") continue;
+    
+    const checkId = check.id || check.checkId || check.name.replace(/\s+/g, "_").toUpperCase();
+    const penaltyItem = PENALTY_MAP[checkId];
+    
+    if (penaltyItem) {
+      if (processedAggregationKeys.has(penaltyItem.aggregationKey)) continue;
+      processedAggregationKeys.add(penaltyItem.aggregationKey);
+      
+      violationsCount++;
+      
+      for (const pen of penaltyItem.penalties) {
+        if (pen.subject === "citizen" || pen.subject === "selfEmployed") {
+          citizenMin += pen.minRub;
+          citizenMax += pen.maxRub;
+        } else if (pen.subject === "ip") {
+          ipMin += pen.minRub;
+          ipMax += pen.maxRub;
+        } else if (pen.subject === "legalEntity") {
+          legalMin += pen.minRub;
+          legalMax += pen.maxRub;
+        }
+      }
+    }
+  }
+
+  // Add penalty for foreign hosting
+  if (hostingCheck.status === "foreign") {
+    violationsCount++;
+    // Foreign hosting penalty - approximate values
+    citizenMin += 1000;
+    citizenMax += 3000;
+    ipMin += 10000;
+    ipMax += 30000;
+    legalMin += 60000;
+    legalMax += 100000;
+  }
+
+  if (violationsCount === 0) {
+    return undefined;
+  }
+
+  return {
+    citizenMinRub: citizenMin,
+    citizenMaxRub: citizenMax,
+    ipMinRub: ipMin,
+    ipMaxRub: ipMax,
+    legalEntityMinRub: legalMin,
+    legalEntityMaxRub: legalMax,
+    violationsCount,
   };
 }
 

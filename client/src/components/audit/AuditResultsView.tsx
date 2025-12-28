@@ -30,7 +30,7 @@ import {
   ChevronRight,
   Scale,
 } from "lucide-react";
-import type { BriefResults, HostingInfo, BriefHighlight } from "@shared/schema";
+import type { BriefResults, HostingInfo, BriefHighlight, BriefPenaltySummary } from "@shared/schema";
 
 interface SiteTypeInfo {
   type: string;
@@ -243,6 +243,44 @@ function HostingInfoBlock({ hosting }: { hosting: HostingInfo }) {
   );
 }
 
+function formatPrice(amount: number): string {
+  return new Intl.NumberFormat("ru-RU").format(amount);
+}
+
+function PenaltySummaryBlock({ penaltySummary }: { penaltySummary: BriefPenaltySummary }) {
+  return (
+    <div className="rounded-lg p-4 bg-rose-500/10 border border-rose-500/30">
+      <div className="flex items-center gap-2 mb-3">
+        <Scale className="w-5 h-5 text-rose-500" />
+        <h3 className="font-semibold text-rose-600">Возможные штрафы</h3>
+      </div>
+      <p className="text-xs text-muted-foreground mb-3">
+        Обнаружено нарушений: {penaltySummary.violationsCount}. Сумма штрафов без детализации:
+      </p>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">Физлица:</span>
+          <span className="font-semibold">
+            {formatPrice(penaltySummary.citizenMinRub)} - {formatPrice(penaltySummary.citizenMaxRub)} ₽
+          </span>
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">ИП:</span>
+          <span className="font-semibold">
+            {formatPrice(penaltySummary.ipMinRub)} - {formatPrice(penaltySummary.ipMaxRub)} ₽
+          </span>
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">Юрлица:</span>
+          <span className="font-semibold text-rose-600">
+            {formatPrice(penaltySummary.legalEntityMinRub)} - {formatPrice(penaltySummary.legalEntityMaxRub)} ₽
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function HighlightsTable({ highlights }: { highlights: BriefHighlight[] }) {
   return (
     <div className="space-y-2">
@@ -405,6 +443,10 @@ export function AuditResultsView({
       <StatsSummary totals={results.score.totals} />
 
       <HostingInfoBlock hosting={results.hosting} />
+
+      {results.penaltySummary && (
+        <PenaltySummaryBlock penaltySummary={results.penaltySummary} />
+      )}
 
       {siteType && (
         <div className="rounded-lg p-4 bg-muted/30 border">

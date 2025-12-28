@@ -868,6 +868,16 @@ export const briefCtaSchema = z.object({
   fullReportIncludes: z.array(z.string()),
 });
 
+export const briefPenaltySummarySchema = z.object({
+  citizenMinRub: z.number(),
+  citizenMaxRub: z.number(),
+  ipMinRub: z.number(),
+  ipMaxRub: z.number(),
+  legalEntityMinRub: z.number(),
+  legalEntityMaxRub: z.number(),
+  violationsCount: z.number(),
+});
+
 export const briefResultsSchema = z.object({
   version: z.string().default("1.0"),
   reportType: z.literal("express"),
@@ -880,12 +890,14 @@ export const briefResultsSchema = z.object({
   hosting: hostingInfoSchema,
   highlights: z.array(briefHighlightSchema),
   cta: briefCtaSchema,
+  penaltySummary: briefPenaltySummarySchema.optional(),
 });
 
 export type LawRef = z.infer<typeof lawRefSchema>;
 export type BriefHighlight = z.infer<typeof briefHighlightSchema>;
 export type BriefScore = z.infer<typeof briefScoreSchema>;
 export type BriefCta = z.infer<typeof briefCtaSchema>;
+export type BriefPenaltySummary = z.infer<typeof briefPenaltySummarySchema>;
 export type BriefResults = z.infer<typeof briefResultsSchema>;
 
 // =====================================================
