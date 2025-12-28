@@ -161,6 +161,27 @@ export interface PlatformDetectionResult {
   actualHostingUrl?: string;
 }
 
+const PRIVATE_IP_RANGES = [
+  /^127\./,
+  /^10\./,
+  /^192\.168\./,
+  /^172\.(1[6-9]|2[0-9]|3[0-1])\./,
+  /^0\./,
+  /^169\.254\./,
+];
+
+function isPrivateIpOrLocalhost(hostname: string): boolean {
+  const lower = hostname.toLowerCase();
+  if (lower === "localhost" || lower.endsWith(".localhost") || lower.endsWith(".local")) {
+    return true;
+  }
+  const ipv4Match = lower.match(/^(\d{1,3}\.){3}\d{1,3}$/);
+  if (ipv4Match) {
+    return PRIVATE_IP_RANGES.some((re) => re.test(lower));
+  }
+  return false;
+}
+
 export async function detectPlatformFromHttp(url: string): Promise<PlatformDetectionResult> {
   const evidence: string[] = [];
   let provider: string | null = null;
@@ -169,6 +190,17 @@ export async function detectPlatformFromHttp(url: string): Promise<PlatformDetec
 
   try {
     const fullUrl = url.startsWith("http") ? url : `https://${url}`;
+    
+    let parsed: URL;
+    try {
+      parsed = new URL(fullUrl);
+    } catch {
+      return { detected: false, provider: null, confidence: 0, evidence: ["Некорректный URL"] };
+    }
+    
+    if (isPrivateIpOrLocalhost(parsed.hostname)) {
+      return { detected: false, provider: null, confidence: 0, evidence: ["Запрещено сканирование внутренних адресов"] };
+    }
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
