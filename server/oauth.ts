@@ -4,14 +4,15 @@ import crypto from "crypto";
 
 const router = Router();
 
-function getBaseUrl(): string {
-  if (process.env.REPLIT_DEV_DOMAIN) {
-    return `https://${process.env.REPLIT_DEV_DOMAIN}`;
+function getBaseUrl(req: Request): string {
+  // Use the Host header from the request to determine the correct callback URL
+  const host = req.get('host');
+  if (host) {
+    const protocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+    return `${protocol}://${host}`;
   }
-  if (process.env.DOMAIN) {
-    return `https://${process.env.DOMAIN}`;
-  }
-  return process.env.BASE_URL || "https://securelex.ru";
+  // Fallback for production
+  return "https://securelex.ru";
 }
 
 async function getOAuthConfig(provider: "vk" | "yandex") {
@@ -34,7 +35,7 @@ router.get("/vk", async (req: Request, res: Response) => {
   const state = crypto.randomBytes(16).toString("hex");
   req.session.oauthState = state;
 
-  const redirectUri = `${getBaseUrl()}/api/oauth/vk/callback`;
+  const redirectUri = `${getBaseUrl(req)}/api/oauth/vk/callback`;
   const scope = "email";
   const vkVersion = "5.131";
 
@@ -68,7 +69,7 @@ router.get("/vk/callback", async (req: Request, res: Response) => {
       return res.redirect("/auth?error=vk_not_configured");
     }
 
-    const redirectUri = `${getBaseUrl()}/api/oauth/vk/callback`;
+    const redirectUri = `${getBaseUrl(req)}/api/oauth/vk/callback`;
     const tokenUrl = `https://oauth.vk.com/access_token?client_id=${config.clientId}&client_secret=${config.clientSecret}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${code}`;
 
     const tokenResponse = await fetch(tokenUrl);
@@ -139,7 +140,7 @@ router.get("/yandex", async (req: Request, res: Response) => {
   const state = crypto.randomBytes(16).toString("hex");
   req.session.oauthState = state;
 
-  const redirectUri = `${getBaseUrl()}/api/oauth/yandex/callback`;
+  const redirectUri = `${getBaseUrl(req)}/api/oauth/yandex/callback`;
 
   const authUrl = `https://oauth.yandex.ru/authorize?response_type=code&client_id=${config.clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
 
@@ -171,7 +172,7 @@ router.get("/yandex/callback", async (req: Request, res: Response) => {
       return res.redirect("/auth?error=yandex_not_configured");
     }
 
-    const redirectUri = `${getBaseUrl()}/api/oauth/yandex/callback`;
+    const redirectUri = `${getBaseUrl(req)}/api/oauth/yandex/callback`;
     
     const tokenResponse = await fetch("https://oauth.yandex.ru/token", {
       method: "POST",
