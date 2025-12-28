@@ -1626,35 +1626,67 @@ function buildBriefResults(
     });
   }
   
-  // Add RKN registry check as CRITICAL error if not registered
-  if (rknCheck?.registryCheck && !rknCheck.registryCheck.isRegistered && !rknCheck.registryCheck.error) {
-    highlights.unshift({
-      id: "RKN-001",
-      title: "Не в реестре операторов РКН",
-      status: "fail",
-      severity: "critical",
-      summary: `Организация с ИНН ${rknCheck.query.inn || "не указан"} не найдена в реестре операторов персональных данных Роскомнадзора`,
-      howToFixShort: "Подать уведомление в Роскомнадзор о начале обработки персональных данных",
-      law: [
-        { act: "152-ФЗ", ref: "ст. 22 (Уведомление об обработке ПДн)" },
-      ],
-    });
-    scores.failedCount++;
-    scores.scorePercent = Math.max(0, scores.scorePercent - 20);
-    scores.severity = "critical";
-  } else if (rknCheck?.registryCheck?.isRegistered) {
+  // Add RKN registry check to highlights
+  if (rknCheck?.registryCheck) {
+    if (rknCheck.registryCheck.isRegistered) {
+      // Registered in RKN registry - OK
+      highlights.push({
+        id: "RKN-001",
+        title: "Регистрация в реестре РКН",
+        status: "ok",
+        severity: "low",
+        summary: `Организация зарегистрирована в реестре операторов ПДн${rknCheck.registryCheck.registrationNumber ? ` (№${rknCheck.registryCheck.registrationNumber})` : ""}`,
+        howToFixShort: undefined,
+        law: [
+          { act: "152-ФЗ", ref: "ст. 22 (Уведомление об обработке ПДн)" },
+        ],
+      });
+      scores.passedCount++;
+    } else if (rknCheck.registryCheck.error) {
+      // Error checking RKN registry - show warning
+      highlights.push({
+        id: "RKN-001",
+        title: "Проверка реестра РКН",
+        status: "warn",
+        severity: "medium",
+        summary: `ИНН ${rknCheck.query.inn || "не указан"} найден на сайте, но проверить реестр РКН не удалось (сервис временно недоступен)`,
+        howToFixShort: "Убедитесь, что организация зарегистрирована как оператор ПДн на сайте pd.rkn.gov.ru",
+        law: [
+          { act: "152-ФЗ", ref: "ст. 22 (Уведомление об обработке ПДн)" },
+        ],
+      });
+      scores.warningCount++;
+    } else {
+      // Not registered in RKN registry - CRITICAL error
+      highlights.unshift({
+        id: "RKN-001",
+        title: "Не в реестре операторов РКН",
+        status: "fail",
+        severity: "critical",
+        summary: `Организация с ИНН ${rknCheck.query.inn || "не указан"} не найдена в реестре операторов персональных данных Роскомнадзора`,
+        howToFixShort: "Подать уведомление в Роскомнадзор о начале обработки персональных данных",
+        law: [
+          { act: "152-ФЗ", ref: "ст. 22 (Уведомление об обработке ПДн)" },
+        ],
+      });
+      scores.failedCount++;
+      scores.scorePercent = Math.max(0, scores.scorePercent - 20);
+      scores.severity = "critical";
+    }
+  } else if (rknCheck?.query?.inn) {
+    // INN found but no registry check performed
     highlights.push({
       id: "RKN-001",
-      title: "Регистрация в реестре РКН",
-      status: "ok",
-      severity: "low",
-      summary: `Организация зарегистрирована в реестре операторов ПДн${rknCheck.registryCheck.registrationNumber ? ` (№${rknCheck.registryCheck.registrationNumber})` : ""}`,
-      howToFixShort: undefined,
+      title: "Проверка реестра РКН",
+      status: "warn",
+      severity: "medium",
+      summary: `ИНН ${rknCheck.query.inn} найден на сайте. Рекомендуем проверить регистрацию в реестре операторов ПДн`,
+      howToFixShort: "Проверьте регистрацию организации на pd.rkn.gov.ru",
       law: [
         { act: "152-ФЗ", ref: "ст. 22 (Уведомление об обработке ПДн)" },
       ],
     });
-    scores.passedCount++;
+    scores.warningCount++;
   }
   
   // Add regular checks
