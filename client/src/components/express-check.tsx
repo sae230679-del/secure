@@ -51,7 +51,7 @@ type ExpressResult = {
 
 function getScoreColor(score: number): "green" | "yellow" | "red" {
   if (score >= 80) return "green";
-  if (score >= 50) return "yellow";
+  if (score >= 40) return "yellow";
   return "red";
 }
 
@@ -67,7 +67,9 @@ function SemaphoreProgress({
   warningCount, 
   failedCount,
   isComplete,
-  finalScore
+  finalScore,
+  rknAttempt,
+  rknMaxAttempts
 }: { 
   criterionIndex: number; 
   passedCount: number; 
@@ -75,23 +77,37 @@ function SemaphoreProgress({
   failedCount: number;
   isComplete: boolean;
   finalScore?: number;
+  rknAttempt?: number;
+  rknMaxAttempts?: number;
 }) {
+  const [cycleColor, setCycleColor] = useState<"green" | "yellow" | "red">("green");
   const [pulseIntensity, setPulseIntensity] = useState(1);
   const totalCriteria = AUDIT_CRITERIA.length;
   const progress = Math.min(100, ((criterionIndex + 1) / totalCriteria) * 100);
   
   const activeColor = isComplete && finalScore !== undefined
     ? getScoreColor(finalScore)
-    : "green";
+    : cycleColor;
 
   useEffect(() => {
     if (isComplete) return;
     
-    const pulseInterval = setInterval(() => {
-      setPulseIntensity(0.6 + Math.random() * 0.4);
-    }, 300);
+    const colors: Array<"green" | "yellow" | "red"> = ["green", "yellow", "red"];
+    let colorIndex = 0;
+    
+    const cycleInterval = setInterval(() => {
+      colorIndex = (colorIndex + 1) % colors.length;
+      setCycleColor(colors[colorIndex]);
+    }, 600);
 
-    return () => clearInterval(pulseInterval);
+    const pulseInterval = setInterval(() => {
+      setPulseIntensity(0.5 + Math.random() * 0.5);
+    }, 200);
+
+    return () => {
+      clearInterval(cycleInterval);
+      clearInterval(pulseInterval);
+    };
   }, [isComplete]);
 
   const getLightStyles = (light: "green" | "yellow" | "red") => {
@@ -102,7 +118,7 @@ function SemaphoreProgress({
       red: { bg: "bg-rose-500", glow: "shadow-rose-500/80" },
     };
     
-    return `w-5 h-5 rounded-full transition-all duration-200 ${
+    return `w-5 h-5 rounded-full transition-all duration-300 ${
       isActive 
         ? `${colors[light].bg} ${colors[light].glow} shadow-lg` 
         : "bg-muted-foreground/20"
@@ -113,6 +129,13 @@ function SemaphoreProgress({
     ? AUDIT_CRITERIA[criterionIndex] 
     : AUDIT_CRITERIA[totalCriteria - 1];
   const CriterionIcon = currentCriterion.icon;
+  
+  const isCheckingRkn = rknAttempt !== undefined && rknAttempt > 0;
+  const statusText = isComplete 
+    ? "Проверка завершена" 
+    : isCheckingRkn 
+      ? `Соединение с сервером РКН - попытка ${rknAttempt} из ${rknMaxAttempts || 5}` 
+      : currentCriterion.name;
 
   return (
     <div className="space-y-4">
@@ -142,7 +165,7 @@ function SemaphoreProgress({
                     : activeColor === "yellow" 
                       ? "bg-amber-500" 
                       : "bg-rose-500"
-                  : "bg-gradient-to-r from-emerald-500 via-amber-500 to-primary"
+                  : "bg-gradient-to-r from-emerald-500 via-amber-500 to-rose-500"
               }`}
               style={{ width: `${progress}%` }}
             />
@@ -150,9 +173,13 @@ function SemaphoreProgress({
           
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-sm">
-              <CriterionIcon className="w-4 h-4 text-muted-foreground" />
-              <span className="text-muted-foreground truncate">
-                {isComplete ? "Проверка завершена" : currentCriterion.name}
+              {isCheckingRkn ? (
+                <Building2 className="w-4 h-4 text-amber-500 animate-pulse" />
+              ) : (
+                <CriterionIcon className="w-4 h-4 text-muted-foreground" />
+              )}
+              <span className={`truncate ${isCheckingRkn ? "text-amber-600 dark:text-amber-400 font-medium" : "text-muted-foreground"}`}>
+                {statusText}
               </span>
             </div>
             <span className="text-sm font-bold tabular-nums">
@@ -183,7 +210,10 @@ function SemaphoreProgress({
       {!isComplete && (
         <div className="text-center">
           <p className="text-xs text-muted-foreground">
-            Проверяем {criterionIndex + 1} из {totalCriteria} критериев...
+            {isCheckingRkn 
+              ? "Проверяем регистрацию в реестре операторов персональных данных..."
+              : `Проверяем ${criterionIndex + 1} из ${totalCriteria} критериев...`
+            }
           </p>
         </div>
       )}
@@ -200,6 +230,8 @@ export function ExpressCheck() {
     passedCount: number;
     warningCount: number;
     failedCount: number;
+    rknAttempt?: number;
+    rknMaxAttempts?: number;
   } | null>(null);
   const [result, setResult] = useState<ExpressResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -292,6 +324,8 @@ export function ExpressCheck() {
           passedCount: data.passedCount || 0,
           warningCount: data.warningCount || 0,
           failedCount: data.failedCount || 0,
+          rknAttempt: data.rknAttempt || 0,
+          rknMaxAttempts: data.rknMaxAttempts || 5,
         });
 
         if (data.status === "completed") {
@@ -484,6 +518,8 @@ export function ExpressCheck() {
                 warningCount={checkStatus.warningCount}
                 failedCount={checkStatus.failedCount}
                 isComplete={false}
+                rknAttempt={checkStatus.rknAttempt}
+                rknMaxAttempts={checkStatus.rknMaxAttempts}
               />
               <p className="text-xs text-center text-muted-foreground">
                 Пожалуйста, подождите. Проверка занимает около 30 секунд.
