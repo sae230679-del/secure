@@ -1,0 +1,5 @@
+=== W2: Duplicate Webhook Test ===
+First request:
+{"status":"ok"}
+Second request (duplicate):
+{"status":"ok"}

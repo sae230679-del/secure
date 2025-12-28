@@ -1,0 +1,2 @@
+=== SA2: Test YooKassa Connection ===
+{"error":"Error in shopId or secret key. Check their validity. You can reissue the key in the Merchant Profile"}

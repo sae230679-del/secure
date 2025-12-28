@@ -2952,70 +2952,99 @@ export async function registerRoutes(
   });
 
   // Yookassa webhook handler
+  // POLICY: Returns 200 OK for all requests (prevents YooKassa infinite retries)
+  // SECURITY: Unknown/invalid payments are logged but not modified (no-op)
+  // IDEMPOTENCY: Already-processed payments are skipped (duplicate detection)
   app.post("/api/yookassa/webhook", async (req, res) => {
     try {
       const { event, object } = req.body;
+      const paymentId = object?.id;
+      const requestId = crypto.randomUUID().slice(0, 8);
       
-      console.log(`[Yookassa Webhook] Event: ${event}`, JSON.stringify(object, null, 2));
+      console.log(`[Webhook:${requestId}] Event: ${event}`, JSON.stringify(object, null, 2));
 
       if (event === "payment.succeeded") {
-        const paymentId = object.id;
         const metadata = object.metadata || {};
         const auditId = metadata.auditId ? parseInt(metadata.auditId) : null;
         const userId = metadata.userId ? parseInt(metadata.userId) : null;
         const packageId = metadata.packageId ? parseInt(metadata.packageId) : null;
 
         const payment = await storage.getPaymentByExternalId(paymentId);
-        if (payment) {
-          await storage.updatePaymentStatus(payment.id, "completed");
+        
+        // SECURITY: Payment not found - log and no-op
+        if (!payment) {
+          console.log(`[Webhook:${requestId}] SECURITY: payment not found, externalId=${paymentId} - no-op`);
+          return res.json({ status: "ok" });
+        }
+        
+        // IDEMPOTENCY: Already processed - skip duplicate
+        if (payment.status === "completed") {
+          console.log(`[Webhook:${requestId}] DUPLICATE: payment ${payment.id} already completed - skipping`);
+          return res.json({ status: "ok" });
+        }
+        
+        await storage.updatePaymentStatus(payment.id, "completed");
+        console.log(`[Webhook:${requestId}] Payment ${payment.id} status updated: pending -> completed`);
+        
+        if (auditId) {
+          await storage.updateAuditStatus(auditId, "processing");
+          console.log(`[Webhook:${requestId}] Audit ${auditId} status updated to processing`);
           
-          if (auditId) {
-            await storage.updateAuditStatus(auditId, "processing");
-            console.log(`[Yookassa] Payment ${paymentId} succeeded for audit ${auditId}`);
+          const audit = await storage.getAuditById(auditId);
+          const user = userId ? await storage.getUserById(userId) : null;
+          const pkg = packageId ? await storage.getPackageById(packageId) : null;
+          
+          if (audit && pkg) {
+            if (user && payment) {
+              sendPaymentConfirmationEmail(user.email, {
+                userName: user.name,
+                packageName: pkg.name,
+                amount: payment.amount,
+                transactionId: payment.yandexPaymentId || `TXN-${payment.id}`,
+                websiteUrl: audit.websiteUrlNormalized,
+              }).catch(err => console.error("Failed to send payment email:", err));
+            }
             
-            const audit = await storage.getAuditById(auditId);
-            const user = userId ? await storage.getUserById(userId) : null;
-            const pkg = packageId ? await storage.getPackageById(packageId) : null;
-            
-            if (audit && pkg) {
-              if (user && payment) {
-                sendPaymentConfirmationEmail(user.email, {
-                  userName: user.name,
-                  packageName: pkg.name,
-                  amount: payment.amount,
-                  transactionId: payment.yandexPaymentId || `TXN-${payment.id}`,
-                  websiteUrl: audit.websiteUrlNormalized,
-                }).catch(err => console.error("Failed to send payment email:", err));
-              }
-              
-              if (pkg.type === "expressreport") {
-                await storage.updateAuditStatus(auditId, "completed", new Date());
-                console.log(`[Yookassa] Express report ${auditId} marked as completed (already has results)`);
-              } else {
-                startAuditProcessing(audit, user, pkg);
-              }
+            if (pkg.type === "expressreport") {
+              await storage.updateAuditStatus(auditId, "completed", new Date());
+              console.log(`[Webhook:${requestId}] Express report ${auditId} marked as completed`);
+            } else {
+              startAuditProcessing(audit, user, pkg);
             }
           }
         }
       } else if (event === "payment.canceled") {
-        const paymentId = object.id;
         const payment = await storage.getPaymentByExternalId(paymentId);
-        if (payment) {
-          await storage.updatePaymentStatus(payment.id, "failed");
-          console.log(`[Yookassa] Payment ${paymentId} canceled`);
+        if (!payment) {
+          console.log(`[Webhook:${requestId}] SECURITY: canceled payment not found, externalId=${paymentId} - no-op`);
+          return res.json({ status: "ok" });
         }
+        if (payment.status === "failed") {
+          console.log(`[Webhook:${requestId}] DUPLICATE: payment ${payment.id} already failed - skipping`);
+          return res.json({ status: "ok" });
+        }
+        await storage.updatePaymentStatus(payment.id, "failed");
+        console.log(`[Webhook:${requestId}] Payment ${payment.id} canceled`);
       } else if (event === "refund.succeeded") {
-        const paymentId = object.payment_id;
-        const payment = await storage.getPaymentByExternalId(paymentId);
-        if (payment) {
-          await storage.updatePaymentStatus(payment.id, "refunded");
-          console.log(`[Yookassa] Payment ${paymentId} refunded`);
+        const refundPaymentId = object.payment_id;
+        const payment = await storage.getPaymentByExternalId(refundPaymentId);
+        if (!payment) {
+          console.log(`[Webhook:${requestId}] SECURITY: refund payment not found, externalId=${refundPaymentId} - no-op`);
+          return res.json({ status: "ok" });
         }
+        if (payment.status === "refunded") {
+          console.log(`[Webhook:${requestId}] DUPLICATE: payment ${payment.id} already refunded - skipping`);
+          return res.json({ status: "ok" });
+        }
+        await storage.updatePaymentStatus(payment.id, "refunded");
+        console.log(`[Webhook:${requestId}] Payment ${payment.id} refunded`);
+      } else {
+        console.log(`[Webhook:${requestId}] UNKNOWN event type: ${event} - no-op`);
       }
 
       res.json({ status: "ok" });
     } catch (error) {
-      console.error("Yookassa webhook error:", error);
+      console.error("[Webhook] Error processing webhook:", error);
       res.status(200).json({ status: "ok" });
     }
   });

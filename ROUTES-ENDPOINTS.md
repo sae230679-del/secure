@@ -7,6 +7,47 @@ BASE_URL=https://ea339cdf-18fa-4e4d-9a93-3a96afbc4eb9-00-2fkmv05f2lmj2.riker.rep
 API_URL=https://ea339cdf-18fa-4e4d-9a93-3a96afbc4eb9-00-2fkmv05f2lmj2.riker.replit.dev
 ```
 
+---
+
+## Superadmin доступ
+
+### Способ 1: Через env переменные (рекомендуется для нового деплоя)
+
+Установите переменные окружения перед запуском:
+
+```bash
+SUPERADMIN_EMAIL=admin@example.ru
+SUPERADMIN_PASSWORD=YourSecurePassword123!
+SUPERADMIN_NAME=Admin
+```
+
+При старте сервера функция `ensureSuperAdmin()` автоматически:
+- Создаст superadmin если его нет
+- Обновит существующего пользователя до superadmin если email совпадает
+
+### Способ 2: Существующий superadmin
+
+```
+Email: sae230679@yandex.ru
+```
+
+### Проверка после настройки
+
+```bash
+# 1. Авторизация
+curl -c cookies.txt -X POST "$BASE_URL/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"YOUR_EMAIL","password":"YOUR_PASSWORD"}'
+
+# 2. Проверка ЮKassa
+curl -b cookies.txt -X POST "$BASE_URL/api/superadmin/test-yookassa"
+
+# 3. Диагностика
+curl -b cookies.txt "$BASE_URL/api/superadmin/yookassa-diagnostics"
+```
+
+---
+
 ## URL Страниц
 
 ### Публичные страницы

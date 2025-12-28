@@ -1,0 +1,2 @@
+=== T1-neg1: Empty URL ===
+{"error":"URL обязателен"}
