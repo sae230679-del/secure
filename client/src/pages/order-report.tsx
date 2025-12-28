@@ -9,6 +9,13 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   FileText,
   CheckCircle2,
   Loader2,
@@ -22,6 +29,10 @@ import {
   Lock,
   Eye,
   EyeOff,
+  Phone,
+  User,
+  Building2,
+  MessageCircle,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -56,15 +67,20 @@ export default function OrderReportPage() {
   
   const urlParams = new URLSearchParams(window.location.search);
   const token = urlParams.get("token");
+  const orderType = urlParams.get("type") || "express";
   
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
-  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [authMode, setAuthMode] = useState<"login" | "register">("register");
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
     name: "",
     phone: "",
+    socialNetwork: "",
+    websiteUrl: "",
+    inn: "",
+    isPhysicalPerson: false,
   });
   const [consents, setConsents] = useState({
     pdn: false,
@@ -80,7 +96,7 @@ export default function OrderReportPage() {
       }
       return response.json();
     },
-    enabled: !!token,
+    enabled: !!token && orderType === "express",
   });
 
   const loginMutation = useMutation({
@@ -103,7 +119,13 @@ export default function OrderReportPage() {
   });
 
   const registerMutation = useMutation({
-    mutationFn: async (data: { email: string; password: string; name: string; phone?: string }) => {
+    mutationFn: async (data: { 
+      email: string; 
+      password: string; 
+      name?: string; 
+      phone?: string;
+      inn?: string;
+    }) => {
       const response = await apiRequest("POST", "/api/auth/register", data);
       if (!response.ok) {
         const errorData = await response.json();
@@ -122,19 +144,25 @@ export default function OrderReportPage() {
   });
 
   const handleCreateOrder = async () => {
-    if (!token) return;
-    
     setIsCreatingOrder(true);
     try {
-      const response = await apiRequest("POST", "/api/express-report/purchase", { token });
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || "Ошибка при создании заказа");
+      if (orderType === "express" && token) {
+        const response = await apiRequest("POST", "/api/express-report/purchase", { token });
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.error || "Ошибка при создании заказа");
+        }
+        
+        toast({ title: "Заказ создан", description: "Переходим к оплате..." });
+        navigate(`/checkout?auditId=${data.auditId}`);
+      } else {
+        toast({ 
+          title: "Заявка принята", 
+          description: "Мы свяжемся с вами в ближайшее время для уточнения деталей" 
+        });
+        navigate("/full-audit?submitted=true");
       }
-      
-      toast({ title: "Заказ создан", description: "Переходим к оплате..." });
-      navigate(`/checkout?auditId=${data.auditId}`);
     } catch (err: any) {
       toast({
         title: "Ошибка",
@@ -148,6 +176,15 @@ export default function OrderReportPage() {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!formData.isPhysicalPerson && !formData.inn.trim() && authMode === "register") {
+      toast({
+        title: "Укажите ИНН",
+        description: "Укажите ИНН или отметьте что вы физическое лицо",
+        variant: "destructive",
+      });
+      return;
+    }
     
     if (!consents.pdn || !consents.offer) {
       toast({
@@ -164,30 +201,25 @@ export default function OrderReportPage() {
         password: formData.password,
       });
     } else {
-      if (!formData.name.trim()) {
-        toast({
-          title: "Укажите имя",
-          description: "Имя обязательно для регистрации",
-          variant: "destructive",
-        });
-        return;
-      }
       await registerMutation.mutateAsync({
         email: formData.email,
         password: formData.password,
-        name: formData.name,
+        name: formData.name || undefined,
         phone: formData.phone || undefined,
+        inn: formData.isPhysicalPerson ? undefined : formData.inn || undefined,
       });
     }
   };
 
   useEffect(() => {
-    if (user && token && !isCreatingOrder && !loginMutation.isPending && !registerMutation.isPending) {
+    if (user && orderType === "express" && token && !isCreatingOrder && !loginMutation.isPending && !registerMutation.isPending) {
       handleCreateOrder();
     }
   }, []);
 
-  if (!token) {
+  const isExpressOrder = orderType === "express";
+
+  if (isExpressOrder && !token) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
@@ -206,7 +238,7 @@ export default function OrderReportPage() {
     );
   }
 
-  if (checkLoading || authLoading) {
+  if ((isExpressOrder && checkLoading) || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -214,7 +246,7 @@ export default function OrderReportPage() {
     );
   }
 
-  if (checkError || !expressCheck) {
+  if (isExpressOrder && (checkError || !expressCheck)) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
@@ -233,7 +265,7 @@ export default function OrderReportPage() {
     );
   }
 
-  if (expressCheck.status !== "completed") {
+  if (isExpressOrder && expressCheck?.status !== "completed") {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
@@ -249,15 +281,19 @@ export default function OrderReportPage() {
     );
   }
 
-  const reportPrice = expressCheck.fullReportPrice || 900;
+  const reportPrice = expressCheck?.fullReportPrice || 900;
+  const pageTitle = isExpressOrder ? "Заказ полного отчёта" : "Заказ аудита сайта";
 
   return (
     <div className="min-h-screen bg-background py-8 px-4">
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
-          <h1 className="text-2xl md:text-3xl font-bold mb-2">Заказ полного отчёта</h1>
+          <h1 className="text-2xl md:text-3xl font-bold mb-2">{pageTitle}</h1>
           <p className="text-muted-foreground">
-            Получите детальный анализ и рекомендации по исправлению
+            {isExpressOrder 
+              ? "Получите детальный анализ и рекомендации по исправлению"
+              : "Закажите полный аудит сайта на соответствие законодательству РФ"
+            }
           </p>
         </div>
 
@@ -270,50 +306,56 @@ export default function OrderReportPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="p-4 rounded-lg bg-muted/50 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Globe className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">Проверяемый сайт</span>
-                </div>
-                <p className="font-mono text-sm truncate" data-testid="text-website-url">
-                  {expressCheck.websiteUrl}
-                </p>
-              </div>
-
-              {expressCheck.siteType && (
-                <div className="p-4 rounded-lg bg-muted/50 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium">{expressCheck.siteType.name}</span>
-                    <Badge variant="secondary">
-                      {expressCheck.siteType.confidence === "high" ? "Уверенно" : 
-                       expressCheck.siteType.confidence === "medium" ? "Вероятно" : "Приблизительно"}
-                    </Badge>
+              {isExpressOrder && expressCheck && (
+                <>
+                  <div className="p-4 rounded-lg bg-muted/50 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Globe className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium">Проверяемый сайт</span>
+                    </div>
+                    <p className="font-mono text-sm truncate" data-testid="text-website-url">
+                      {expressCheck.websiteUrl}
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground">{expressCheck.siteType.description}</p>
-                </div>
-              )}
 
-              <div className="p-4 rounded-lg bg-muted/50 space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm">Результат проверки</span>
-                  <Badge 
-                    variant={expressCheck.severity === "low" ? "default" : 
-                             expressCheck.severity === "medium" ? "secondary" : "destructive"}
-                  >
-                    {expressCheck.scorePercent}%
-                  </Badge>
-                </div>
-                <div className="flex gap-4 text-xs text-muted-foreground">
-                  <span className="text-emerald-600">OK: {expressCheck.passedCount}</span>
-                  <span className="text-amber-600">Внимание: {expressCheck.warningCount}</span>
-                  <span className="text-rose-600">Ошибки: {expressCheck.failedCount}</span>
-                </div>
-              </div>
+                  {expressCheck.siteType && (
+                    <div className="p-4 rounded-lg bg-muted/50 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium">{expressCheck.siteType.name}</span>
+                        <Badge variant="secondary">
+                          {expressCheck.siteType.confidence === "high" ? "Уверенно" : 
+                           expressCheck.siteType.confidence === "medium" ? "Вероятно" : "Приблизительно"}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{expressCheck.siteType.description}</p>
+                    </div>
+                  )}
+
+                  <div className="p-4 rounded-lg bg-muted/50 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm">Результат проверки</span>
+                      <Badge 
+                        variant={expressCheck.severity === "low" ? "default" : 
+                                 expressCheck.severity === "medium" ? "secondary" : "destructive"}
+                      >
+                        {expressCheck.scorePercent}%
+                      </Badge>
+                    </div>
+                    <div className="flex gap-4 text-xs text-muted-foreground">
+                      <span className="text-emerald-600">OK: {expressCheck.passedCount}</span>
+                      <span className="text-amber-600">Внимание: {expressCheck.warningCount}</span>
+                      <span className="text-rose-600">Ошибки: {expressCheck.failedCount}</span>
+                    </div>
+                  </div>
+                </>
+              )}
 
               <Separator />
 
               <div className="space-y-3">
-                <h4 className="font-medium">Что входит в полный отчёт:</h4>
+                <h4 className="font-medium">
+                  {isExpressOrder ? "Что входит в полный отчёт:" : "Что входит в аудит:"}
+                </h4>
                 <ul className="space-y-2 text-sm">
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
@@ -334,14 +376,17 @@ export default function OrderReportPage() {
                 </ul>
               </div>
 
-              <Separator />
-
-              <div className="flex items-center justify-between">
-                <span className="text-lg font-medium">Итого к оплате:</span>
-                <span className="text-2xl font-bold text-primary" data-testid="text-report-price">
-                  {reportPrice.toLocaleString("ru-RU")} ₽
-                </span>
-              </div>
+              {isExpressOrder && (
+                <>
+                  <Separator />
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-medium">Итого к оплате:</span>
+                    <span className="text-2xl font-bold text-primary" data-testid="text-report-price">
+                      {reportPrice.toLocaleString("ru-RU")} ₽
+                    </span>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -356,14 +401,16 @@ export default function OrderReportPage() {
                 ) : (
                   <>
                     {authMode === "login" ? <LogIn className="h-5 w-5" /> : <UserPlus className="h-5 w-5" />}
-                    {authMode === "login" ? "Вход в аккаунт" : "Регистрация"}
+                    {authMode === "login" ? "Вход в аккаунт" : "Оформление заказа"}
                   </>
                 )}
               </CardTitle>
               <CardDescription>
                 {user 
                   ? "Нажмите кнопку для перехода к оплате" 
-                  : "Для заказа необходимо войти или зарегистрироваться"}
+                  : authMode === "login" 
+                    ? "Войдите в существующий аккаунт"
+                    : "Заполните форму для оформления заказа"}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -396,20 +443,64 @@ export default function OrderReportPage() {
               ) : (
                 <form onSubmit={handleAuth} className="space-y-4">
                   {authMode === "register" && (
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Имя</Label>
-                      <Input
-                        id="name"
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        placeholder="Иван Иванов"
-                        data-testid="input-name"
-                      />
-                    </div>
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="name">Имя</Label>
+                        <div className="relative">
+                          <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            id="name"
+                            value={formData.name}
+                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                            placeholder="Иван Иванов"
+                            className="pl-10"
+                            data-testid="input-name"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="phone">Телефон</Label>
+                        <div className="relative">
+                          <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            id="phone"
+                            type="tel"
+                            value={formData.phone}
+                            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                            placeholder="+7 (999) 123-45-67"
+                            className="pl-10"
+                            data-testid="input-phone"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="socialNetwork">Соцсеть для связи</Label>
+                        <Select
+                          value={formData.socialNetwork}
+                          onValueChange={(value) => setFormData({ ...formData, socialNetwork: value })}
+                        >
+                          <SelectTrigger data-testid="select-social-network">
+                            <div className="flex items-center gap-2">
+                              <MessageCircle className="h-4 w-4 text-muted-foreground" />
+                              <SelectValue placeholder="Выберите мессенджер" />
+                            </div>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="telegram">Телеграм</SelectItem>
+                            <SelectItem value="whatsapp">Вацап</SelectItem>
+                            <SelectItem value="max">Макс</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </>
                   )}
 
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="email">
+                      Email <span className="text-destructive">*</span>
+                    </Label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
@@ -426,7 +517,9 @@ export default function OrderReportPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="password">Пароль</Label>
+                    <Label htmlFor="password">
+                      Пароль <span className="text-destructive">*</span>
+                    </Label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
@@ -453,20 +546,71 @@ export default function OrderReportPage() {
                   </div>
 
                   {authMode === "register" && (
-                    <div className="space-y-2">
-                      <Label htmlFor="phone">Телефон (необязательно)</Label>
-                      <Input
-                        id="phone"
-                        type="tel"
-                        value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                        placeholder="+7 (999) 123-45-67"
-                        data-testid="input-phone"
-                      />
-                    </div>
+                    <>
+                      {!isExpressOrder && (
+                        <div className="space-y-2">
+                          <Label htmlFor="websiteUrl">
+                            URL сайта <span className="text-destructive">*</span>
+                          </Label>
+                          <div className="relative">
+                            <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                              id="websiteUrl"
+                              type="url"
+                              value={formData.websiteUrl}
+                              onChange={(e) => setFormData({ ...formData, websiteUrl: e.target.value })}
+                              placeholder="https://example.ru"
+                              className="pl-10"
+                              required
+                              data-testid="input-website-url"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="space-y-3">
+                        <div className="flex items-start gap-2">
+                          <Checkbox
+                            id="isPhysicalPerson"
+                            checked={formData.isPhysicalPerson}
+                            onCheckedChange={(checked) => setFormData({ 
+                              ...formData, 
+                              isPhysicalPerson: !!checked,
+                              inn: checked ? "" : formData.inn 
+                            })}
+                            data-testid="checkbox-physical-person"
+                          />
+                          <Label htmlFor="isPhysicalPerson" className="text-sm leading-tight cursor-pointer">
+                            У меня нет ИНН, я физическое лицо
+                          </Label>
+                        </div>
+
+                        {!formData.isPhysicalPerson && (
+                          <div className="space-y-2">
+                            <Label htmlFor="inn">
+                              ИНН компании/ИП/самозанятого <span className="text-destructive">*</span>
+                            </Label>
+                            <div className="relative">
+                              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                              <Input
+                                id="inn"
+                                value={formData.inn}
+                                onChange={(e) => setFormData({ ...formData, inn: e.target.value })}
+                                placeholder="1234567890"
+                                className="pl-10"
+                                maxLength={12}
+                                data-testid="input-inn"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </>
                   )}
 
-                  <div className="space-y-3 pt-2">
+                  <Separator />
+
+                  <div className="space-y-3">
                     <div className="flex items-start gap-2">
                       <Checkbox
                         id="pdn"
@@ -507,11 +651,11 @@ export default function OrderReportPage() {
                     {loginMutation.isPending || registerMutation.isPending ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        {authMode === "login" ? "Вход..." : "Регистрация..."}
+                        {authMode === "login" ? "Вход..." : "Оформление..."}
                       </>
                     ) : (
                       <>
-                        {authMode === "login" ? "Войти и оплатить" : "Зарегистрироваться и оплатить"}
+                        {authMode === "login" ? "Войти и оплатить" : "Оформить и оплатить"}
                         <ArrowRight className="ml-2 h-4 w-4" />
                       </>
                     )}
@@ -538,10 +682,21 @@ export default function OrderReportPage() {
           <Card className="inline-block">
             <CardContent className="pt-6 px-8">
               <p className="text-sm text-muted-foreground">
-                Хотите полный аудит с документами?{" "}
-                <Link href="/full-audit" className="text-primary font-medium underline">
-                  Узнать подробнее
-                </Link>
+                {isExpressOrder ? (
+                  <>
+                    Хотите полный аудит с документами?{" "}
+                    <Link href="/full-audit" className="text-primary font-medium underline">
+                      Узнать подробнее
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    Хотите быструю проверку?{" "}
+                    <Link href="/" className="text-primary font-medium underline">
+                      Экспресс-проверка
+                    </Link>
+                  </>
+                )}
               </p>
             </CardContent>
           </Card>
