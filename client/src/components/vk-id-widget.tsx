@@ -66,7 +66,6 @@ export function VKIDWidget() {
             styles: {
               height: 44,
               borderRadius: 8,
-              width: 0,
             },
           });
 

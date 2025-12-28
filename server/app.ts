@@ -54,12 +54,12 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://mc.yandex.ru", "https://mc.yandex.com", "https://yastatic.net"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://mc.yandex.ru", "https://mc.yandex.com", "https://yastatic.net", "https://id.vk.ru", "https://vk.com"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         imgSrc: ["'self'", "data:", "blob:", "https:", "http:"],
         fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
-        connectSrc: ["'self'", "https://mc.yandex.ru", "https://mc.yandex.com", "wss:", "ws:"],
-        frameSrc: ["'self'"],
+        connectSrc: ["'self'", "https://mc.yandex.ru", "https://mc.yandex.com", "https://id.vk.ru", "https://api.vk.ru", "https://vk.com", "https://oauth.vk.com", "wss:", "ws:"],
+        frameSrc: ["'self'", "https://id.vk.ru", "https://vk.com", "https://oauth.vk.com"],
         objectSrc: ["'none'"],
         baseUri: ["'self'"],
         formAction: ["'self'"],
