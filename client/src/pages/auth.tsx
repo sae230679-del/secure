@@ -17,11 +17,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Link } from "wouter";
 
 type AuthMode = "login" | "register";
-type LoginStep = "credentials" | "otp" | "email_not_verified" | "registration_pending";
+type LoginStep = "consents" | "credentials" | "otp" | "email_not_verified" | "registration_pending";
 
 export default function AuthPage() {
   const [mode, setMode] = useState<AuthMode>("login");
-  const [loginStep, setLoginStep] = useState<LoginStep>("credentials");
+  const [loginStep, setLoginStep] = useState<LoginStep>("consents");
   const [, navigate] = useLocation();
   const searchString = useSearch();
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
@@ -198,7 +198,7 @@ export default function AuthPage() {
   };
 
   const handleBackToCredentials = () => {
-    setLoginStep("credentials");
+    setLoginStep("consents");
     setOtpData({ userId: 0, code: "" });
     setPendingVerifyEmail("");
   };
@@ -238,7 +238,107 @@ export default function AuthPage() {
         </div>
 
         <Card>
-          {(loginStep === "email_not_verified" || loginStep === "registration_pending") ? (
+          {loginStep === "consents" ? (
+            <>
+              <CardHeader>
+                <CardTitle>Перед входом</CardTitle>
+                <CardDescription>
+                  Для продолжения необходимо принять условия использования сервиса
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-3">
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      id="consent-privacy"
+                      checked={loginConsents.privacyConsent}
+                      onCheckedChange={(checked) => 
+                        setLoginConsents({ ...loginConsents, privacyConsent: checked === true })
+                      }
+                      data-testid="checkbox-consent-privacy"
+                    />
+                    <label
+                      htmlFor="consent-privacy"
+                      className="text-sm leading-tight cursor-pointer"
+                    >
+                      Я ознакомлен с{" "}
+                      <Link href="/privacy-policy" className="text-primary hover:underline">
+                        политикой конфиденциальности
+                      </Link>
+                    </label>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      id="consent-pdn"
+                      checked={loginConsents.pdnConsent}
+                      onCheckedChange={(checked) => 
+                        setLoginConsents({ ...loginConsents, pdnConsent: checked === true })
+                      }
+                      data-testid="checkbox-consent-pdn"
+                    />
+                    <label
+                      htmlFor="consent-pdn"
+                      className="text-sm leading-tight cursor-pointer"
+                    >
+                      Даю{" "}
+                      <Link href="/personal-data-agreement" className="text-primary hover:underline">
+                        согласие на обработку персональных данных
+                      </Link>
+                    </label>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      id="consent-offer"
+                      checked={loginConsents.offerConsent}
+                      onCheckedChange={(checked) => 
+                        setLoginConsents({ ...loginConsents, offerConsent: checked === true })
+                      }
+                      data-testid="checkbox-consent-offer"
+                    />
+                    <label
+                      htmlFor="consent-offer"
+                      className="text-sm leading-tight cursor-pointer"
+                    >
+                      Принимаю условия{" "}
+                      <Link href="/offer" className="text-primary hover:underline">
+                        договора оферты
+                      </Link>
+                    </label>
+                  </div>
+                </div>
+
+                <Button
+                  className="w-full"
+                  disabled={!loginConsents.privacyConsent || !loginConsents.pdnConsent || !loginConsents.offerConsent}
+                  onClick={() => setLoginStep("credentials")}
+                  data-testid="button-continue-to-auth"
+                >
+                  Продолжить
+                </Button>
+
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={() => setMode(mode === "login" ? "register" : "login")}
+                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    data-testid="button-toggle-mode-consents"
+                  >
+                    {mode === "login" ? (
+                      <>
+                        Нет аккаунта? <span className="text-primary font-medium">Зарегистрируйтесь</span>
+                      </>
+                    ) : (
+                      <>
+                        Уже есть аккаунт? <span className="text-primary font-medium">Войдите</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </CardContent>
+            </>
+          ) : (loginStep === "email_not_verified" || loginStep === "registration_pending") ? (
             <CardContent className="pt-6">
               <div className="text-center space-y-4">
                 {loginStep === "registration_pending" ? (
@@ -408,32 +508,21 @@ export default function AuthPage() {
                   />
                 </div>
 
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="w-full">
-                      <Button
-                        type="submit"
-                        className="w-full"
-                        disabled={isLoading || !loginConsents.privacyConsent || !loginConsents.pdnConsent || !loginConsents.offerConsent}
-                        data-testid="button-login"
-                      >
-                        {isLoading ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Вход...
-                          </>
-                        ) : (
-                          "Войти"
-                        )}
-                      </Button>
-                    </span>
-                  </TooltipTrigger>
-                  {(!loginConsents.privacyConsent || !loginConsents.pdnConsent || !loginConsents.offerConsent) && (
-                    <TooltipContent>
-                      <p>Для входа примите все согласия ниже</p>
-                    </TooltipContent>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={isLoading}
+                  data-testid="button-login"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Вход...
+                    </>
+                  ) : (
+                    "Войти"
                   )}
-                </Tooltip>
+                </Button>
 
                 <div className="text-center">
                   <a
@@ -456,101 +545,34 @@ export default function AuthPage() {
                   </div>
                 </div>
 
-                {/* ФЗ-152: Чекбоксы согласий при входе - расположены ПЕРЕД кнопками */}
-                <div className="space-y-2 pb-3">
-                  <div className="flex items-start gap-2">
-                    <Checkbox
-                      id="login-privacy-consent"
-                      checked={loginConsents.privacyConsent}
-                      onCheckedChange={(checked) => 
-                        setLoginConsents({ ...loginConsents, privacyConsent: checked === true })
-                      }
-                      disabled={isLoading}
-                      data-testid="checkbox-login-privacy-consent"
-                    />
-                    <label
-                      htmlFor="login-privacy-consent"
-                      className="text-xs sm:text-sm leading-tight cursor-pointer"
-                    >
-                      Я ознакомлен с{" "}
-                      <Link href="/privacy-policy" className="text-primary hover:underline">
-                        политикой конфиденциальности
-                      </Link>
-                    </label>
+                {/* OAuth кнопки - активны, так как согласия уже приняты */}
+                <div className="space-y-3">
+                  <p className="text-xs text-center text-muted-foreground">
+                    или войти через VK ID с использованием данных из сервиса
+                  </p>
+                  
+                  <div className="w-full">
+                    <VKIDWidget disabled={isLoading} />
                   </div>
-
-                  <div className="flex items-start gap-2">
-                    <Checkbox
-                      id="login-pdn-consent"
-                      checked={loginConsents.pdnConsent}
-                      onCheckedChange={(checked) => 
-                        setLoginConsents({ ...loginConsents, pdnConsent: checked === true })
-                      }
-                      disabled={isLoading}
-                      data-testid="checkbox-login-pdn-consent"
-                    />
-                    <label
-                      htmlFor="login-pdn-consent"
-                      className="text-xs sm:text-sm leading-tight cursor-pointer"
-                    >
-                      Даю{" "}
-                      <Link href="/personal-data-agreement" className="text-primary hover:underline">
-                        согласие на обработку персональных данных
-                      </Link>
-                    </label>
-                  </div>
-
-                  <div className="flex items-start gap-2">
-                    <Checkbox
-                      id="login-offer-consent"
-                      checked={loginConsents.offerConsent}
-                      onCheckedChange={(checked) => 
-                        setLoginConsents({ ...loginConsents, offerConsent: checked === true })
-                      }
-                      disabled={isLoading}
-                      data-testid="checkbox-login-offer-consent"
-                    />
-                    <label
-                      htmlFor="login-offer-consent"
-                      className="text-xs sm:text-sm leading-tight cursor-pointer"
-                    >
-                      Принимаю условия{" "}
-                      <Link href="/offer" className="text-primary hover:underline">
-                        договора оферты
-                      </Link>
-                    </label>
-                  </div>
+                  
+                  <YandexIDButton 
+                    disabled={isLoading} 
+                    size="m"
+                    variant="secondary"
+                    className="w-full"
+                  />
                 </div>
 
-                {/* Кнопки OAuth с подсказкой */}
-                {(() => {
-                  const allConsentsGiven = loginConsents.privacyConsent && loginConsents.pdnConsent && loginConsents.offerConsent;
-                  const oauthDisabled = isLoading || !allConsentsGiven;
-                  
-                  return (
-                    <div className="space-y-3">
-                      {/* Подсказка когда кнопки заблокированы */}
-                      {!allConsentsGiven && (
-                        <div className="text-center text-xs sm:text-sm text-muted-foreground bg-muted/50 rounded-md p-2 border border-border">
-                          Для входа через ВКонтакте или Яндекс сначала примите условия выше
-                        </div>
-                      )}
-                      
-                      {/* VK ID виджет - 3 кнопки */}
-                      <div className="w-full">
-                        <VKIDWidget disabled={oauthDisabled} />
-                      </div>
-                      
-                      {/* Яндекс - широкая кнопка */}
-                      <YandexIDButton 
-                        disabled={oauthDisabled} 
-                        size="m"
-                        variant="secondary"
-                        className="w-full"
-                      />
-                    </div>
-                  );
-                })()}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full"
+                  onClick={() => setLoginStep("consents")}
+                  data-testid="button-back-to-consents"
+                >
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Назад
+                </Button>
               </form>
             ) : (
               <form onSubmit={handleRegisterSubmit} className="space-y-4">
