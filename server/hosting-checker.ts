@@ -24,6 +24,15 @@ export interface HostingCheckResult {
   providerGuess: string | null;
   evidence: string[];
   ai: HostingAiResult;
+  platform?: {
+    detected: boolean;
+    provider: string | null;
+    confidence: number;
+    evidence: string[];
+    actualHostingUrl?: string;
+  };
+  dnsStatus?: HostingStatus;
+  dnsProviderGuess?: string | null;
 }
 
 const RUSSIAN_HOSTING_PATTERNS: Array<{
@@ -92,6 +101,38 @@ const FOREIGN_PROVIDER_PATTERNS: Array<{
   { pattern: /bluehost/i, provider: "Bluehost" },
 ];
 
+const FOREIGN_PLATFORM_PATTERNS: Array<{
+  pattern: RegExp;
+  provider: string;
+  confidence: number;
+}> = [
+  { pattern: /lovable\.app/i, provider: "Lovable (GPT Engineer)", confidence: 0.95 },
+  { pattern: /lovable\.dev/i, provider: "Lovable (GPT Engineer)", confidence: 0.95 },
+  { pattern: /vercel\.app/i, provider: "Vercel", confidence: 0.95 },
+  { pattern: /netlify\.app/i, provider: "Netlify", confidence: 0.95 },
+  { pattern: /netlify\.com/i, provider: "Netlify", confidence: 0.95 },
+  { pattern: /pages\.dev/i, provider: "Cloudflare Pages", confidence: 0.95 },
+  { pattern: /herokuapp\.com/i, provider: "Heroku", confidence: 0.95 },
+  { pattern: /railway\.app/i, provider: "Railway", confidence: 0.95 },
+  { pattern: /render\.com/i, provider: "Render", confidence: 0.95 },
+  { pattern: /fly\.dev/i, provider: "Fly.io", confidence: 0.95 },
+  { pattern: /github\.io/i, provider: "GitHub Pages", confidence: 0.95 },
+  { pattern: /gitlab\.io/i, provider: "GitLab Pages", confidence: 0.95 },
+  { pattern: /firebaseapp\.com/i, provider: "Firebase", confidence: 0.95 },
+  { pattern: /web\.app/i, provider: "Firebase", confidence: 0.9 },
+  { pattern: /azurewebsites\.net/i, provider: "Azure App Service", confidence: 0.95 },
+  { pattern: /amplifyapp\.com/i, provider: "AWS Amplify", confidence: 0.95 },
+  { pattern: /replit\.app/i, provider: "Replit", confidence: 0.95 },
+  { pattern: /replit\.dev/i, provider: "Replit", confidence: 0.95 },
+  { pattern: /wixsite\.com/i, provider: "Wix", confidence: 0.95 },
+  { pattern: /squarespace\.com/i, provider: "Squarespace", confidence: 0.95 },
+  { pattern: /webflow\.io/i, provider: "Webflow", confidence: 0.95 },
+  { pattern: /framer\.app/i, provider: "Framer", confidence: 0.95 },
+  { pattern: /bubble\.io/i, provider: "Bubble", confidence: 0.95 },
+  { pattern: /tilda\.ws/i, provider: "Tilda", confidence: 0.9 },
+  { pattern: /lpmotor\.ru/i, provider: "LPmotor", confidence: 0.9 },
+];
+
 const RUSSIAN_REGISTRARS = [
   "REGRU-RU",
   "REG.RU",
@@ -110,6 +151,190 @@ function extractDomain(url: string): string {
   } catch {
     return url.replace(/^(https?:\/\/)?/, "").split("/")[0];
   }
+}
+
+export interface PlatformDetectionResult {
+  detected: boolean;
+  provider: string | null;
+  confidence: number;
+  evidence: string[];
+  actualHostingUrl?: string;
+}
+
+export async function detectPlatformFromHttp(url: string): Promise<PlatformDetectionResult> {
+  const evidence: string[] = [];
+  let provider: string | null = null;
+  let confidence = 0;
+  let actualHostingUrl: string | undefined;
+
+  try {
+    const fullUrl = url.startsWith("http") ? url : `https://${url}`;
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    const response = await fetch(fullUrl, {
+      method: "GET",
+      redirect: "manual",
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; SecureLexBot/1.0)",
+        "Accept": "text/html",
+      },
+    });
+
+    clearTimeout(timeoutId);
+
+    const headers = response.headers;
+    const serverHeader = headers.get("server") || "";
+    const xPoweredBy = headers.get("x-powered-by") || "";
+    const via = headers.get("via") || "";
+    const cfRay = headers.get("cf-ray") || "";
+    const xVercelId = headers.get("x-vercel-id") || "";
+    const xNetlify = headers.get("x-nf-request-id") || "";
+    
+    if (cfRay) {
+      evidence.push(`HTTP заголовок cf-ray: Cloudflare CDN`);
+    }
+    
+    if (xVercelId) {
+      provider = "Vercel";
+      confidence = 0.9;
+      evidence.push(`HTTP заголовок x-vercel-id: платформа Vercel`);
+    }
+    
+    if (xNetlify) {
+      provider = "Netlify";
+      confidence = 0.9;
+      evidence.push(`HTTP заголовок x-nf-request-id: платформа Netlify`);
+    }
+    
+    if (serverHeader) {
+      evidence.push(`HTTP Server: ${serverHeader}`);
+      
+      if (/cloudflare/i.test(serverHeader)) {
+        evidence.push(`Сервер Cloudflare обнаружен`);
+      }
+      if (/vercel/i.test(serverHeader)) {
+        provider = "Vercel";
+        confidence = 0.9;
+      }
+      if (/netlify/i.test(serverHeader)) {
+        provider = "Netlify";
+        confidence = 0.9;
+      }
+    }
+
+    if (response.status === 301 || response.status === 302 || response.status === 307 || response.status === 308) {
+      const location = headers.get("location");
+      if (location) {
+        evidence.push(`HTTP редирект на: ${location}`);
+        
+        for (const { pattern, provider: prov, confidence: conf } of FOREIGN_PLATFORM_PATTERNS) {
+          if (pattern.test(location)) {
+            provider = prov;
+            confidence = conf;
+            actualHostingUrl = location;
+            evidence.push(`Редирект ведёт на иностранную платформу: ${prov}`);
+            break;
+          }
+        }
+      }
+    }
+
+    const text = await response.text().catch(() => "");
+    
+    if (text.length > 0) {
+      const iframeSrcMatch = text.match(/<iframe[^>]+src=["']([^"']+)["']/gi);
+      if (iframeSrcMatch) {
+        for (const iframe of iframeSrcMatch) {
+          const srcMatch = iframe.match(/src=["']([^"']+)["']/i);
+          if (srcMatch) {
+            const iframeSrc = srcMatch[1];
+            for (const { pattern, provider: prov, confidence: conf } of FOREIGN_PLATFORM_PATTERNS) {
+              if (pattern.test(iframeSrc)) {
+                provider = prov;
+                confidence = conf;
+                actualHostingUrl = iframeSrc;
+                evidence.push(`Iframe указывает на иностранную платформу: ${prov} (${iframeSrc})`);
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      const canonicalMatch = text.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i);
+      if (canonicalMatch) {
+        const canonical = canonicalMatch[1];
+        for (const { pattern, provider: prov, confidence: conf } of FOREIGN_PLATFORM_PATTERNS) {
+          if (pattern.test(canonical)) {
+            provider = prov;
+            confidence = conf;
+            actualHostingUrl = canonical;
+            evidence.push(`Canonical URL указывает на иностранную платформу: ${prov}`);
+            break;
+          }
+        }
+      }
+
+      const metaRefreshMatch = text.match(/<meta[^>]+http-equiv=["']refresh["'][^>]+content=["'][^"']*url=([^"'>\s]+)/i);
+      if (metaRefreshMatch) {
+        const refreshUrl = metaRefreshMatch[1];
+        for (const { pattern, provider: prov, confidence: conf } of FOREIGN_PLATFORM_PATTERNS) {
+          if (pattern.test(refreshUrl)) {
+            provider = prov;
+            confidence = conf;
+            actualHostingUrl = refreshUrl;
+            evidence.push(`Meta refresh указывает на иностранную платформу: ${prov}`);
+            break;
+          }
+        }
+      }
+
+      const scriptMatches = text.match(/<script[^>]*src=["']([^"']+)["'][^>]*>/gi);
+      if (scriptMatches) {
+        for (const script of scriptMatches.slice(0, 10)) {
+          const srcMatch = script.match(/src=["']([^"']+)["']/i);
+          if (srcMatch) {
+            const scriptSrc = srcMatch[1];
+            for (const { pattern, provider: prov } of FOREIGN_PLATFORM_PATTERNS) {
+              if (pattern.test(scriptSrc)) {
+                if (!provider) {
+                  provider = prov;
+                  confidence = 0.7;
+                }
+                evidence.push(`Скрипт загружается с платформы: ${prov}`);
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      if (text.includes("lovable.app") || text.includes("lovable.dev")) {
+        provider = "Lovable (GPT Engineer)";
+        confidence = 0.95;
+        evidence.push(`Обнаружены ссылки на Lovable в HTML`);
+        
+        const lovableMatch = text.match(/https?:\/\/[^"'\s<>]+lovable\.(app|dev)[^"'\s<>]*/i);
+        if (lovableMatch) {
+          actualHostingUrl = lovableMatch[0];
+        }
+      }
+    }
+
+  } catch (error: any) {
+    evidence.push(`Ошибка HTTP-проверки: ${error?.message || "неизвестная ошибка"}`);
+  }
+
+  return {
+    detected: provider !== null,
+    provider,
+    confidence,
+    evidence,
+    actualHostingUrl,
+  };
 }
 
 async function getWhoisData(domain: string): Promise<string | null> {
@@ -336,7 +561,10 @@ export async function checkHostingLayer2AI(
 }
 
 export async function checkHosting(url: string): Promise<HostingCheckResult> {
-  const layer1 = await checkHostingLayer1(url);
+  const [layer1, platformResult] = await Promise.all([
+    checkHostingLayer1(url),
+    detectPlatformFromHttp(url),
+  ]);
   
   let ai: HostingAiResult = {
     used: false,
@@ -347,17 +575,54 @@ export async function checkHosting(url: string): Promise<HostingCheckResult> {
 
   if (layer1.status === "unknown" || layer1.confidence < 0.6) {
     ai = await checkHostingLayer2AI(url, layer1);
+  }
+
+  if (platformResult.detected && platformResult.provider) {
+    const isRussianPlatform = /tilda|lpmotor/i.test(platformResult.provider);
+    const platformStatus: HostingStatus = isRussianPlatform ? "ru" : "foreign";
     
-    if (ai.status !== "unknown" && ai.confidence > layer1.confidence) {
-      return {
-        status: ai.status,
-        confidence: ai.confidence,
-        ips: layer1.ips,
-        providerGuess: layer1.providerGuess,
-        evidence: [...layer1.evidence, ...ai.evidence],
-        ai
-      };
+    const combinedEvidence = [
+      ...layer1.evidence,
+      `--- Проверка платформы хостинга ---`,
+      ...platformResult.evidence,
+    ];
+    
+    if (platformStatus === "foreign" && layer1.status === "ru") {
+      combinedEvidence.push(`ВНИМАНИЕ: Домен указывает на российский IP (${layer1.providerGuess || "неизвестный провайдер"}), но сайт фактически размещён на иностранной платформе ${platformResult.provider}`);
     }
+    
+    if (platformResult.actualHostingUrl) {
+      combinedEvidence.push(`Фактический URL хостинга: ${platformResult.actualHostingUrl}`);
+    }
+    
+    if (ai.used && ai.evidence.length > 0) {
+      combinedEvidence.push(...ai.evidence);
+    }
+
+    return {
+      status: platformStatus,
+      confidence: platformResult.confidence,
+      ips: layer1.ips,
+      providerGuess: platformResult.provider,
+      evidence: combinedEvidence,
+      ai,
+      platform: platformResult,
+      dnsStatus: layer1.status,
+      dnsProviderGuess: layer1.providerGuess,
+    };
+  }
+
+  if (ai.status !== "unknown" && ai.confidence > layer1.confidence) {
+    return {
+      status: ai.status,
+      confidence: ai.confidence,
+      ips: layer1.ips,
+      providerGuess: layer1.providerGuess,
+      evidence: [...layer1.evidence, ...ai.evidence],
+      ai,
+      dnsStatus: layer1.status,
+      dnsProviderGuess: layer1.providerGuess,
+    };
   }
 
   return {
@@ -366,6 +631,8 @@ export async function checkHosting(url: string): Promise<HostingCheckResult> {
     ips: layer1.ips,
     providerGuess: layer1.providerGuess,
     evidence: layer1.evidence,
-    ai
+    ai,
+    dnsStatus: layer1.status,
+    dnsProviderGuess: layer1.providerGuess,
   };
 }

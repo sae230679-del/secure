@@ -844,6 +844,13 @@ function checkPrivacyPolicy(html: string): AuditCheckResult {
     { pattern: /href\s*=\s*["']\/privacy-policy["']/i, name: "ссылка '/privacy-policy'" },
     { pattern: /href\s*=\s*["']\/personal-data[^"']*["']/i, name: "ссылка '/personal-data'" },
     { pattern: /Политика\s+конфиденциальности/i, name: "текст 'Политика конфиденциальности'" },
+    { pattern: /href\s*=\s*["']\/privacy["']/i, name: "ссылка '/privacy'" },
+    { pattern: /href\s*=\s*["'][^"']*politika[^"']*["']/i, name: "ссылка с 'politika' в URL" },
+    { pattern: /href\s*=\s*["'][^"']*pdn[^"']*["']/i, name: "ссылка с 'pdn' в URL" },
+    { pattern: /согласие\s*на\s*обработку\s*пдн/i, name: "'согласие на обработку ПДн'" },
+    { pattern: /персональны[еых]\s*данны[еых]/i, name: "'персональные данные'" },
+    { pattern: /пдн/i, name: "'ПДн'" },
+    { pattern: /Документы/i, name: "'Документы'" },
   ];
 
   const foundPatterns: string[] = [];
@@ -1035,6 +1042,17 @@ function checkContactInfo(html: string): AuditCheckResult {
     { pattern: /8\s*\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}/, name: "телефон 8" },
     { pattern: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/, name: "email" },
     { pattern: /контакт/i, name: "'контакты'" },
+    { pattern: /href\s*=\s*["'][^"']*contacts?[^"']*["']/i, name: "ссылка на контакты" },
+    { pattern: /href\s*=\s*["']\/contacts?["']/i, name: "ссылка /contacts" },
+    { pattern: /показать\s*контакты?/i, name: "'показать контакты'" },
+    { pattern: /связаться\s*с\s*нами/i, name: "'связаться с нами'" },
+    { pattern: /обратная\s*связь/i, name: "'обратная связь'" },
+    { pattern: /свяжитесь/i, name: "'свяжитесь'" },
+    { pattern: /tel:\+?\d/i, name: "телефонная ссылка tel:" },
+    { pattern: /mailto:/i, name: "email ссылка mailto:" },
+    { pattern: /whatsapp\.com|wa\.me/i, name: "WhatsApp" },
+    { pattern: /t\.me\//i, name: "Telegram" },
+    { pattern: /vk\.com/i, name: "VK" },
   ];
 
   const foundPatterns: string[] = [];
@@ -1600,13 +1618,26 @@ function buildBriefResults(
   const highlights: BriefHighlight[] = [];
   
   // Add hosting check as CRITICAL error if foreign
+  const hasPlatformMismatch = hostingCheck.platform?.detected && 
+    hostingCheck.dnsStatus === "ru" && 
+    hostingCheck.status === "foreign";
+  
   if (hostingCheck.status === "foreign") {
+    let summary = `Сайт размещён на иностранном хостинге (${hostingCheck.providerGuess || "зарубежный провайдер"})`;
+    
+    if (hasPlatformMismatch) {
+      summary = `Домен указывает на российский IP (${hostingCheck.dnsProviderGuess || "РФ"}), но сайт фактически размещён на иностранной платформе ${hostingCheck.providerGuess}`;
+      if (hostingCheck.platform?.actualHostingUrl) {
+        summary += `. Фактический хостинг: ${hostingCheck.platform.actualHostingUrl}`;
+      }
+    }
+    
     highlights.push({
       id: "HOSTING-001",
-      title: "Иностранный хостинг",
+      title: hasPlatformMismatch ? "Иностранная платформа хостинга" : "Иностранный хостинг",
       status: "fail",
       severity: "critical",
-      summary: `Сайт размещён на иностранном хостинге (${hostingCheck.providerGuess || "зарубежный провайдер"})`,
+      summary,
       howToFixShort: "Перенести сайт на российский хостинг (Timeweb, Beget, REG.RU и др.)",
       law: [
         { act: "152-ФЗ", ref: "ст. 18 ч. 5 (Локализация ПДн граждан РФ на территории РФ)" },
