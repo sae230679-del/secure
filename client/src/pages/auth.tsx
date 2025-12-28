@@ -10,6 +10,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { Shield, Loader2, Mail, User, Phone, KeyRound, ArrowLeft, CheckCircle, RefreshCw } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { VKIDWidget } from "@/components/vk-id-widget";
 import { YandexIDButton } from "@/components/yandex-id-button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -407,21 +408,32 @@ export default function AuthPage() {
                   />
                 </div>
 
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={isLoading || !loginConsents.privacyConsent || !loginConsents.pdnConsent || !loginConsents.offerConsent}
-                  data-testid="button-login"
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Вход...
-                    </>
-                  ) : (
-                    "Войти"
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="w-full">
+                      <Button
+                        type="submit"
+                        className="w-full"
+                        disabled={isLoading || !loginConsents.privacyConsent || !loginConsents.pdnConsent || !loginConsents.offerConsent}
+                        data-testid="button-login"
+                      >
+                        {isLoading ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Вход...
+                          </>
+                        ) : (
+                          "Войти"
+                        )}
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {(!loginConsents.privacyConsent || !loginConsents.pdnConsent || !loginConsents.offerConsent) && (
+                    <TooltipContent>
+                      <p>Для входа примите все согласия ниже</p>
+                    </TooltipContent>
                   )}
-                </Button>
+                </Tooltip>
 
                 <div className="text-center">
                   <a
