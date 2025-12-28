@@ -2977,14 +2977,19 @@ export async function registerRoutes(
           return res.json({ status: "ok" });
         }
         
-        // IDEMPOTENCY: Already processed - skip duplicate
+        // IDEMPOTENCY: Check for valid state transition
+        const validSourceStates = ["pending", "created"];
         if (payment.status === "completed") {
-          console.log(`[Webhook:${requestId}] DUPLICATE: payment ${payment.id} already completed - skipping`);
+          console.log(`[Webhook:${requestId}] DUPLICATE: payment id=${payment.id} already completed - skipping`);
+          return res.json({ status: "ok" });
+        }
+        if (!validSourceStates.includes(payment.status)) {
+          console.log(`[Webhook:${requestId}] INVALID_TRANSITION: payment id=${payment.id} status=${payment.status} cannot transition to completed - no-op`);
           return res.json({ status: "ok" });
         }
         
         await storage.updatePaymentStatus(payment.id, "completed");
-        console.log(`[Webhook:${requestId}] Payment ${payment.id} status updated: pending -> completed`);
+        console.log(`[Webhook:${requestId}] Payment id=${payment.id} status: ${payment.status} -> completed`);
         
         if (auditId) {
           await storage.updateAuditStatus(auditId, "processing");
@@ -3019,12 +3024,17 @@ export async function registerRoutes(
           console.log(`[Webhook:${requestId}] SECURITY: canceled payment not found, externalId=${paymentId} - no-op`);
           return res.json({ status: "ok" });
         }
+        // IDEMPOTENCY: Check for valid state transition (only pending/created can be canceled)
         if (payment.status === "failed") {
-          console.log(`[Webhook:${requestId}] DUPLICATE: payment ${payment.id} already failed - skipping`);
+          console.log(`[Webhook:${requestId}] DUPLICATE: payment id=${payment.id} already failed - skipping`);
+          return res.json({ status: "ok" });
+        }
+        if (!["pending", "created"].includes(payment.status)) {
+          console.log(`[Webhook:${requestId}] INVALID_TRANSITION: payment id=${payment.id} status=${payment.status} cannot transition to failed - no-op`);
           return res.json({ status: "ok" });
         }
         await storage.updatePaymentStatus(payment.id, "failed");
-        console.log(`[Webhook:${requestId}] Payment ${payment.id} canceled`);
+        console.log(`[Webhook:${requestId}] Payment id=${payment.id} status: ${payment.status} -> failed`);
       } else if (event === "refund.succeeded") {
         const refundPaymentId = object.payment_id;
         const payment = await storage.getPaymentByExternalId(refundPaymentId);
@@ -3032,12 +3042,17 @@ export async function registerRoutes(
           console.log(`[Webhook:${requestId}] SECURITY: refund payment not found, externalId=${refundPaymentId} - no-op`);
           return res.json({ status: "ok" });
         }
+        // IDEMPOTENCY: Check for valid state transition (only completed can be refunded)
         if (payment.status === "refunded") {
-          console.log(`[Webhook:${requestId}] DUPLICATE: payment ${payment.id} already refunded - skipping`);
+          console.log(`[Webhook:${requestId}] DUPLICATE: payment id=${payment.id} already refunded - skipping`);
+          return res.json({ status: "ok" });
+        }
+        if (payment.status !== "completed") {
+          console.log(`[Webhook:${requestId}] INVALID_TRANSITION: payment id=${payment.id} status=${payment.status} cannot transition to refunded - no-op`);
           return res.json({ status: "ok" });
         }
         await storage.updatePaymentStatus(payment.id, "refunded");
-        console.log(`[Webhook:${requestId}] Payment ${payment.id} refunded`);
+        console.log(`[Webhook:${requestId}] Payment id=${payment.id} status: completed -> refunded`);
       } else {
         console.log(`[Webhook:${requestId}] UNKNOWN event type: ${event} - no-op`);
       }
