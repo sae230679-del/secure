@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { eq, desc, and, or, sql, gt } from "drizzle-orm";
+import { eq, desc, and, or, sql, gt, inArray } from "drizzle-orm";
 import * as schema from "@shared/schema";
 import crypto from "crypto";
 import type {
@@ -41,6 +41,8 @@ export interface IStorage {
   createAudit(data: InsertAudit): Promise<Audit>;
   updateAuditStatus(id: number, status: string, completedAt?: Date): Promise<Audit | undefined>;
   getPaidAudits(): Promise<AuditWithDetails[]>;
+  getFullAudits(): Promise<AuditWithDetails[]>;
+  getExpressAudits(): Promise<AuditWithDetails[]>;
   
   createAuditResult(data: { auditId: number; criteriaJson: CriteriaResult[]; rknCheckJson?: any; scorePercent: number; severity: string }): Promise<AuditResult>;
   saveAuditResults(auditId: number, criteriaResults: CriteriaResult[], score: number): Promise<AuditResult>;
@@ -293,6 +295,60 @@ export class DatabaseStorage implements IStorage {
     const audits = await db
       .select()
       .from(schema.audits)
+      .orderBy(desc(schema.audits.createdAt));
+
+    const auditsWithDetails: AuditWithDetails[] = [];
+    for (const audit of audits) {
+      const pkg = await this.getPackageById(audit.packageId);
+      const results = await db.select().from(schema.auditResults).where(eq(schema.auditResults.auditId, audit.id));
+      auditsWithDetails.push({
+        ...audit,
+        package: pkg,
+        results,
+      });
+    }
+    return auditsWithDetails;
+  }
+
+  async getFullAudits(): Promise<AuditWithDetails[]> {
+    const allPackages = await this.getPackages();
+    const fullAuditPackageIds = allPackages
+      .filter(pkg => pkg.category === "full_audit")
+      .map(pkg => pkg.id);
+
+    const audits = await db
+      .select()
+      .from(schema.audits)
+      .where(inArray(schema.audits.packageId, fullAuditPackageIds))
+      .orderBy(desc(schema.audits.createdAt));
+
+    const auditsWithDetails: AuditWithDetails[] = [];
+    for (const audit of audits) {
+      const pkg = await this.getPackageById(audit.packageId);
+      const results = await db.select().from(schema.auditResults).where(eq(schema.auditResults.auditId, audit.id));
+      auditsWithDetails.push({
+        ...audit,
+        package: pkg,
+        results,
+      });
+    }
+    return auditsWithDetails;
+  }
+
+  async getExpressAudits(): Promise<AuditWithDetails[]> {
+    const allPackages = await this.getPackages();
+    const expressPackageIds = allPackages
+      .filter(pkg => pkg.category === "express_pdf" || pkg.type === "expressreport")
+      .map(pkg => pkg.id);
+
+    if (expressPackageIds.length === 0) {
+      return [];
+    }
+
+    const audits = await db
+      .select()
+      .from(schema.audits)
+      .where(inArray(schema.audits.packageId, expressPackageIds))
       .orderBy(desc(schema.audits.createdAt));
 
     const auditsWithDetails: AuditWithDetails[] = [];

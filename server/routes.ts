@@ -1236,10 +1236,19 @@ export async function registerRoutes(
 
   app.get("/api/admin/audits", requireAdmin, async (req, res) => {
     try {
-      const audits = await storage.getPaidAudits();
+      const audits = await storage.getFullAudits();
       res.json(audits);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch audits" });
+    }
+  });
+
+  app.get("/api/admin/express-audits", requireAdmin, async (req, res) => {
+    try {
+      const audits = await storage.getExpressAudits();
+      res.json(audits);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch express audits" });
     }
   });
 
