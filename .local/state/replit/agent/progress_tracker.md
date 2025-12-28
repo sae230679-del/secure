@@ -8,3 +8,4 @@
 [x] 8. Verified workflow is running successfully on port 5000
 [x] 9. Created missing changelog.tsx page for superadmin section
 [x] 10. Verified application loads correctly - main page displays properly
+[x] 11. Fixed privacy policy and RKN check detection - added stripHtmlTags function to extract plain text before pattern matching

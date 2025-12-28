@@ -25,6 +25,21 @@ function isPrivateIp(hostname: string): boolean {
   return PRIVATE_IP_RANGES.some((re) => re.test(lower));
 }
 
+function stripHtmlTags(html: string): string {
+  return html
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#\d+;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 let cachedGigaChatToken: { token: string; expiresAt: number } | null = null;
 
 async function getGigaChatAccessToken(): Promise<string | null> {
@@ -401,11 +416,23 @@ function buildEvidenceBundle(checks: AuditCheckResult[], url: string): EvidenceB
 }
 
 function buildRknCheck(html: string, url: string): RknCheckResult {
-  const innPattern = /инн\s*:?\s*(\d{10,12})/i;
+  const plainText = stripHtmlTags(html);
+  
+  const innPatterns = [
+    /инн\s*:?\s*(\d{10,12})/i,
+    /ИНН\s*:?\s*(\d{10,12})/i,
+    /инн\s+(\d{10,12})/i,
+    /(?:^|\s)(\d{10}|\d{12})(?:\s|$)/,
+  ];
   const namePattern = /ооо\s*["«]?([^"»]{2,50})["»]?|ип\s+([а-яёА-ЯЁ]+\s+[а-яёА-ЯЁ]+)/i;
 
-  const innMatch = html.match(innPattern);
-  const nameMatch = html.match(namePattern);
+  let innMatch: RegExpMatchArray | null = null;
+  for (const pattern of innPatterns) {
+    innMatch = plainText.match(pattern);
+    if (innMatch) break;
+  }
+  
+  const nameMatch = plainText.match(namePattern);
 
   const innFound = innMatch ? innMatch[1] : undefined;
   const nameFound = nameMatch ? (nameMatch[1] || nameMatch[2])?.trim() : undefined;
@@ -832,22 +859,15 @@ function checkSecurityHeaders(data: WebsiteData): AuditCheckResult[] {
 
 function checkPrivacyPolicy(html: string): AuditCheckResult {
   const evidence: string[] = [];
+  const plainText = stripHtmlTags(html);
   
-  const policyPatterns = [
+  const textPatterns = [
     { pattern: /политик[аиуыейо]+\s*конфиденциальности/i, name: "текст 'политика конфиденциальности'" },
     { pattern: /политикой\s*конфиденциальности/i, name: "текст 'политикой конфиденциальности'" },
     { pattern: /privacy\s*policy/i, name: "текст 'privacy policy'" },
     { pattern: /обработк[аиуеой]\s*персональных\s*данных/i, name: "текст 'обработка персональных данных'" },
     { pattern: /защит[аиуеой]\s*персональных\s*данных/i, name: "текст 'защита персональных данных'" },
-    { pattern: /href\s*=\s*["'][^"']*privacy[^"']*["']/i, name: "ссылка с 'privacy' в URL" },
-    { pattern: /href\s*=\s*["'][^"']*policy[^"']*["']/i, name: "ссылка с 'policy' в URL" },
-    { pattern: /href\s*=\s*["'][^"']*конфиденциальност[^"']*["']/i, name: "ссылка с 'конфиденциальность' в URL" },
-    { pattern: /href\s*=\s*["']\/privacy-policy["']/i, name: "ссылка '/privacy-policy'" },
-    { pattern: /href\s*=\s*["']\/personal-data[^"']*["']/i, name: "ссылка '/personal-data'" },
     { pattern: /Политика\s+конфиденциальности/i, name: "текст 'Политика конфиденциальности'" },
-    { pattern: /href\s*=\s*["']\/privacy["']/i, name: "ссылка '/privacy'" },
-    { pattern: /href\s*=\s*["'][^"']*politika[^"']*["']/i, name: "ссылка с 'politika' в URL" },
-    { pattern: /href\s*=\s*["'][^"']*pdn[^"']*["']/i, name: "ссылка с 'pdn' в URL" },
     { pattern: /согласие\s*на\s*обработку\s*пдн/i, name: "'согласие на обработку ПДн'" },
     { pattern: /персональны[еых]\s*данны[еых]/i, name: "'персональные данные'" },
     { pattern: /соглашаетесь\s*с\s*политик/i, name: "'соглашаетесь с политик*'" },
@@ -855,14 +875,32 @@ function checkPrivacyPolicy(html: string): AuditCheckResult {
     { pattern: /ознакомлен\s*с\s*политик/i, name: "'ознакомлен с политик*'" },
     { pattern: /cookie[s]?\s*(политик|policy)/i, name: "'cookie политика'" },
     { pattern: /политик[аиуыейо]+\s*cookie/i, name: "'политика cookie'" },
-    { pattern: /href\s*=\s*["'][^"']*cookie[^"']*policy[^"']*["']/i, name: "ссылка с 'cookie-policy'" },
-    { pattern: /href\s*=\s*["'][^"']*legal[^"']*["']/i, name: "ссылка с '/legal'" },
     { pattern: /правовая\s*информация/i, name: "'правовая информация'" },
     { pattern: /юридическая\s*информация/i, name: "'юридическая информация'" },
   ];
+  
+  const hrefPatterns = [
+    { pattern: /href\s*=\s*["'][^"']*privacy[^"']*["']/i, name: "ссылка с 'privacy' в URL" },
+    { pattern: /href\s*=\s*["'][^"']*policy[^"']*["']/i, name: "ссылка с 'policy' в URL" },
+    { pattern: /href\s*=\s*["'][^"']*конфиденциальност[^"']*["']/i, name: "ссылка с 'конфиденциальность' в URL" },
+    { pattern: /href\s*=\s*["']\/privacy-policy["']/i, name: "ссылка '/privacy-policy'" },
+    { pattern: /href\s*=\s*["']\/personal-data[^"']*["']/i, name: "ссылка '/personal-data'" },
+    { pattern: /href\s*=\s*["']\/privacy["']/i, name: "ссылка '/privacy'" },
+    { pattern: /href\s*=\s*["'][^"']*politika[^"']*["']/i, name: "ссылка с 'politika' в URL" },
+    { pattern: /href\s*=\s*["'][^"']*pdn[^"']*["']/i, name: "ссылка с 'pdn' в URL" },
+    { pattern: /href\s*=\s*["'][^"']*cookie[^"']*policy[^"']*["']/i, name: "ссылка с 'cookie-policy'" },
+    { pattern: /href\s*=\s*["'][^"']*legal[^"']*["']/i, name: "ссылка с '/legal'" },
+  ];
 
   const foundPatterns: string[] = [];
-  for (const { pattern, name } of policyPatterns) {
+  
+  for (const { pattern, name } of textPatterns) {
+    if (pattern.test(plainText)) {
+      foundPatterns.push(name);
+    }
+  }
+  
+  for (const { pattern, name } of hrefPatterns) {
     if (pattern.test(html)) {
       foundPatterns.push(name);
     }
@@ -2090,18 +2128,28 @@ async function fetchSitemap(baseUrl: URL): Promise<string[]> {
 }
 
 function checkPrivacyPolicyWithEvidence(html: string, url: string): DebugCheckResult {
-  const patterns: { pattern: RegExp; label: string }[] = [
-    { pattern: /политик[аи|уыей]\s*конфиденциальности/i, label: "политика конфиденциальности" },
+  const plainText = stripHtmlTags(html);
+  
+  const textPatterns: { pattern: RegExp; label: string }[] = [
+    { pattern: /политик[аиуыейо]+\s*конфиденциальности/i, label: "политика конфиденциальности" },
     { pattern: /privacy\s*policy/i, label: "privacy policy" },
     { pattern: /обработк[аиуеой]\s*персональных\s*данных/i, label: "обработка ПДн" },
     { pattern: /защит[аиуеой]\s*персональных\s*данных/i, label: "защита ПДн" },
+  ];
+  
+  const hrefPatterns: { pattern: RegExp; label: string }[] = [
     { pattern: /href\s*=\s*["'][^"']*privacy[^"']*["']/i, label: "ссылка /privacy" },
     { pattern: /href\s*=\s*["'][^"']*policy[^"']*["']/i, label: "ссылка /policy" },
     { pattern: /href\s*=\s*["'][^"']*конфиденциальност[^"']*["']/i, label: "ссылка конфиденциальность" },
   ];
 
   const foundMarkers: string[] = [];
-  for (const { pattern, label } of patterns) {
+  for (const { pattern, label } of textPatterns) {
+    if (pattern.test(plainText)) {
+      foundMarkers.push(label);
+    }
+  }
+  for (const { pattern, label } of hrefPatterns) {
     if (pattern.test(html)) {
       foundMarkers.push(label);
     }
