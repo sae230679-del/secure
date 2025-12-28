@@ -219,15 +219,21 @@ export function Footer() {
     <footer className="border-t py-8 sm:py-12 bg-card/50" data-testid="footer">
       <div className="max-w-7xl mx-auto px-4 sm:px-8 lg:px-12">
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> 0db03b02757ef90e2822494bbfe34499ad040562
         <div className={cn(
           "grid gap-6 sm:gap-8",
           isMobile ? "grid-cols-1 divide-y divide-border" : "sm:grid-cols-2 lg:grid-cols-6"
         )}>
           <div className="space-y-4 pb-4 sm:pb-0">
+<<<<<<< HEAD
+=======
 =======
         <div className="grid sm:grid-cols-2 lg:grid-cols-6 gap-8">
           <div className="space-y-4">
 >>>>>>> 091c5d9 (Add a new personal data agreement page and update footer links)
+>>>>>>> 0db03b02757ef90e2822494bbfe34499ad040562
             <div className="flex items-center gap-2">
               <Shield className="h-6 w-6 animate-traffic-light-text" />
               <span className="font-bold">{settings?.siteName || "SecureLex.ru"}</span>
@@ -275,11 +281,17 @@ export function Footer() {
           
           <FooterSection title="Документы">
 =======
+<<<<<<< HEAD
+          </FooterSection>
+          
+          <FooterSection title="Документы">
+=======
           </div>
           
           <div>
             <h4 className="font-semibold mb-4">Документы</h4>
 >>>>>>> 091c5d9 (Add a new personal data agreement page and update footer links)
+>>>>>>> 0db03b02757ef90e2822494bbfe34499ad040562
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li>
                 <Link href="/privacy-policy" className="hover:text-foreground transition-colors" data-testid="link-footer-privacy-policy">
@@ -289,6 +301,8 @@ export function Footer() {
               <li>
                 <Link href="/user-agreement" className="hover:text-foreground transition-colors" data-testid="link-footer-agreement">
                   Пользовательское соглашение
+<<<<<<< HEAD
+=======
 <<<<<<< HEAD
 =======
                 </Link>
@@ -307,6 +321,7 @@ export function Footer() {
                 <Link href="/cookies-policy" className="hover:text-foreground transition-colors" data-testid="link-footer-cookies">
                   Политика cookies
 >>>>>>> 091c5d9 (Add a new personal data agreement page and update footer links)
+>>>>>>> 0db03b02757ef90e2822494bbfe34499ad040562
                 </Link>
               </li>
               <li>
