@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { URLInput } from "@/components/url-input";
@@ -37,6 +38,15 @@ type RknCheckResult = {
   evidence?: { innFound?: string; nameFound?: string; urls?: string[] };
 };
 
+type SiteTypeInfo = {
+  type: string;
+  name: string;
+  description: string;
+  baseAuditPrice: number;
+  confidence: "high" | "medium" | "low";
+  signals: string[];
+};
+
 type ExpressResult = {
   scorePercent: number;
   severity: string;
@@ -47,6 +57,8 @@ type ExpressResult = {
   rknCheck?: RknCheckResult | null;
   briefResults?: BriefResults | null;
   hostingInfo?: any | null;
+  siteType?: SiteTypeInfo | null;
+  fullReportPrice?: number;
 };
 
 function getScoreColor(score: number): "green" | "yellow" | "red" {
@@ -339,6 +351,8 @@ export function ExpressCheck() {
             rknCheck: data.rknCheck || null,
             briefResults: data.briefResults || null,
             hostingInfo: data.hostingInfo || null,
+            siteType: data.siteType || null,
+            fullReportPrice: data.fullReportPrice || 900,
           });
           setIsChecking(false);
           if (pollingRef.current) {
@@ -533,6 +547,8 @@ export function ExpressCheck() {
                 onDownloadPdf={handleDownloadPdf}
                 onPurchaseFullReport={handlePurchaseReport}
                 onReset={resetCheck}
+                siteType={result.siteType}
+                fullReportPrice={result.fullReportPrice}
                 isDownloading={isDownloading}
                 isPurchasing={isPurchasing}
               />
@@ -622,6 +638,25 @@ export function ExpressCheck() {
                   </div>
                 )}
 
+                {result.siteType && (
+                  <div className="p-3 rounded-lg border bg-muted/30 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Globe className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-sm font-medium">Тип сайта</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <span className="text-sm font-medium">{result.siteType.name}</span>
+                        <p className="text-xs text-muted-foreground">{result.siteType.description}</p>
+                      </div>
+                      <Badge variant="secondary" className="shrink-0">
+                        {result.siteType.confidence === "high" ? "Уверенно" : 
+                         result.siteType.confidence === "medium" ? "Вероятно" : "Приблизительно"}
+                      </Badge>
+                    </div>
+                  </div>
+                )}
+
                 <div className="border-t pt-4 space-y-4">
                   <div className="p-4 rounded-lg border-2 border-primary/30 bg-primary/5 space-y-3">
                     <div className="flex items-center justify-between gap-2">
@@ -629,7 +664,7 @@ export function ExpressCheck() {
                         <FileText className="w-5 h-5 text-primary" />
                         <span className="font-semibold">Полный PDF отчёт</span>
                       </div>
-                      <span className="text-2xl font-bold text-primary">900 ₽</span>
+                      <span className="text-2xl font-bold text-primary">{result.fullReportPrice || 900} ₽</span>
                     </div>
                     <ul className="text-xs text-muted-foreground space-y-1.5">
                       <li className="flex items-center gap-2">
@@ -660,7 +695,7 @@ export function ExpressCheck() {
                       ) : (
                         <>
                           <CreditCard className="mr-2 h-4 w-4" />
-                          Купить за 900 ₽
+                          Купить за {result.fullReportPrice || 900} ₽
                         </>
                       )}
                     </Button>
@@ -669,7 +704,9 @@ export function ExpressCheck() {
                   <div className="p-3 rounded-lg bg-muted/50 space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm font-medium">Полный аудит + документы</span>
-                      <span className="text-sm text-muted-foreground">от 3 900 ₽</span>
+                      <span className="text-sm text-muted-foreground">
+                        от {result.siteType?.baseAuditPrice?.toLocaleString('ru-RU') || "4 900"} ₽
+                      </span>
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Глубокий анализ + готовые документы для вашего сайта

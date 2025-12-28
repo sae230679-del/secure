@@ -23,7 +23,8 @@ No foreign services: The platform does not use or support foreign data protectio
 - **Compliance Features**: PDN Consent Tracking (with versioning, IP/user-agent logging, withdrawal with destruction schedule), 152-ФЗ compliant Cookie Consent, and versioned legal pages.
 - **Audit Engine**: Over 60 criteria for premium packages covering ФЗ-152, ФЗ-149, cookies, technical, legal, content, and security aspects.
 - **Hosting Detection**: Two-layer Russian hosting detection (DNS/PTR lookup and AI-powered WHOIS analysis).
-- **Brief Results**: Standardized JSON structure for express audit reports, including score, severity, key highlights, and hosting status.
+- **Brief Results**: Standardized JSON structure for express audit reports, including score, severity, key highlights, hosting status, site type detection, and dynamic pricing.
+- **Site Type Detection**: Automated classification of websites into 12 categories (ecommerce, marketplace, services, corporate, landing, saas, blog, onlineSchool, ugc, classifieds, government, other) using HTML analysis with confidence levels. Each type has a recommended audit package price.
 - **Penalty System**: Calculation of real КоАП РФ ст. 13.11 penalties with automated deduplication.
 - **PDF Report Generation**: Branded, multi-page PDF reports with detailed criteria results, penalty risk tables, law references, and recommendations.
 - **SEO Management**: SuperAdmin controlled CRUD for SEO pages and sitemap generation.

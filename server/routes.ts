@@ -20,6 +20,7 @@ import { generatePdfReport } from "./pdf-generator";
 import { toolsRouter } from "./tools-routes";
 import oauthRouter from "./oauth";
 import { maskEmail } from "./utils/pii";
+import { detectSiteType, getAllSiteTypes, type SiteTypeResult } from "./site-type-detector";
 
 // GUARD: Mock mode forbidden in production
 const auditMockMode = process.env.AUDIT_MOCK_MODE === "true";
@@ -1908,6 +1909,7 @@ export async function registerRoutes(
       const yandexMetrikaSetting = await storage.getSystemSetting("yandex_metrika_code");
       const yandexWebmasterSetting = await storage.getSystemSetting("yandex_webmaster_verification");
       const widgetCodeSetting = await storage.getSystemSetting("widget_code");
+      const fullReportPriceSetting = await storage.getSystemSetting("full_report_price");
       
       let requisites = null;
       let contacts = null;
@@ -1935,9 +1937,49 @@ export async function registerRoutes(
         yandexMetrikaCode: yandexMetrikaSetting?.value || "",
         yandexWebmasterVerification: yandexWebmasterSetting?.value || "",
         widgetCode: widgetCodeSetting?.value || "",
+        fullReportPrice: parseInt(fullReportPriceSetting?.value || "900", 10),
       });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch settings" });
+    }
+  });
+
+  // Public API: Get all available site types
+  app.get("/api/public/site-types", async (req, res) => {
+    try {
+      const siteTypes = getAllSiteTypes();
+      res.json(siteTypes);
+    } catch (error) {
+      console.error("Failed to fetch site types:", error);
+      res.status(500).json({ error: "Failed to fetch site types" });
+    }
+  });
+
+  // Public API: Detect site type by URL
+  app.post("/api/public/detect-site-type", async (req, res) => {
+    try {
+      const schema = z.object({
+        websiteUrl: z.string().min(1, "URL обязателен"),
+      });
+      
+      const data = schema.parse(req.body);
+      const normalizedUrl = validateWebsiteUrl(data.websiteUrl);
+      
+      const websiteCheck = await checkWebsiteExists(normalizedUrl);
+      if (!websiteCheck.exists) {
+        return res.status(400).json({ 
+          error: websiteCheck.error || "Сайт недоступен. Проверьте правильность адреса."
+        });
+      }
+      
+      const siteTypeResult = await detectSiteType(normalizedUrl);
+      res.json(siteTypeResult);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors[0].message });
+      }
+      console.error("Site type detection error:", error);
+      res.status(500).json({ error: "Ошибка при определении типа сайта" });
     }
   });
 
@@ -2618,6 +2660,19 @@ export async function registerRoutes(
             details: check.details,
           }));
 
+          // Detect site type
+          let siteTypeResult: SiteTypeResult | null = null;
+          try {
+            siteTypeResult = await detectSiteType(normalizedUrl);
+            console.log(`[EXPRESS] Site type detected: ${siteTypeResult.type} (${siteTypeResult.confidence})`);
+          } catch (siteTypeError) {
+            console.error("[EXPRESS] Site type detection failed:", siteTypeError);
+          }
+
+          // Get full report price from settings
+          const fullReportPriceSetting = await storage.getSystemSetting("full_report_price");
+          const fullReportPrice = parseInt(fullReportPriceSetting?.value || "900", 10);
+
           await storage.updatePublicAuditProgress(token, {
             status: "completed",
             stageIndex: 7,
@@ -2632,6 +2687,8 @@ export async function registerRoutes(
               rknCheck: report.rknCheck || null,
               hostingInfo: report.hostingCheck || null,
               briefResults: report.briefResults || null,
+              siteType: siteTypeResult || null,
+              fullReportPrice: fullReportPrice,
             },
             completedAt: new Date(),
           });
@@ -2692,6 +2749,8 @@ export async function registerRoutes(
       const hostingInfo = summaryData?.hostingInfo || null;
       const rknAttempt = summaryData?.rknAttempt || 0;
       const rknMaxAttempts = summaryData?.rknMaxAttempts || 5;
+      const siteType = summaryData?.siteType || null;
+      const fullReportPrice = summaryData?.fullReportPrice || 900;
 
       res.json({
         token: audit.token,
@@ -2710,6 +2769,8 @@ export async function registerRoutes(
         hostingInfo: hostingInfo,
         rknAttempt: rknAttempt,
         rknMaxAttempts: rknMaxAttempts,
+        siteType: siteType,
+        fullReportPrice: fullReportPrice,
         createdAt: audit.createdAt,
         completedAt: audit.completedAt,
       });

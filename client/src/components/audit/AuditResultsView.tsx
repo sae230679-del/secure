@@ -33,6 +33,15 @@ import {
 } from "lucide-react";
 import type { BriefResults, HostingInfo, BriefHighlight } from "@shared/schema";
 
+interface SiteTypeInfo {
+  type: string;
+  name: string;
+  description: string;
+  baseAuditPrice: number;
+  confidence: "high" | "medium" | "low";
+  signals: string[];
+}
+
 interface AuditResultsViewProps {
   results: BriefResults;
   isExpress?: boolean;
@@ -41,6 +50,8 @@ interface AuditResultsViewProps {
   onReset?: () => void;
   isDownloading?: boolean;
   isPurchasing?: boolean;
+  siteType?: SiteTypeInfo | null;
+  fullReportPrice?: number;
 }
 
 function getStatusIcon(status: string, className = "w-4 h-4") {
@@ -391,6 +402,8 @@ export function AuditResultsView({
   onReset,
   isDownloading,
   isPurchasing,
+  siteType,
+  fullReportPrice = 900,
 }: AuditResultsViewProps) {
   return (
     <div className="space-y-5" data-testid="express-results-view">
@@ -417,6 +430,25 @@ export function AuditResultsView({
       <StatsSummary totals={results.score.totals} />
 
       <HostingInfoBlock hosting={results.hosting} />
+
+      {siteType && (
+        <div className="rounded-lg p-4 bg-muted/30 border">
+          <div className="flex items-center gap-2 mb-2">
+            <Globe className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Тип сайта</span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <span className="text-sm font-medium">{siteType.name}</span>
+              <p className="text-xs text-muted-foreground">{siteType.description}</p>
+            </div>
+            <Badge variant="secondary" className="shrink-0">
+              {siteType.confidence === "high" ? "Уверенно" : 
+               siteType.confidence === "medium" ? "Вероятно" : "Приблизительно"}
+            </Badge>
+          </div>
+        </div>
+      )}
 
       <HighlightsTable highlights={results.highlights} />
 

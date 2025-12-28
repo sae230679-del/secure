@@ -38,6 +38,7 @@ export default function SuperAdminSettingsPage() {
     yandex_webmaster_verification: "",
     widget_code: "",
     free_audit_limit: "3",
+    full_report_price: "900",
   });
 
   const [contactData, setContactData] = useState({
@@ -375,6 +376,31 @@ export default function SuperAdminSettingsPage() {
               </div>
               <p className="text-sm text-muted-foreground">
                 Максимальное количество бесплатных экспресс-проверок с одного IP-адреса
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="full_report_price">Цена полного отчёта (руб.)</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="full_report_price"
+                  type="number"
+                  min="0"
+                  value={formData.full_report_price}
+                  onChange={(e) => setFormData({ ...formData, full_report_price: e.target.value })}
+                  placeholder="900"
+                  data-testid="input-full-report-price"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => handleSave("full_report_price")}
+                  disabled={updateSettingMutation.isPending}
+                >
+                  <Save className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Стоимость полного отчёта после экспресс-проверки (по умолчанию 900 руб.)
               </p>
             </div>
           </CardContent>
