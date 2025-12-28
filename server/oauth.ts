@@ -367,4 +367,169 @@ router.get("/status", async (req: Request, res: Response) => {
   });
 });
 
+router.get("/vk/config", async (req: Request, res: Response) => {
+  const config = await getOAuthConfig("vk");
+  if (!config) {
+    return res.status(500).json({ error: "VK OAuth не настроен" });
+  }
+
+  const state = crypto.randomBytes(32).toString('base64url');
+  const { codeVerifier, codeChallenge } = generatePKCE();
+  
+  req.session.oauthState = state;
+  req.session.vkCodeVerifier = codeVerifier;
+
+  const redirectUri = `${getBaseUrl(req)}/api/oauth/vk/callback`;
+
+  req.session.save((err) => {
+    if (err) {
+      console.error("[VK ID Config] Session save error:", err);
+      return res.status(500).json({ error: "Session error" });
+    }
+    
+    res.json({
+      app: parseInt(config.clientId, 10),
+      redirectUrl: redirectUri,
+      state: state,
+      codeChallenge: codeChallenge,
+      scope: 'email vkid.personal_info',
+    });
+  });
+});
+
+router.post("/vk/exchange", async (req: Request, res: Response) => {
+  try {
+    const { code, deviceId, state } = req.body;
+
+    if (!code || !deviceId) {
+      return res.status(400).json({ error: "Missing code or deviceId" });
+    }
+
+    if (state !== req.session.oauthState) {
+      console.error("[VK ID Exchange] Invalid state. Expected:", req.session.oauthState, "Got:", state);
+      return res.status(400).json({ error: "Invalid state" });
+    }
+
+    const codeVerifier = req.session.vkCodeVerifier;
+    if (!codeVerifier) {
+      console.error("[VK ID Exchange] No code_verifier in session");
+      return res.status(400).json({ error: "No verifier" });
+    }
+
+    delete req.session.oauthState;
+    delete req.session.vkCodeVerifier;
+
+    const config = await getOAuthConfig("vk");
+    if (!config) {
+      return res.status(500).json({ error: "VK not configured" });
+    }
+
+    const redirectUri = `${getBaseUrl(req)}/api/oauth/vk/callback`;
+    
+    const tokenParams = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code: code,
+      code_verifier: codeVerifier,
+      client_id: config.clientId,
+      redirect_uri: redirectUri,
+      device_id: deviceId,
+      state: state || '',
+    });
+
+    console.log("[VK ID Exchange] Exchanging code for token...");
+    const tokenResponse = await fetch("https://id.vk.ru/oauth2/auth", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: tokenParams.toString(),
+    });
+
+    const tokenData = await tokenResponse.json();
+    console.log("[VK ID Exchange] Token response:", { ...tokenData, access_token: tokenData.access_token ? '***' : undefined });
+
+    if (tokenData.error) {
+      console.error("[VK ID Exchange] Token error:", tokenData);
+      return res.status(400).json({ error: "Token exchange failed", details: tokenData.error });
+    }
+
+    const { access_token, user_id } = tokenData;
+
+    const userInfoResponse = await fetch("https://api.vk.ru/method/users.get", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Authorization": `Bearer ${access_token}`,
+      },
+      body: new URLSearchParams({
+        fields: "photo_100,first_name,last_name",
+        v: "5.199",
+      }).toString(),
+    });
+
+    const userInfoData = await userInfoResponse.json();
+
+    if (userInfoData.error || !userInfoData.response?.[0]) {
+      console.error("[VK ID Exchange] User info error:", userInfoData);
+      return res.status(400).json({ error: "Failed to get user info" });
+    }
+
+    const vkUser = userInfoData.response[0];
+    const vkId = String(user_id || vkUser.id);
+    const name = `${vkUser.first_name || ''} ${vkUser.last_name || ''}`.trim() || 'VK User';
+    const avatarUrl = vkUser.photo_100;
+
+    let email: string | undefined;
+    try {
+      const emailResponse = await fetch("https://api.vk.ru/method/account.getProfileInfo", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Authorization": `Bearer ${access_token}`,
+        },
+        body: new URLSearchParams({ v: "5.199" }).toString(),
+      });
+      const emailData = await emailResponse.json();
+      if (emailData.response?.email) {
+        email = emailData.response.email;
+      }
+    } catch (e) {
+      console.log("[VK ID Exchange] Could not get email:", e);
+    }
+
+    let user = await storage.getUserByVkId(vkId);
+
+    if (!user && email) {
+      user = await storage.getUserByEmail(email);
+      if (user) {
+        await storage.updateUser(user.id, { vkId, avatarUrl, oauthProvider: "vk" });
+      }
+    }
+
+    if (!user) {
+      const userEmail = email || `vk_${vkId}@securelex.ru`;
+      user = await storage.createOAuthUser({
+        name,
+        email: userEmail,
+        vkId,
+        avatarUrl,
+        oauthProvider: "vk",
+      });
+    }
+
+    req.session.userId = user.id;
+    req.session.save((err) => {
+      if (err) {
+        console.error("[VK ID Exchange] Session save error:", err);
+        return res.status(500).json({ error: "Session save failed" });
+      }
+      console.log(`[VK ID Exchange] User logged in: ${user!.id}`);
+      res.json({ success: true, user: { id: user!.id, name: user!.name } });
+    });
+  } catch (error) {
+    console.error("[VK ID Exchange] Error:", error);
+    res.status(500).json({ error: "Exchange failed" });
+  }
+});
+
 export default router;
