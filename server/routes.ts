@@ -1265,6 +1265,30 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/admin/express-settings", requireAdmin, async (req, res) => {
+    try {
+      const priceSetting = await storage.getSystemSetting("express_full_report_price");
+      res.json({
+        fullReportPrice: priceSetting?.value ? parseInt(priceSetting.value as string, 10) : 900,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch express settings" });
+    }
+  });
+
+  app.post("/api/admin/express-settings", requireAdmin, async (req, res) => {
+    try {
+      const { fullReportPrice } = req.body;
+      if (typeof fullReportPrice !== "number" || fullReportPrice < 0) {
+        return res.status(400).json({ error: "Invalid price value" });
+      }
+      await storage.setSystemSetting("express_full_report_price", String(fullReportPrice));
+      res.json({ success: true, fullReportPrice });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to save express settings" });
+    }
+  });
+
   app.get("/api/admin/stats", requireAdmin, async (req, res) => {
     try {
       const stats = await storage.getAdminStats();
@@ -2777,8 +2801,13 @@ export async function registerRoutes(
           }
 
           // Get full report price from settings
-          const fullReportPriceSetting = await storage.getSystemSetting("full_report_price");
-          const fullReportPrice = parseInt(fullReportPriceSetting?.value || "900", 10);
+          const fullReportPriceSetting = await storage.getSystemSetting("express_full_report_price");
+          const fullReportPrice = parseInt(fullReportPriceSetting?.value as string || "900", 10);
+          
+          // Update briefResults.cta with the configured price
+          if (report.briefResults?.cta) {
+            report.briefResults.cta.fullReportPriceRub = fullReportPrice;
+          }
 
           await storage.updatePublicAuditProgress(token, {
             status: "completed",

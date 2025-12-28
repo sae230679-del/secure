@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { AuditWithDetails, Package } from "@shared/schema";
+import type { AuditWithDetails } from "@shared/schema";
 import { useState, useEffect } from "react";
 import {
   Zap,
@@ -43,25 +43,25 @@ export default function AdminExpressAuditsPage() {
     queryKey: ["/api/admin/express-audits"],
   });
 
-  const { data: expressPackage, isLoading: isLoadingPackage } = useQuery<Package>({
-    queryKey: ["/api/admin/packages/expressreport"],
+  const { data: expressSettings, isLoading: isLoadingSettings } = useQuery<{ fullReportPrice: number }>({
+    queryKey: ["/api/admin/express-settings"],
   });
 
   useEffect(() => {
-    if (expressPackage?.price) {
-      setReportPrice(expressPackage.price);
+    if (expressSettings?.fullReportPrice !== undefined) {
+      setReportPrice(expressSettings.fullReportPrice);
     }
-  }, [expressPackage]);
+  }, [expressSettings]);
 
   const updatePriceMutation = useMutation({
     mutationFn: async (newPrice: number) => {
-      const response = await apiRequest("PATCH", `/api/admin/packages/${expressPackage?.id}`, {
-        price: newPrice,
+      const response = await apiRequest("POST", "/api/admin/express-settings", {
+        fullReportPrice: newPrice,
       });
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/packages/expressreport"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/express-settings"] });
       toast({
         title: "Цена обновлена",
         description: `Стоимость полного отчёта: ${reportPrice} руб.`,
@@ -183,7 +183,7 @@ export default function AdminExpressAuditsPage() {
                   value={reportPrice}
                   onChange={(e) => setReportPrice(Number(e.target.value))}
                   className="w-32"
-                  disabled={isLoadingPackage}
+                  disabled={isLoadingSettings}
                   data-testid="input-express-report-price"
                 />
                 <span className="text-muted-foreground">руб.</span>
@@ -191,7 +191,7 @@ export default function AdminExpressAuditsPage() {
             </div>
             <Button
               onClick={() => updatePriceMutation.mutate(reportPrice)}
-              disabled={updatePriceMutation.isPending || isLoadingPackage || reportPrice === expressPackage?.price}
+              disabled={updatePriceMutation.isPending || isLoadingSettings || reportPrice === expressSettings?.fullReportPrice}
               data-testid="button-save-price"
             >
               {updatePriceMutation.isPending ? (
