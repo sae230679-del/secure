@@ -264,7 +264,7 @@ export default function AuthPage() {
 
         <Card className="relative overflow-visible">
           {showConsentOverlay && (
-            <div className="absolute inset-0 z-50 bg-background/95 backdrop-blur-sm rounded-lg flex flex-col justify-center p-6">
+            <div className="absolute inset-0 z-50 bg-background/95 consent-overlay rounded-lg flex flex-col justify-center p-4 sm:p-6">
               <div className="space-y-4">
                 <div className="text-center mb-4">
                   <h3 className="text-lg font-semibold">
@@ -395,7 +395,7 @@ export default function AuthPage() {
                           <span className="text-muted-foreground">
                             Согласен получать уведомления на email
                           </span>
-                          <span className="block mt-1 text-xs font-medium text-green-600 dark:text-green-400 animate-pulse">
+                          <span className="block mt-1 text-xs font-bold text-green-600 dark:text-green-400 animate-blink-green">
                             СПАМА не будет - только при изменениях ФЗ-152 уведомим вас!
                           </span>
                         </label>

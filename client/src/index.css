@@ -364,3 +364,31 @@
 .animate-traffic-light-text {
   animation: traffic-light-text 1.5s ease-in-out infinite;
 }
+
+@keyframes blink-green {
+  0%, 100% { 
+    opacity: 1;
+  }
+  50% { 
+    opacity: 0.4;
+  }
+}
+
+.animate-blink-green {
+  animation: blink-green 1.2s ease-in-out infinite;
+  -webkit-animation: blink-green 1.2s ease-in-out infinite;
+}
+
+.consent-overlay {
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+@supports not (backdrop-filter: blur(4px)) {
+  .consent-overlay {
+    background-color: hsl(var(--background) / 0.98);
+  }
+}
