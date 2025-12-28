@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { Shield, Loader2, Mail, User, Phone, KeyRound, ArrowLeft, CheckCircle, RefreshCw } from "lucide-react";
 import { VKIDWidget } from "@/components/vk-id-widget";
+import { YandexIDButton } from "@/components/yandex-id-button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Link } from "wouter";
 
@@ -440,20 +441,12 @@ export default function AuthPage() {
 
                 <div className="space-y-3">
                   <VKIDWidget />
-                  
-                  <Button
-                    type="button"
-                    variant="outline"
+                  <YandexIDButton 
+                    disabled={isLoading} 
+                    size="m"
+                    variant="secondary"
                     className="w-full"
-                    onClick={() => window.location.href = "/api/oauth/yandex"}
-                    disabled={isLoading}
-                    data-testid="button-login-yandex"
-                  >
-                    <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M2.04 12c0-5.523 4.476-10 10-10 5.522 0 10 4.477 10 10s-4.478 10-10 10c-5.524 0-10-4.477-10-10zm10 6.462V5.538H9.96v4.77L6.538 5.538h-2.5l4.346 6.462-4.731 6.462h2.5l3.807-5.654v5.654h2.08z"/>
-                    </svg>
-                    Яндекс
-                  </Button>
+                  />
                 </div>
 
                 {/* ФЗ-152: Уведомление о принятии условий при входе */}
