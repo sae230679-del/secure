@@ -834,7 +834,8 @@ function checkPrivacyPolicy(html: string): AuditCheckResult {
   const evidence: string[] = [];
   
   const policyPatterns = [
-    { pattern: /политик[аи|уыей]\s*конфиденциальности/i, name: "текст 'политика конфиденциальности'" },
+    { pattern: /политик[аиуыейо]+\s*конфиденциальности/i, name: "текст 'политика конфиденциальности'" },
+    { pattern: /политикой\s*конфиденциальности/i, name: "текст 'политикой конфиденциальности'" },
     { pattern: /privacy\s*policy/i, name: "текст 'privacy policy'" },
     { pattern: /обработк[аиуеой]\s*персональных\s*данных/i, name: "текст 'обработка персональных данных'" },
     { pattern: /защит[аиуеой]\s*персональных\s*данных/i, name: "текст 'защита персональных данных'" },
@@ -849,8 +850,15 @@ function checkPrivacyPolicy(html: string): AuditCheckResult {
     { pattern: /href\s*=\s*["'][^"']*pdn[^"']*["']/i, name: "ссылка с 'pdn' в URL" },
     { pattern: /согласие\s*на\s*обработку\s*пдн/i, name: "'согласие на обработку ПДн'" },
     { pattern: /персональны[еых]\s*данны[еых]/i, name: "'персональные данные'" },
-    { pattern: /пдн/i, name: "'ПДн'" },
-    { pattern: /Документы/i, name: "'Документы'" },
+    { pattern: /соглашаетесь\s*с\s*политик/i, name: "'соглашаетесь с политик*'" },
+    { pattern: /согласны\s*с\s*политик/i, name: "'согласны с политик*'" },
+    { pattern: /ознакомлен\s*с\s*политик/i, name: "'ознакомлен с политик*'" },
+    { pattern: /cookie[s]?\s*(политик|policy)/i, name: "'cookie политика'" },
+    { pattern: /политик[аиуыейо]+\s*cookie/i, name: "'политика cookie'" },
+    { pattern: /href\s*=\s*["'][^"']*cookie[^"']*policy[^"']*["']/i, name: "ссылка с 'cookie-policy'" },
+    { pattern: /href\s*=\s*["'][^"']*legal[^"']*["']/i, name: "ссылка с '/legal'" },
+    { pattern: /правовая\s*информация/i, name: "'правовая информация'" },
+    { pattern: /юридическая\s*информация/i, name: "'юридическая информация'" },
   ];
 
   const foundPatterns: string[] = [];

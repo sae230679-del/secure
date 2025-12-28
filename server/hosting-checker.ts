@@ -354,6 +354,33 @@ export async function detectPlatformFromHttp(url: string): Promise<PlatformDetec
           actualHostingUrl = lovableMatch[0];
         }
       }
+      
+      // Detect Lovable by generator meta tag
+      const generatorMatch = text.match(/<meta[^>]*name=["']generator["'][^>]*content=["']([^"']+)["']/i) ||
+                            text.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']generator["']/i);
+      if (generatorMatch) {
+        const generator = generatorMatch[1].toLowerCase();
+        if (generator.includes("lovable") || generator.includes("gpt engineer") || generator.includes("gptengineer")) {
+          provider = "Lovable (GPT Engineer)";
+          confidence = 0.95;
+          evidence.push(`Meta generator указывает на Lovable: ${generatorMatch[1]}`);
+        }
+      }
+      
+      // Detect Lovable by characteristic script patterns
+      if (text.includes("@lovable") || text.includes("gptengineer.app") || 
+          text.includes("lovable-tagger") || text.includes("/lovable/")) {
+        provider = "Lovable (GPT Engineer)";
+        confidence = 0.9;
+        evidence.push(`Обнаружены характерные маркеры Lovable в коде страницы`);
+      }
+      
+      // Detect Lovable by HTML comment
+      if (/<!--.*lovable.*-->/i.test(text) || /<!--.*gpt.*engineer.*-->/i.test(text)) {
+        provider = "Lovable (GPT Engineer)";
+        confidence = 0.85;
+        evidence.push(`Обнаружен комментарий Lovable в HTML`);
+      }
     }
 
   } catch (error: any) {
