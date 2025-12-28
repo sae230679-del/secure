@@ -2,17 +2,32 @@ import { Router, Request, Response } from "express";
 import { storage } from "./storage";
 import crypto from "crypto";
 
+declare module "express-session" {
+  interface SessionData {
+    userId?: number;
+    oauthState?: string;
+    vkCodeVerifier?: string;
+  }
+}
+
 const router = Router();
 
 function getBaseUrl(req: Request): string {
-  // Use the Host header from the request to determine the correct callback URL
   const host = req.get('host');
   if (host) {
     const protocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
     return `${protocol}://${host}`;
   }
-  // Fallback for production
   return "https://securelex.ru";
+}
+
+function generatePKCE() {
+  const codeVerifier = crypto.randomBytes(32).toString('base64url');
+  const codeChallenge = crypto
+    .createHash('sha256')
+    .update(codeVerifier)
+    .digest('base64url');
+  return { codeVerifier, codeChallenge };
 }
 
 async function getOAuthConfig(provider: "vk" | "yandex") {
@@ -32,37 +47,79 @@ router.get("/vk", async (req: Request, res: Response) => {
     return res.status(500).json({ error: "VK OAuth не настроен или отключён" });
   }
 
-  const state = crypto.randomBytes(16).toString("hex");
+  const state = crypto.randomBytes(32).toString('base64url');
+  const { codeVerifier, codeChallenge } = generatePKCE();
+  
   req.session.oauthState = state;
+  req.session.vkCodeVerifier = codeVerifier;
 
   const redirectUri = `${getBaseUrl(req)}/api/oauth/vk/callback`;
-  const scope = "email";
-  const vkVersion = "5.131";
+  
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id: config.clientId,
+    redirect_uri: redirectUri,
+    state: state,
+    scope: 'email vkid.personal_info',
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256',
+  });
 
-  const authUrl = `https://oauth.vk.com/authorize?client_id=${config.clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&display=page&scope=${scope}&response_type=code&v=${vkVersion}&state=${state}`;
-
+  const authUrl = `https://id.vk.ru/authorize?${params.toString()}`;
+  console.log("[VK ID] Redirecting to:", authUrl);
   res.redirect(authUrl);
 });
 
 router.get("/vk/callback", async (req: Request, res: Response) => {
   try {
-    const { code, state, error, error_description } = req.query;
+    const { payload, error, error_description } = req.query;
+    
+    console.log("[VK ID Callback] Query params:", req.query);
 
     if (error) {
-      console.error("[VK OAuth] Error:", error, error_description);
+      console.error("[VK ID] Error:", error, error_description);
       return res.redirect("/auth?error=vk_denied");
     }
 
-    if (!code || typeof code !== "string") {
+    let code: string | undefined;
+    let state: string | undefined;
+    let deviceId: string | undefined;
+
+    if (payload && typeof payload === 'string') {
+      try {
+        const payloadData = JSON.parse(payload);
+        code = payloadData.code;
+        state = payloadData.state;
+        deviceId = payloadData.device_id;
+        console.log("[VK ID] Parsed payload:", { code: code?.substring(0, 10) + '...', state, deviceId });
+      } catch (e) {
+        console.error("[VK ID] Failed to parse payload:", e);
+        return res.redirect("/auth?error=vk_invalid_payload");
+      }
+    } else {
+      code = req.query.code as string;
+      state = req.query.state as string;
+      deviceId = req.query.device_id as string;
+    }
+
+    if (!code) {
+      console.error("[VK ID] No code received");
       return res.redirect("/auth?error=vk_no_code");
     }
 
     if (state !== req.session.oauthState) {
-      console.error("[VK OAuth] Invalid state");
+      console.error("[VK ID] Invalid state. Expected:", req.session.oauthState, "Got:", state);
       return res.redirect("/auth?error=vk_invalid_state");
     }
 
+    const codeVerifier = req.session.vkCodeVerifier;
+    if (!codeVerifier) {
+      console.error("[VK ID] No code_verifier in session");
+      return res.redirect("/auth?error=vk_no_verifier");
+    }
+
     delete req.session.oauthState;
+    delete req.session.vkCodeVerifier;
 
     const config = await getOAuthConfig("vk");
     if (!config) {
@@ -70,31 +127,78 @@ router.get("/vk/callback", async (req: Request, res: Response) => {
     }
 
     const redirectUri = `${getBaseUrl(req)}/api/oauth/vk/callback`;
-    const tokenUrl = `https://oauth.vk.com/access_token?client_id=${config.clientId}&client_secret=${config.clientSecret}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${code}`;
+    
+    const tokenParams = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code: code,
+      code_verifier: codeVerifier,
+      client_id: config.clientId,
+      redirect_uri: redirectUri,
+      device_id: deviceId || '',
+      state: state || '',
+    });
 
-    const tokenResponse = await fetch(tokenUrl);
+    console.log("[VK ID] Exchanging code for token...");
+    const tokenResponse = await fetch("https://id.vk.ru/oauth2/auth", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: tokenParams.toString(),
+    });
+
     const tokenData = await tokenResponse.json();
+    console.log("[VK ID] Token response:", { ...tokenData, access_token: tokenData.access_token ? '***' : undefined });
 
     if (tokenData.error) {
-      console.error("[VK OAuth] Token error:", tokenData);
+      console.error("[VK ID] Token error:", tokenData);
       return res.redirect("/auth?error=vk_token_failed");
     }
 
-    const { access_token, user_id, email } = tokenData;
+    const { access_token, user_id } = tokenData;
 
-    const userInfoUrl = `https://api.vk.com/method/users.get?user_ids=${user_id}&fields=photo_100,first_name,last_name&access_token=${access_token}&v=5.131`;
-    const userInfoResponse = await fetch(userInfoUrl);
+    const userInfoResponse = await fetch("https://api.vk.ru/method/users.get", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Authorization": `Bearer ${access_token}`,
+      },
+      body: new URLSearchParams({
+        fields: "photo_100,first_name,last_name",
+        v: "5.199",
+      }).toString(),
+    });
+
     const userInfoData = await userInfoResponse.json();
+    console.log("[VK ID] User info response:", userInfoData);
 
     if (userInfoData.error || !userInfoData.response?.[0]) {
-      console.error("[VK OAuth] User info error:", userInfoData);
+      console.error("[VK ID] User info error:", userInfoData);
       return res.redirect("/auth?error=vk_userinfo_failed");
     }
 
     const vkUser = userInfoData.response[0];
-    const vkId = String(user_id);
-    const name = `${vkUser.first_name} ${vkUser.last_name}`.trim();
+    const vkId = String(user_id || vkUser.id);
+    const name = `${vkUser.first_name || ''} ${vkUser.last_name || ''}`.trim() || 'VK User';
     const avatarUrl = vkUser.photo_100;
+
+    let email: string | undefined;
+    try {
+      const emailResponse = await fetch("https://api.vk.ru/method/account.getProfileInfo", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Authorization": `Bearer ${access_token}`,
+        },
+        body: new URLSearchParams({ v: "5.199" }).toString(),
+      });
+      const emailData = await emailResponse.json();
+      if (emailData.response?.email) {
+        email = emailData.response.email;
+      }
+    } catch (e) {
+      console.log("[VK ID] Could not get email:", e);
+    }
 
     let user = await storage.getUserByVkId(vkId);
 
@@ -119,14 +223,14 @@ router.get("/vk/callback", async (req: Request, res: Response) => {
     req.session.userId = user.id;
     req.session.save((err) => {
       if (err) {
-        console.error("[VK OAuth] Session save error:", err);
+        console.error("[VK ID] Session save error:", err);
         return res.redirect("/auth?error=session_failed");
       }
-      console.log(`[VK OAuth] User logged in: ${user!.id}`);
+      console.log(`[VK ID] User logged in: ${user!.id}`);
       res.redirect("/dashboard");
     });
   } catch (error) {
-    console.error("[VK OAuth] Callback error:", error);
+    console.error("[VK ID] Callback error:", error);
     res.redirect("/auth?error=vk_failed");
   }
 });
