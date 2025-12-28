@@ -66,8 +66,15 @@ router.get("/vk", async (req: Request, res: Response) => {
   });
 
   const authUrl = `https://id.vk.ru/authorize?${params.toString()}`;
-  console.log("[VK ID] Redirecting to:", authUrl);
-  res.redirect(authUrl);
+  console.log(`[VK ID] Init: redirectUri=${redirectUri}, state=${state}, sessionId=${req.sessionID}`);
+  
+  req.session.save((err) => {
+    if (err) {
+      console.error("[VK ID] Session save error:", err);
+      return res.status(500).json({ error: "Session error" });
+    }
+    res.redirect(authUrl);
+  });
 });
 
 router.get("/vk/callback", async (req: Request, res: Response) => {
@@ -248,12 +255,22 @@ router.get("/yandex", async (req: Request, res: Response) => {
 
   const authUrl = `https://oauth.yandex.ru/authorize?response_type=code&client_id=${config.clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
 
-  res.redirect(authUrl);
+  console.log(`[Yandex OAuth] Init: redirectUri=${redirectUri}, state=${state}, sessionId=${req.sessionID}`);
+  
+  req.session.save((err) => {
+    if (err) {
+      console.error("[Yandex OAuth] Session save error:", err);
+      return res.status(500).json({ error: "Session error" });
+    }
+    res.redirect(authUrl);
+  });
 });
 
 router.get("/yandex/callback", async (req: Request, res: Response) => {
   try {
     const { code, state, error, error_description } = req.query;
+    
+    console.log(`[Yandex OAuth] Callback: state=${state}, sessionState=${req.session.oauthState}, sessionId=${req.sessionID}`);
 
     if (error) {
       console.error("[Yandex OAuth] Error:", error, error_description);
@@ -265,7 +282,7 @@ router.get("/yandex/callback", async (req: Request, res: Response) => {
     }
 
     if (state !== req.session.oauthState) {
-      console.error("[Yandex OAuth] Invalid state");
+      console.error(`[Yandex OAuth] Invalid state. Expected: ${req.session.oauthState}, Got: ${state}`);
       return res.redirect("/auth?error=yandex_invalid_state");
     }
 
