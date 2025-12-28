@@ -409,6 +409,81 @@ export type Promotion = typeof promotions.$inferSelect;
 export const insertPromotionSchema = createInsertSchema(promotions).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertPromotion = z.infer<typeof insertPromotionSchema>;
 
+// =====================================================
+// Заказы полных отчётов (после экспресс-проверки)
+// =====================================================
+export const expressReportOrderStatusEnum = pgEnum("express_report_order_status", ["pending", "paid", "processing", "completed", "cancelled", "refunded"]);
+
+export const expressReportOrders = pgTable("express_report_orders", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id),
+  name: varchar("name", { length: 255 }),
+  phone: varchar("phone", { length: 30 }),
+  socialNetwork: varchar("social_network", { length: 50 }),
+  socialContact: varchar("social_contact", { length: 255 }),
+  email: varchar("email", { length: 255 }).notNull(),
+  websiteUrl: varchar("website_url", { length: 500 }).notNull(),
+  inn: varchar("inn", { length: 15 }),
+  isIndividual: boolean("is_individual").default(false),
+  price: integer("price").notNull(),
+  status: expressReportOrderStatusEnum("status").default("pending").notNull(),
+  paymentId: varchar("payment_id", { length: 100 }),
+  briefResultsSnapshot: jsonb("brief_results_snapshot"),
+  adminNotes: text("admin_notes"),
+  reportFileUrl: text("report_file_url"),
+  privacyConsent: boolean("privacy_consent").default(false).notNull(),
+  pdnConsent: boolean("pdn_consent").default(false).notNull(),
+  offerConsent: boolean("offer_consent").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  paidAt: timestamp("paid_at"),
+  completedAt: timestamp("completed_at"),
+});
+
+export type ExpressReportOrder = typeof expressReportOrders.$inferSelect;
+export const insertExpressReportOrderSchema = createInsertSchema(expressReportOrders).omit({ 
+  id: true, 
+  createdAt: true, 
+  paidAt: true, 
+  completedAt: true,
+  status: true,
+});
+export type InsertExpressReportOrder = z.infer<typeof insertExpressReportOrderSchema>;
+
+// =====================================================
+// Индивидуальные заказы (свободная форма)
+// =====================================================
+export const individualOrderStatusEnum = pgEnum("individual_order_status", ["new", "contacted", "in_progress", "completed", "cancelled"]);
+
+export const individualOrders = pgTable("individual_orders", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id),
+  name: varchar("name", { length: 255 }),
+  phone: varchar("phone", { length: 30 }),
+  socialNetwork: varchar("social_network", { length: 50 }),
+  socialContact: varchar("social_contact", { length: 255 }),
+  email: varchar("email", { length: 255 }).notNull(),
+  websiteUrl: varchar("website_url", { length: 500 }),
+  inn: varchar("inn", { length: 15 }),
+  isIndividual: boolean("is_individual").default(false),
+  message: text("message"),
+  status: individualOrderStatusEnum("status").default("new").notNull(),
+  adminNotes: text("admin_notes"),
+  privacyConsent: boolean("privacy_consent").default(false).notNull(),
+  pdnConsent: boolean("pdn_consent").default(false).notNull(),
+  offerConsent: boolean("offer_consent").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type IndividualOrder = typeof individualOrders.$inferSelect;
+export const insertIndividualOrderSchema = createInsertSchema(individualOrders).omit({ 
+  id: true, 
+  createdAt: true, 
+  updatedAt: true,
+  status: true,
+});
+export type InsertIndividualOrder = z.infer<typeof insertIndividualOrderSchema>;
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
