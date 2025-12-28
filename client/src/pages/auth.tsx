@@ -10,18 +10,18 @@ import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import { Shield, Loader2, Mail, User, Phone, KeyRound, ArrowLeft, CheckCircle, RefreshCw } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { VKIDWidget } from "@/components/vk-id-widget";
 import { YandexIDButton } from "@/components/yandex-id-button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Link } from "wouter";
 
 type AuthMode = "login" | "register";
-type LoginStep = "consents" | "credentials" | "otp" | "email_not_verified" | "registration_pending";
+type LoginStep = "credentials" | "otp" | "email_not_verified" | "registration_pending";
 
 export default function AuthPage() {
   const [mode, setMode] = useState<AuthMode>("login");
-  const [loginStep, setLoginStep] = useState<LoginStep>("consents");
+  const [loginStep, setLoginStep] = useState<LoginStep>("credentials");
+  const [consentsAccepted, setConsentsAccepted] = useState(false);
   const [, navigate] = useLocation();
   const searchString = useSearch();
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
@@ -58,16 +58,18 @@ export default function AuthPage() {
     pdnConsent: false,
     offerConsent: false,
   });
+  const [registerConsents, setRegisterConsents] = useState({
+    privacyConsent: false,
+    pdnConsent: false,
+    offerConsent: false,
+    marketingConsent: false,
+  });
   const [otpData, setOtpData] = useState({ userId: 0, code: "" });
   const [registerData, setRegisterData] = useState({
     name: "",
     email: "",
     phone: "",
     password: "",
-    privacyConsent: false,
-    pdnConsent: false,
-    offerConsent: false,
-    marketingConsent: false,
   });
   const [pendingVerifyEmail, setPendingVerifyEmail] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -136,7 +138,16 @@ export default function AuthPage() {
   });
 
   const registerMutation = useMutation({
-    mutationFn: async (data: { name: string; email: string; phone?: string; password: string; privacyConsent: boolean; pdnConsent: boolean; offerConsent: boolean; marketingConsent: boolean }) => {
+    mutationFn: async (data: { 
+      name: string; 
+      email: string; 
+      phone?: string; 
+      password: string; 
+      privacyConsent: boolean; 
+      pdnConsent: boolean; 
+      offerConsent: boolean; 
+      marketingConsent: boolean 
+    }) => {
       const response = await apiRequest("POST", "/api/auth/register", data);
       return response.json();
     },
@@ -198,14 +209,20 @@ export default function AuthPage() {
   };
 
   const handleBackToCredentials = () => {
-    setLoginStep("consents");
+    setLoginStep("credentials");
     setOtpData({ userId: 0, code: "" });
     setPendingVerifyEmail("");
   };
 
   const handleRegisterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    registerMutation.mutate(registerData);
+    registerMutation.mutate({
+      ...registerData,
+      privacyConsent: registerConsents.privacyConsent,
+      pdnConsent: registerConsents.pdnConsent,
+      offerConsent: registerConsents.offerConsent,
+      marketingConsent: registerConsents.marketingConsent,
+    });
   };
 
   const handleResendVerification = () => {
@@ -214,7 +231,6 @@ export default function AuthPage() {
     }
   };
 
-  // Resend cooldown timer
   useEffect(() => {
     if (resendCooldown > 0) {
       const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
@@ -222,7 +238,16 @@ export default function AuthPage() {
     }
   }, [resendCooldown]);
 
+  const handleAcceptConsents = () => {
+    setConsentsAccepted(true);
+  };
+
+  const loginConsentsValid = loginConsents.privacyConsent && loginConsents.pdnConsent && loginConsents.offerConsent;
+  const registerConsentsValid = registerConsents.privacyConsent && registerConsents.pdnConsent && registerConsents.offerConsent;
+
   const isLoading = loginMutation.isPending || registerMutation.isPending || verifyOtpMutation.isPending || resendVerificationMutation.isPending;
+
+  const showConsentOverlay = !consentsAccepted && loginStep === "credentials";
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -237,108 +262,161 @@ export default function AuthPage() {
           </p>
         </div>
 
-        <Card>
-          {loginStep === "consents" ? (
-            <>
-              <CardHeader>
-                <CardTitle>Перед входом</CardTitle>
-                <CardDescription>
-                  Для продолжения необходимо принять условия использования сервиса
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
+        <Card className="relative overflow-visible">
+          {showConsentOverlay && (
+            <div className="absolute inset-0 z-50 bg-background/95 backdrop-blur-sm rounded-lg flex flex-col justify-center p-6">
+              <div className="space-y-4">
+                <div className="text-center mb-4">
+                  <h3 className="text-lg font-semibold">
+                    {mode === "login" ? "Перед входом" : "Перед регистрацией"}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Для продолжения необходимо принять условия
+                  </p>
+                </div>
+
                 <div className="space-y-3">
-                  <div className="flex items-start gap-3">
-                    <Checkbox
-                      id="consent-privacy"
-                      checked={loginConsents.privacyConsent}
-                      onCheckedChange={(checked) => 
-                        setLoginConsents({ ...loginConsents, privacyConsent: checked === true })
-                      }
-                      data-testid="checkbox-consent-privacy"
-                    />
-                    <label
-                      htmlFor="consent-privacy"
-                      className="text-sm leading-tight cursor-pointer"
-                    >
-                      Я ознакомлен с{" "}
-                      <Link href="/privacy-policy" className="text-primary hover:underline">
-                        политикой конфиденциальности
-                      </Link>
-                    </label>
-                  </div>
+                  {mode === "login" ? (
+                    <>
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          id="overlay-privacy"
+                          checked={loginConsents.privacyConsent}
+                          onCheckedChange={(checked) => 
+                            setLoginConsents({ ...loginConsents, privacyConsent: checked === true })
+                          }
+                          data-testid="checkbox-overlay-privacy"
+                        />
+                        <label htmlFor="overlay-privacy" className="text-sm leading-tight cursor-pointer">
+                          Я ознакомлен с{" "}
+                          <Link href="/privacy-policy" className="text-primary hover:underline">
+                            политикой конфиденциальности
+                          </Link>
+                        </label>
+                      </div>
 
-                  <div className="flex items-start gap-3">
-                    <Checkbox
-                      id="consent-pdn"
-                      checked={loginConsents.pdnConsent}
-                      onCheckedChange={(checked) => 
-                        setLoginConsents({ ...loginConsents, pdnConsent: checked === true })
-                      }
-                      data-testid="checkbox-consent-pdn"
-                    />
-                    <label
-                      htmlFor="consent-pdn"
-                      className="text-sm leading-tight cursor-pointer"
-                    >
-                      Даю{" "}
-                      <Link href="/personal-data-agreement" className="text-primary hover:underline">
-                        согласие на обработку персональных данных
-                      </Link>
-                    </label>
-                  </div>
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          id="overlay-pdn"
+                          checked={loginConsents.pdnConsent}
+                          onCheckedChange={(checked) => 
+                            setLoginConsents({ ...loginConsents, pdnConsent: checked === true })
+                          }
+                          data-testid="checkbox-overlay-pdn"
+                        />
+                        <label htmlFor="overlay-pdn" className="text-sm leading-tight cursor-pointer">
+                          Даю{" "}
+                          <Link href="/personal-data-agreement" className="text-primary hover:underline">
+                            согласие на обработку персональных данных
+                          </Link>
+                        </label>
+                      </div>
 
-                  <div className="flex items-start gap-3">
-                    <Checkbox
-                      id="consent-offer"
-                      checked={loginConsents.offerConsent}
-                      onCheckedChange={(checked) => 
-                        setLoginConsents({ ...loginConsents, offerConsent: checked === true })
-                      }
-                      data-testid="checkbox-consent-offer"
-                    />
-                    <label
-                      htmlFor="consent-offer"
-                      className="text-sm leading-tight cursor-pointer"
-                    >
-                      Принимаю условия{" "}
-                      <Link href="/offer" className="text-primary hover:underline">
-                        договора оферты
-                      </Link>
-                    </label>
-                  </div>
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          id="overlay-offer"
+                          checked={loginConsents.offerConsent}
+                          onCheckedChange={(checked) => 
+                            setLoginConsents({ ...loginConsents, offerConsent: checked === true })
+                          }
+                          data-testid="checkbox-overlay-offer"
+                        />
+                        <label htmlFor="overlay-offer" className="text-sm leading-tight cursor-pointer">
+                          Принимаю условия{" "}
+                          <Link href="/offer" className="text-primary hover:underline">
+                            договора оферты
+                          </Link>
+                        </label>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          id="overlay-reg-privacy"
+                          checked={registerConsents.privacyConsent}
+                          onCheckedChange={(checked) => 
+                            setRegisterConsents({ ...registerConsents, privacyConsent: checked === true })
+                          }
+                          data-testid="checkbox-overlay-reg-privacy"
+                        />
+                        <label htmlFor="overlay-reg-privacy" className="text-sm leading-tight cursor-pointer">
+                          Я ознакомлен с{" "}
+                          <Link href="/privacy-policy" className="text-primary hover:underline">
+                            политикой конфиденциальности
+                          </Link>
+                        </label>
+                      </div>
+
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          id="overlay-reg-pdn"
+                          checked={registerConsents.pdnConsent}
+                          onCheckedChange={(checked) => 
+                            setRegisterConsents({ ...registerConsents, pdnConsent: checked === true })
+                          }
+                          data-testid="checkbox-overlay-reg-pdn"
+                        />
+                        <label htmlFor="overlay-reg-pdn" className="text-sm leading-tight cursor-pointer">
+                          Даю{" "}
+                          <Link href="/personal-data-agreement" className="text-primary hover:underline">
+                            согласие на обработку персональных данных
+                          </Link>
+                        </label>
+                      </div>
+
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          id="overlay-reg-offer"
+                          checked={registerConsents.offerConsent}
+                          onCheckedChange={(checked) => 
+                            setRegisterConsents({ ...registerConsents, offerConsent: checked === true })
+                          }
+                          data-testid="checkbox-overlay-reg-offer"
+                        />
+                        <label htmlFor="overlay-reg-offer" className="text-sm leading-tight cursor-pointer">
+                          Принимаю условия{" "}
+                          <Link href="/offer" className="text-primary hover:underline">
+                            договора оферты
+                          </Link>
+                        </label>
+                      </div>
+
+                      <div className="flex items-start gap-3 pt-2 border-t">
+                        <Checkbox
+                          id="overlay-reg-marketing"
+                          checked={registerConsents.marketingConsent}
+                          onCheckedChange={(checked) => 
+                            setRegisterConsents({ ...registerConsents, marketingConsent: checked === true })
+                          }
+                          data-testid="checkbox-overlay-reg-marketing"
+                        />
+                        <label htmlFor="overlay-reg-marketing" className="text-sm leading-tight cursor-pointer">
+                          <span className="text-muted-foreground">
+                            Согласен получать уведомления на email
+                          </span>
+                          <span className="block mt-1 text-xs font-medium text-green-600 dark:text-green-400 animate-pulse">
+                            СПАМА не будет - только при изменениях ФЗ-152 уведомим вас!
+                          </span>
+                        </label>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <Button
-                  className="w-full"
-                  disabled={!loginConsents.privacyConsent || !loginConsents.pdnConsent || !loginConsents.offerConsent}
-                  onClick={() => setLoginStep("credentials")}
-                  data-testid="button-continue-to-auth"
+                  className="w-full mt-4"
+                  disabled={mode === "login" ? !loginConsentsValid : !registerConsentsValid}
+                  onClick={handleAcceptConsents}
+                  data-testid="button-accept-consents"
                 >
-                  Продолжить
+                  Принять и продолжить
                 </Button>
+              </div>
+            </div>
+          )}
 
-                <div className="text-center">
-                  <button
-                    type="button"
-                    onClick={() => setMode(mode === "login" ? "register" : "login")}
-                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                    data-testid="button-toggle-mode-consents"
-                  >
-                    {mode === "login" ? (
-                      <>
-                        Нет аккаунта? <span className="text-primary font-medium">Зарегистрируйтесь</span>
-                      </>
-                    ) : (
-                      <>
-                        Уже есть аккаунт? <span className="text-primary font-medium">Войдите</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </CardContent>
-            </>
-          ) : (loginStep === "email_not_verified" || loginStep === "registration_pending") ? (
+          {(loginStep === "email_not_verified" || loginStep === "registration_pending") ? (
             <CardContent className="pt-6">
               <div className="text-center space-y-4">
                 {loginStep === "registration_pending" ? (
@@ -421,368 +499,262 @@ export default function AuthPage() {
               </CardHeader>
               <CardContent>
                 {loginStep === "otp" ? (
-              <form onSubmit={handleOtpSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="otp-code">Код подтверждения</Label>
-                  <div className="relative">
-                    <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="otp-code"
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={6}
-                      placeholder="123456"
-                      value={otpData.code}
-                      onChange={(e) => setOtpData({ ...otpData, code: e.target.value.replace(/\D/g, "") })}
-                      className="pl-10 text-center text-2xl tracking-widest"
-                      disabled={isLoading}
-                      data-testid="input-otp-code"
-                      required
-                      autoFocus
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground text-center">
-                    Код отправлен на {loginData.email}
-                  </p>
-                </div>
+                  <form onSubmit={handleOtpSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="otp-code">Код подтверждения</Label>
+                      <div className="relative">
+                        <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="otp-code"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          maxLength={6}
+                          placeholder="123456"
+                          value={otpData.code}
+                          onChange={(e) => setOtpData({ ...otpData, code: e.target.value.replace(/\D/g, "") })}
+                          className="pl-10 text-center text-2xl tracking-widest"
+                          disabled={isLoading}
+                          data-testid="input-otp-code"
+                          required
+                          autoFocus
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground text-center">
+                        Код действителен 10 минут
+                      </p>
+                    </div>
 
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={isLoading || otpData.code.length !== 6}
-                  data-testid="button-verify-otp"
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Проверка...
-                    </>
-                  ) : (
-                    "Подтвердить"
-                  )}
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="w-full"
-                  onClick={handleBackToCredentials}
-                  data-testid="button-back-to-login"
-                >
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Назад к входу
-                </Button>
-              </form>
-            ) : mode === "login" ? (
-              <form onSubmit={handleLoginSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="login-email">Email</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="login-email"
-                      type="email"
-                      placeholder="ivan@mail.ru"
-                      value={loginData.email}
-                      onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
-                      className="pl-10"
-                      disabled={isLoading}
-                      data-testid="input-login-email"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="login-password">Пароль</Label>
-                  <PasswordInput
-                    id="login-password"
-                    placeholder="••••••••"
-                    value={loginData.password}
-                    onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
-                    showLeftIcon
-                    disabled={isLoading}
-                    data-testid="input-login-password"
-                    required
-                  />
-                </div>
-
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={isLoading}
-                  data-testid="button-login"
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Вход...
-                    </>
-                  ) : (
-                    "Войти"
-                  )}
-                </Button>
-
-                <div className="text-center">
-                  <a
-                    href="/forgot-password"
-                    className="text-sm text-primary hover:underline"
-                    data-testid="link-forgot-password"
-                  >
-                    Забыли пароль?
-                  </a>
-                </div>
-
-                <div className="relative my-4">
-                  <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t" />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-background px-2 text-muted-foreground">
-                      или войти через
-                    </span>
-                  </div>
-                </div>
-
-                {/* OAuth кнопки - активны, так как согласия уже приняты */}
-                <div className="space-y-3">
-                  <p className="text-xs text-center text-muted-foreground">
-                    или войти через VK ID с использованием данных из сервиса
-                  </p>
-                  
-                  <div className="w-full">
-                    <VKIDWidget disabled={isLoading} />
-                  </div>
-                  
-                  <YandexIDButton 
-                    disabled={isLoading} 
-                    size="m"
-                    variant="secondary"
-                    className="w-full"
-                  />
-                </div>
-
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="w-full"
-                  onClick={() => setLoginStep("consents")}
-                  data-testid="button-back-to-consents"
-                >
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Назад
-                </Button>
-              </form>
-            ) : (
-              <form onSubmit={handleRegisterSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="register-name">Ваше имя</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="register-name"
-                      type="text"
-                      placeholder="Иван Петров"
-                      value={registerData.name}
-                      onChange={(e) => setRegisterData({ ...registerData, name: e.target.value })}
-                      className="pl-10"
-                      disabled={isLoading}
-                      data-testid="input-register-name"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="register-email">Email</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="register-email"
-                      type="email"
-                      placeholder="ivan@mail.ru"
-                      value={registerData.email}
-                      onChange={(e) => setRegisterData({ ...registerData, email: e.target.value })}
-                      className="pl-10"
-                      disabled={isLoading}
-                      data-testid="input-register-email"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="register-phone">Телефон (опционально)</Label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="register-phone"
-                      type="tel"
-                      placeholder="+7 (999) 999-99-99"
-                      value={registerData.phone}
-                      onChange={(e) => setRegisterData({ ...registerData, phone: e.target.value })}
-                      className="pl-10"
-                      disabled={isLoading}
-                      data-testid="input-register-phone"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="register-password">Пароль</Label>
-                  <PasswordInput
-                    id="register-password"
-                    placeholder="Минимум 6 символов"
-                    value={registerData.password}
-                    onChange={(e) => setRegisterData({ ...registerData, password: e.target.value })}
-                    showLeftIcon
-                    disabled={isLoading}
-                    data-testid="input-register-password"
-                    required
-                    minLength={6}
-                  />
-                </div>
-
-                {/* ФЗ-152: Чекбоксы согласий при регистрации */}
-                <div className="space-y-3 pt-2 border-t">
-                  {/* Ознакомление с политикой конфиденциальности */}
-                  <div className="flex items-start gap-2">
-                    <Checkbox
-                      id="privacy-consent"
-                      checked={registerData.privacyConsent}
-                      onCheckedChange={(checked) => 
-                        setRegisterData({ ...registerData, privacyConsent: checked === true })
-                      }
-                      disabled={isLoading}
-                      data-testid="checkbox-privacy-consent"
-                    />
-                    <label
-                      htmlFor="privacy-consent"
-                      className="text-sm leading-tight cursor-pointer"
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      disabled={isLoading || otpData.code.length !== 6}
+                      data-testid="button-verify-otp"
                     >
-                      Я ознакомлен с{" "}
-                      <Link href="/privacy-policy" className="text-primary hover:underline">
-                        политикой конфиденциальности
-                      </Link>
-                    </label>
-                  </div>
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Проверка...
+                        </>
+                      ) : (
+                        "Подтвердить"
+                      )}
+                    </Button>
 
-                  {/* Обязательное согласие на обработку ПДн */}
-                  <div className="flex items-start gap-2">
-                    <Checkbox
-                      id="pdn-consent"
-                      checked={registerData.pdnConsent}
-                      onCheckedChange={(checked) => 
-                        setRegisterData({ ...registerData, pdnConsent: checked === true })
-                      }
-                      disabled={isLoading}
-                      data-testid="checkbox-pdn-consent"
-                    />
-                    <label
-                      htmlFor="pdn-consent"
-                      className="text-sm leading-tight cursor-pointer"
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="w-full"
+                      onClick={handleBackToCredentials}
+                      data-testid="button-back-from-otp"
                     >
-                      Даю{" "}
-                      <Link href="/personal-data-agreement" className="text-primary hover:underline">
-                        согласие на обработку персональных данных
-                      </Link>
-                    </label>
-                  </div>
+                      <ArrowLeft className="h-4 w-4 mr-2" />
+                      Назад
+                    </Button>
+                  </form>
+                ) : mode === "login" ? (
+                  <form onSubmit={handleLoginSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="login-email">Email</Label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="login-email"
+                          type="email"
+                          placeholder="ivan@mail.ru"
+                          value={loginData.email}
+                          onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
+                          className="pl-10"
+                          disabled={isLoading || !consentsAccepted}
+                          data-testid="input-login-email"
+                          required
+                        />
+                      </div>
+                    </div>
 
-                  {/* Принятие оферты */}
-                  <div className="flex items-start gap-2">
-                    <Checkbox
-                      id="offer-consent"
-                      checked={registerData.offerConsent}
-                      onCheckedChange={(checked) => 
-                        setRegisterData({ ...registerData, offerConsent: checked === true })
-                      }
-                      disabled={isLoading}
-                      data-testid="checkbox-offer-consent"
-                    />
-                    <label
-                      htmlFor="offer-consent"
-                      className="text-sm leading-tight cursor-pointer"
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <Label htmlFor="login-password">Пароль</Label>
+                        <Link 
+                          href="/forgot-password" 
+                          className="text-xs text-muted-foreground hover:text-primary transition-colors"
+                          data-testid="link-forgot-password"
+                        >
+                          Забыли пароль?
+                        </Link>
+                      </div>
+                      <PasswordInput
+                        id="login-password"
+                        placeholder="Введите пароль"
+                        value={loginData.password}
+                        onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
+                        showLeftIcon
+                        disabled={isLoading || !consentsAccepted}
+                        data-testid="input-login-password"
+                        required
+                      />
+                    </div>
+
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      disabled={isLoading || !consentsAccepted}
+                      data-testid="button-login"
                     >
-                      Принимаю условия{" "}
-                      <Link href="/offer" className="text-primary hover:underline">
-                        договора оферты
-                      </Link>
-                    </label>
-                  </div>
-                  
-                  {/* Необязательное согласие на маркетинговые рассылки */}
-                  <div className="flex items-start gap-2">
-                    <Checkbox
-                      id="marketing-consent"
-                      checked={registerData.marketingConsent}
-                      onCheckedChange={(checked) => 
-                        setRegisterData({ ...registerData, marketingConsent: checked === true })
-                      }
-                      disabled={isLoading}
-                      data-testid="checkbox-marketing-consent"
-                    />
-                    <label
-                      htmlFor="marketing-consent"
-                      className="text-sm text-muted-foreground leading-tight cursor-pointer"
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Вход...
+                        </>
+                      ) : (
+                        "Войти"
+                      )}
+                    </Button>
+
+                    <div className="relative my-4">
+                      <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t" />
+                      </div>
+                      <div className="relative flex justify-center text-xs uppercase">
+                        <span className="bg-card px-2 text-muted-foreground">
+                          или войдите через
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="w-full">
+                        <VKIDWidget disabled={isLoading || !consentsAccepted} />
+                      </div>
+                      
+                      <YandexIDButton 
+                        disabled={isLoading || !consentsAccepted} 
+                        size="m"
+                        variant="secondary"
+                        className="w-full"
+                      />
+                    </div>
+                  </form>
+                ) : (
+                  <form onSubmit={handleRegisterSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="register-name">Ваше имя</Label>
+                      <div className="relative">
+                        <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="register-name"
+                          type="text"
+                          placeholder="Иван Петров"
+                          value={registerData.name}
+                          onChange={(e) => setRegisterData({ ...registerData, name: e.target.value })}
+                          className="pl-10"
+                          disabled={isLoading || !consentsAccepted}
+                          data-testid="input-register-name"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="register-email">Email</Label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="register-email"
+                          type="email"
+                          placeholder="ivan@mail.ru"
+                          value={registerData.email}
+                          onChange={(e) => setRegisterData({ ...registerData, email: e.target.value })}
+                          className="pl-10"
+                          disabled={isLoading || !consentsAccepted}
+                          data-testid="input-register-email"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="register-phone">Телефон (опционально)</Label>
+                      <div className="relative">
+                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="register-phone"
+                          type="tel"
+                          placeholder="+7 (999) 999-99-99"
+                          value={registerData.phone}
+                          onChange={(e) => setRegisterData({ ...registerData, phone: e.target.value })}
+                          className="pl-10"
+                          disabled={isLoading || !consentsAccepted}
+                          data-testid="input-register-phone"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="register-password">Пароль</Label>
+                      <PasswordInput
+                        id="register-password"
+                        placeholder="Минимум 6 символов"
+                        value={registerData.password}
+                        onChange={(e) => setRegisterData({ ...registerData, password: e.target.value })}
+                        showLeftIcon
+                        disabled={isLoading || !consentsAccepted}
+                        data-testid="input-register-password"
+                        required
+                        minLength={6}
+                      />
+                    </div>
+
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      disabled={isLoading || !consentsAccepted}
+                      data-testid="button-register"
                     >
-                      Согласен получать новости и предложения сервиса SecureLex на указанный e-mail
-                    </label>
-                  </div>
-                </div>
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Регистрация...
+                        </>
+                      ) : (
+                        "Создать аккаунт"
+                      )}
+                    </Button>
 
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={isLoading || !registerData.privacyConsent || !registerData.pdnConsent || !registerData.offerConsent}
-                  data-testid="button-register"
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Регистрация...
-                    </>
-                  ) : (
-                    "Создать аккаунт"
-                  )}
-                </Button>
+                    <div className="relative my-4">
+                      <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t" />
+                      </div>
+                      <div className="relative flex justify-center text-xs uppercase">
+                        <span className="bg-card px-2 text-muted-foreground">
+                          или зарегистрируйтесь через
+                        </span>
+                      </div>
+                    </div>
 
-                <div className="relative my-4">
-                  <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t" />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-card px-2 text-muted-foreground">
-                      или зарегистрируйтесь через
-                    </span>
-                  </div>
-                </div>
+                    <div className="space-y-3">
+                      <div className="w-full">
+                        <VKIDWidget disabled={isLoading || !consentsAccepted} />
+                      </div>
+                      
+                      <YandexIDButton 
+                        disabled={isLoading || !consentsAccepted} 
+                        size="m"
+                        variant="secondary"
+                        className="w-full"
+                      />
+                    </div>
+                  </form>
+                )}
 
-                <div className="space-y-3">
-                  <p className="text-xs text-center text-muted-foreground">
-                    Быстрая регистрация через VK ID
-                  </p>
-                  
-                  <div className="w-full">
-                    <VKIDWidget disabled={isLoading || !registerData.privacyConsent || !registerData.pdnConsent || !registerData.offerConsent} />
-                  </div>
-                  
-                  <YandexIDButton 
-                    disabled={isLoading || !registerData.privacyConsent || !registerData.pdnConsent || !registerData.offerConsent} 
-                    size="m"
-                    variant="secondary"
-                    className="w-full"
-                  />
-                </div>
-              </form>
-            )}
-
-            {loginStep !== "otp" && (
+                {loginStep !== "otp" && (
                   <div className="mt-6 text-center">
                     <button
                       type="button"
-                      onClick={() => setMode(mode === "login" ? "register" : "login")}
+                      onClick={() => {
+                        setMode(mode === "login" ? "register" : "login");
+                        setConsentsAccepted(false);
+                      }}
                       className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                       data-testid="button-toggle-auth-mode"
                     >
