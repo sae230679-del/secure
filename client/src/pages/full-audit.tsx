@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { ColorModeToggle } from "@/components/color-mode-toggle";
 import { Footer } from "@/components/footer";
 import { FULL_AUDIT_PACKAGES, formatPrice } from "@/lib/packages-data";
@@ -30,6 +32,8 @@ import {
   Loader2,
   Globe,
   Sparkles,
+  Send,
+  MessageSquare,
 } from "lucide-react";
 
 type SiteTypeResult = {
@@ -48,6 +52,56 @@ export default function FullAuditPage() {
   const [isDetecting, setIsDetecting] = useState(false);
   const [detectedResult, setDetectedResult] = useState<SiteTypeResult | null>(null);
 
+  const [individualForm, setIndividualForm] = useState({
+    name: "",
+    email: "",
+    url: "",
+    description: "",
+  });
+  const [isSubmittingIndividual, setIsSubmittingIndividual] = useState(false);
+  const [individualSubmitted, setIndividualSubmitted] = useState(false);
+
+  const handleIndividualSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!individualForm.email || !individualForm.description) {
+      toast({
+        title: "Заполните обязательные поля",
+        description: "Email и описание задачи обязательны",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSubmittingIndividual(true);
+    try {
+      const response = await fetch("/api/public/individual-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(individualForm),
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Ошибка отправки");
+      }
+      
+      setIndividualSubmitted(true);
+      toast({
+        title: "Заявка отправлена",
+        description: "Мы свяжемся с вами в ближайшее время",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Ошибка",
+        description: err.message || "Не удалось отправить заявку",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmittingIndividual(false);
+    }
+  };
+
   const handleDetectSiteType = async () => {
     if (!detectUrl.trim()) {
       toast({
@@ -64,7 +118,7 @@ export default function FullAuditPage() {
       const response = await fetch("/api/public/detect-site-type", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: detectUrl }),
+        body: JSON.stringify({ websiteUrl: detectUrl }),
       });
       
       if (!response.ok) {
@@ -306,18 +360,95 @@ export default function FullAuditPage() {
             </Button>
           </div>
 
-          <div className="mt-12 p-6 rounded-lg bg-muted/50 text-center">
-            <h3 className="text-lg font-semibold mb-2">Не нашли подходящий тип сайта?</h3>
-            <p className="text-muted-foreground mb-4">
-              Свяжитесь с нами для индивидуального расчёта стоимости аудита
-            </p>
-            <Button variant="outline" asChild>
-              <Link href="/contacts">
-                Связаться с нами
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-          </div>
+          <Card className="mt-12">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageSquare className="h-5 w-5 text-primary" />
+                Индивидуальный заказ
+              </CardTitle>
+              <CardDescription>
+                Не нашли подходящий тип? Опишите вашу задачу, и мы подготовим индивидуальное предложение
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {individualSubmitted ? (
+                <div className="text-center py-6">
+                  <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
+                  <h3 className="font-semibold text-lg mb-2">Заявка отправлена</h3>
+                  <p className="text-muted-foreground">
+                    Мы рассмотрим вашу заявку и свяжемся с вами в ближайшее время
+                  </p>
+                </div>
+              ) : (
+                <form onSubmit={handleIndividualSubmit} className="space-y-4">
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="ind-name">Имя</Label>
+                      <Input
+                        id="ind-name"
+                        placeholder="Ваше имя"
+                        value={individualForm.name}
+                        onChange={(e) => setIndividualForm(prev => ({ ...prev, name: e.target.value }))}
+                        data-testid="input-individual-name"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="ind-email">Email *</Label>
+                      <Input
+                        id="ind-email"
+                        type="email"
+                        placeholder="email@example.com"
+                        value={individualForm.email}
+                        onChange={(e) => setIndividualForm(prev => ({ ...prev, email: e.target.value }))}
+                        required
+                        data-testid="input-individual-email"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="ind-url">URL сайта (если есть)</Label>
+                    <Input
+                      id="ind-url"
+                      placeholder="example.com"
+                      value={individualForm.url}
+                      onChange={(e) => setIndividualForm(prev => ({ ...prev, url: e.target.value }))}
+                      data-testid="input-individual-url"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="ind-description">Опишите вашу задачу *</Label>
+                    <Textarea
+                      id="ind-description"
+                      placeholder="Опишите, что именно вам нужно: какой у вас сайт, какие данные вы собираете, какие документы нужны..."
+                      value={individualForm.description}
+                      onChange={(e) => setIndividualForm(prev => ({ ...prev, description: e.target.value }))}
+                      rows={4}
+                      required
+                      data-testid="input-individual-description"
+                    />
+                  </div>
+                  <Button 
+                    type="submit" 
+                    disabled={isSubmittingIndividual}
+                    className="w-full sm:w-auto"
+                    data-testid="button-submit-individual"
+                  >
+                    {isSubmittingIndividual ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Отправка...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="h-4 w-4 mr-2" />
+                        Отправить заявку
+                      </>
+                    )}
+                  </Button>
+                </form>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </section>
 

@@ -1983,6 +1983,40 @@ export async function registerRoutes(
     }
   });
 
+  // Public API: Individual request form submission
+  app.post("/api/public/individual-request", async (req, res) => {
+    try {
+      const schema = z.object({
+        name: z.string().optional(),
+        email: z.string().email("Неверный формат email"),
+        url: z.string().optional(),
+        description: z.string().min(10, "Описание должно содержать минимум 10 символов"),
+      });
+      
+      const data = schema.parse(req.body);
+      
+      // Store individual request as a special type of audit or support ticket
+      // For now, just log it and return success (can be enhanced later with notifications)
+      console.log("Individual request received:", {
+        name: data.name,
+        email: data.email,
+        url: data.url,
+        descriptionLength: data.description.length,
+        timestamp: new Date().toISOString(),
+      });
+      
+      // TODO: Send email notification to admin, store in database
+      
+      res.json({ success: true, message: "Заявка успешно отправлена" });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors[0].message });
+      }
+      console.error("Individual request error:", error);
+      res.status(500).json({ error: "Ошибка при отправке заявки" });
+    }
+  });
+
   // Public maintenance mode check (no auth required)
   app.get("/api/maintenance-mode", async (req, res) => {
     try {
