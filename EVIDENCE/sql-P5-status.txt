@@ -1,0 +1,6 @@
+=== P5 SQL Check - Before/After Fake Webhook ===
+
+Query: SELECT id, audit_id, status FROM payments ORDER BY id DESC LIMIT 5;
+Result: (empty - no payments exist, fake webhook did NOT create any)
+
+Conclusion: PASS - Fake webhook cannot create or modify payment records

@@ -1,0 +1,28 @@
+HTTP/1.1 200 OK
+Vary: Origin
+Access-Control-Allow-Credentials: true
+Content-Security-Policy: default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval' https://mc.yandex.ru https://mc.yandex.com https://yastatic.net https://id.vk.ru https://vk.com;style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;img-src 'self' data: blob: https: http:;font-src 'self' https://fonts.gstatic.com data:;connect-src 'self' https://mc.yandex.ru https://mc.yandex.com https://id.vk.ru https://api.vk.ru https://vk.com https://oauth.vk.com wss: ws:;frame-src 'self' https://id.vk.ru https://vk.com https://oauth.vk.com;object-src 'none';base-uri 'self';form-action 'self';frame-ancestors 'self';script-src-attr 'none'
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Resource-Policy: same-origin
+Origin-Agent-Cluster: ?1
+Referrer-Policy: strict-origin-when-cross-origin
+Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+X-Content-Type-Options: nosniff
+X-DNS-Prefetch-Control: off
+X-Download-Options: noopen
+X-Frame-Options: SAMEORIGIN
+X-Permitted-Cross-Domain-Policies: none
+X-XSS-Protection: 0
+Permissions-Policy: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(self), usb=()
+RateLimit-Policy: 100;w=900
+RateLimit-Limit: 100
+RateLimit-Remaining: 95
+RateLimit-Reset: 848
+Content-Type: application/json; charset=utf-8
+Content-Length: 77
+ETag: W/"4d-+wQPGDCiNFWhFXB+/g6RovuQ3RM"
+Date: Sun, 28 Dec 2025 19:48:50 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"success":true,"message":"Заявка успешно отправлена"}

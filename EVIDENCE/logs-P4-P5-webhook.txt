@@ -1,0 +1,37 @@
+<workflow>
+<workflow_name>Start application</workflow_name>
+<status>RUNNING</status><run_id>fKpvyNJCa32zEyzi_kl3o</run_id><timestamp>2025-12-28T19:49:48.554671+00:00</timestamp>
+<logs>> rest-express@1.0.0 dev
+> NODE_ENV=development tsx server/index.ts
+[CONFIG] Environment: DEVELOPMENT
+[CONFIG] Cookie settings: sameSite=lax, secure=false, allowInsecureCookies=true
+7:36:08 PM [express] serving on port 5000
+[NO_SIMULATION_GUARD] Сканирование кода на запрещённые паттерны...
+[NO_SIMULATION_GUARD] OK: Запрещённые паттерны не обнаружены
+[storage] SuperAdmin already exists
+[SEED] Guide sections already exist, skipping...
+7:36:10 PM [express] Application fully initialized
+[PDN Job] Skipped scheduling in development mode
+7:47:58 PM [express] GET /api/health 200 in 4ms :: {"ok":true,"version":"1.0.0","environment":"development","timestamp":"2025-12-28T19:47:58.760Z"}
+[AUTH] User not found
+7:48:09 PM [express] POST /api/auth/login 401 in 17ms :: {"error":"Неверный email или пароль","code":"INVALID_CREDENTIALS","message":"Неверный email или пароль"}
+[AUTH] Invalid password
+7:48:25 PM [express] POST /api/auth/login 401 in 115ms :: {"error":"Неверный email или пароль","code":"INVALID_CREDENTIALS","message":"Неверный email или пароль"}
+[Playwright] Using Chromium at: /nix/store/qa9cnw4v5xkxyip6mb9kxqfq1z4x2dx1-chromium-138.0.7204.100/bin/chromium
+7:48:50 PM [express] POST /api/public/detect-site-type 200 in 15313ms :: {"type":"landing","name":"Лендинг","description":"Одностраничный сайт для продвижения продукта","baseAuditPrice":4900,"confidence":"medium","signals":["Одностраничный сайт"]}
+Individual request received: {
+  name: 'Тест Тестов',
+  email: 'test@example.ru',
+  url: 'https://test.ru',
+  descriptionLength: 39,
+  timestamp: '2025-12-28T19:48:50.944Z'
+}
+7:48:50 PM [express] POST /api/public/individual-request 200 in 4ms :: {"success":true,"message":"Заявка успешно отправлена"}
+[Yookassa Webhook] Event: payment.succeeded {
+  "id": "fake-payment-id",
+  "metadata": {
+    "auditId": "999999"
+  }
+}
+7:49:43 PM [express] POST /api/yookassa/webhook 200 in 35ms :: {"status":"ok"}</logs>
+</workflow>
