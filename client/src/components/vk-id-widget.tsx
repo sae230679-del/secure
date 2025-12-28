@@ -45,15 +45,19 @@ export function VKIDWidget({ disabled = false }: VKIDWidgetProps) {
         
         const VKID = await import("@vkid/sdk");
         
-        VKID.Config.init({
-          app: config.app,
-          redirectUrl: config.redirectUrl,
-          state: config.state,
-          codeChallenge: config.codeChallenge,
-          scope: config.scope,
-          responseMode: VKID.ConfigResponseMode.Callback,
-          source: VKID.ConfigSource.LOWCODE,
-        });
+        try {
+          VKID.Config.init({
+            app: config.app,
+            redirectUrl: config.redirectUrl,
+            state: config.state,
+            codeChallenge: config.codeChallenge,
+            scope: config.scope,
+            responseMode: VKID.ConfigResponseMode.Callback,
+            source: VKID.ConfigSource.LOWCODE,
+          });
+        } catch (initError) {
+          console.warn("[VK ID Widget] Config init error (CORS in dev?):", initError);
+        }
 
         if (containerRef.current) {
           const oAuthList = new VKID.OAuthList();
@@ -113,7 +117,7 @@ export function VKIDWidget({ disabled = false }: VKIDWidgetProps) {
         setIsLoading(false);
       } catch (err) {
         console.error("[VK ID Widget] Init error:", err);
-        setError("Не удалось инициализировать VK ID");
+        setError("sdk_failed");
         setIsLoading(false);
       }
     };
@@ -121,8 +125,37 @@ export function VKIDWidget({ disabled = false }: VKIDWidgetProps) {
     initVKID();
   }, [toast, login, navigate]);
 
-  if (error) {
+  const handleFallbackVKLogin = () => {
+    if (disabled) return;
+    window.location.href = "/api/oauth/vk";
+  };
+
+  if (error === "VK ID не настроен") {
     return null;
+  }
+
+  if (error === "sdk_failed") {
+    return (
+      <div className="w-full">
+        <button
+          type="button"
+          onClick={handleFallbackVKLogin}
+          disabled={disabled}
+          className={`
+            w-full flex items-center justify-center gap-2 
+            h-11 rounded-lg font-medium transition-colors
+            bg-[#0077FF] hover:bg-[#0066DD] text-white
+            disabled:opacity-50 disabled:cursor-not-allowed
+          `}
+          data-testid="button-login-vk-fallback"
+        >
+          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M15.684 0H8.316C1.592 0 0 1.592 0 8.316v7.368C0 22.408 1.592 24 8.316 24h7.368C22.408 24 24 22.408 24 15.684V8.316C24 1.592 22.408 0 15.684 0zm3.692 17.123h-1.744c-.66 0-.862-.525-2.049-1.714-1.033-1.01-1.49-1.135-1.744-1.135-.356 0-.458.102-.458.593v1.575c0 .424-.135.678-1.253.678-1.846 0-3.896-1.12-5.339-3.202-2.17-3.046-2.764-5.339-2.764-5.813 0-.254.102-.491.593-.491h1.744c.44 0 .61.203.78.678.864 2.49 2.303 4.675 2.896 4.675.22 0 .322-.102.322-.66V9.721c-.068-1.186-.695-1.287-.695-1.71 0-.203.17-.407.44-.407h2.744c.373 0 .508.203.508.644v3.46c0 .372.17.508.271.508.22 0 .407-.136.813-.542 1.254-1.406 2.151-3.574 2.151-3.574.119-.254.305-.491.745-.491h1.744c.525 0 .644.27.525.644-.22 1.017-2.354 4.031-2.354 4.031-.186.305-.254.44 0 .78.186.254.796.779 1.203 1.253.745.847 1.32 1.558 1.473 2.049.17.475-.085.72-.576.72z"/>
+          </svg>
+          <span>Войти через ВКонтакте</span>
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -141,7 +174,7 @@ export function VKIDWidget({ disabled = false }: VKIDWidgetProps) {
       {disabled && !isLoading && (
         <div 
           className="absolute inset-0 bg-background/50 cursor-not-allowed"
-          title="Для входа через VK ID примите условия ниже"
+          title="Для входа через VK ID примите условия выше"
           data-testid="vk-id-widget-disabled-overlay"
         />
       )}

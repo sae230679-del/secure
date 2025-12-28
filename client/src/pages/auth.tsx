@@ -444,20 +444,8 @@ export default function AuthPage() {
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-                  <div className="flex-1 min-w-0">
-                    <VKIDWidget disabled={!loginConsents.privacyConsent || !loginConsents.pdnConsent || !loginConsents.offerConsent} />
-                  </div>
-                  <YandexIDButton 
-                    disabled={isLoading || !loginConsents.privacyConsent || !loginConsents.pdnConsent || !loginConsents.offerConsent} 
-                    size="m"
-                    variant="secondary"
-                    className="w-full sm:w-auto sm:flex-1"
-                  />
-                </div>
-
-                {/* ФЗ-152: Чекбоксы согласий при входе */}
-                <div className="space-y-2 pt-3 border-t">
+                {/* ФЗ-152: Чекбоксы согласий при входе - расположены ПЕРЕД кнопками */}
+                <div className="space-y-2 pb-3">
                   <div className="flex items-start gap-2">
                     <Checkbox
                       id="login-privacy-consent"
@@ -521,6 +509,36 @@ export default function AuthPage() {
                     </label>
                   </div>
                 </div>
+
+                {/* Кнопки OAuth с подсказкой */}
+                {(() => {
+                  const allConsentsGiven = loginConsents.privacyConsent && loginConsents.pdnConsent && loginConsents.offerConsent;
+                  const oauthDisabled = isLoading || !allConsentsGiven;
+                  
+                  return (
+                    <div className="space-y-3">
+                      {/* Подсказка когда кнопки заблокированы */}
+                      {!allConsentsGiven && (
+                        <div className="text-center text-xs sm:text-sm text-muted-foreground bg-muted/50 rounded-md p-2 border border-border">
+                          Для входа через ВКонтакте или Яндекс сначала примите условия выше
+                        </div>
+                      )}
+                      
+                      {/* VK ID виджет - 3 кнопки */}
+                      <div className="w-full">
+                        <VKIDWidget disabled={oauthDisabled} />
+                      </div>
+                      
+                      {/* Яндекс - широкая кнопка */}
+                      <YandexIDButton 
+                        disabled={oauthDisabled} 
+                        size="m"
+                        variant="secondary"
+                        className="w-full"
+                      />
+                    </div>
+                  );
+                })()}
               </form>
             ) : (
               <form onSubmit={handleRegisterSubmit} className="space-y-4">
