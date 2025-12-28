@@ -48,28 +48,24 @@ export function VKIDWidget() {
           codeChallenge: config.codeChallenge,
           scope: config.scope,
           responseMode: VKID.ConfigResponseMode.Callback,
-          mode: VKID.ConfigAuthMode.InNewTab,
+          source: VKID.ConfigSource.LOWCODE,
         });
 
         if (containerRef.current) {
-          const oauthList = new VKID.OAuthList();
+          const oneTap = new VKID.OneTap();
           
-          oauthList.render({
+          oneTap.render({
             container: containerRef.current,
-            oauthList: [
-              VKID.OAuthName.VK,
-              VKID.OAuthName.MAIL,
-              VKID.OAuthName.OK,
-            ],
+            showAlternativeLogin: true,
             scheme: VKID.Scheme.LIGHT,
             lang: VKID.Languages.RUS,
-            styles: {
-              height: 44,
-              borderRadius: 8,
-            },
           });
 
-          oauthList.on(VKID.OAuthListInternalEvents.LOGIN_SUCCESS, async (payload: { code: string; device_id: string; state?: string }) => {
+          oneTap.on(VKID.WidgetEvents.ERROR, (error: unknown) => {
+            console.error("[VK ID Widget] Error:", error);
+          });
+
+          oneTap.on(VKID.OneTapInternalEvents.LOGIN_SUCCESS, async (payload: { code: string; device_id: string; state?: string }) => {
             try {
               const exchangeResponse = await fetch("/api/oauth/vk/exchange", {
                 method: "POST",
@@ -109,15 +105,6 @@ export function VKIDWidget() {
               });
             }
           });
-
-          oauthList.on(VKID.WidgetEvents.ERROR, (error: unknown) => {
-            console.error("[VK ID Widget] Error:", error);
-            toast({
-              title: "Ошибка VK ID",
-              description: "Не удалось загрузить виджет авторизации.",
-              variant: "destructive",
-            });
-          });
         }
 
         setIsLoading(false);
@@ -144,7 +131,7 @@ export function VKIDWidget() {
       )}
       <div 
         ref={containerRef} 
-        id="VkIdSdkOAuthList"
+        id="VkIdSdkOneTap"
         className={isLoading ? "hidden" : ""}
         data-testid="vk-id-widget"
       />
