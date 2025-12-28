@@ -396,7 +396,7 @@ export default function AuthPage() {
                             Согласен получать уведомления на email
                           </span>
                           <span className="block mt-1 text-xs font-bold text-green-600 dark:text-green-400 animate-blink-green">
-                            СПАМА не будет - только при изменениях ФЗ-152 уведомим вас!
+                            СПАМА не будет! Уведомим об изменении ФЗ-152!
                           </span>
                         </label>
                       </div>
