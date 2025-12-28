@@ -433,35 +433,7 @@ export function ExpressCheck() {
   const handlePurchaseReport = async () => {
     if (!checkToken) return;
     
-    if (!isAuthenticated) {
-      navigate("/auth");
-      return;
-    }
-
-    setIsPurchasing(true);
-    try {
-      const response = await apiRequest("POST", "/api/express-report/purchase", { token: checkToken });
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || "Ошибка при создании отчета");
-      }
-
-      toast({
-        title: "Отчет создан",
-        description: "Переходим к оплате...",
-      });
-      
-      navigate(`/checkout/${data.auditId}`);
-    } catch (err: any) {
-      toast({
-        title: "Ошибка",
-        description: err.message || "Не удалось создать отчет",
-        variant: "destructive",
-      });
-    } finally {
-      setIsPurchasing(false);
-    }
+    navigate(`/order-report?token=${checkToken}`);
   };
 
   const handleDownloadPdf = async () => {

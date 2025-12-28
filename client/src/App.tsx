@@ -57,6 +57,7 @@ import OfferPage from "@/pages/offer";
 import PersonalDataAgreementPage from "@/pages/personal-data-agreement";
 import ToolsPage from "@/pages/tools";
 import FullAuditPage from "@/pages/full-audit";
+import OrderReportPage from "@/pages/order-report";
 import GuidePage from "@/pages/guide";
 import GuideArticlePage from "@/pages/guide-article";
 import GuideSectionPage from "@/pages/guide-section";
@@ -239,6 +240,7 @@ function Router() {
       <Route path="/personal-data-agreement" component={PersonalDataAgreementPage} />
       <Route path="/tools" component={ToolsPage} />
       <Route path="/full-audit" component={FullAuditPage} />
+      <Route path="/order-report" component={OrderReportPage} />
       <Route path="/guide" component={GuidePage} />
       <Route path="/guide/section/:sectionSlug" component={GuideSectionPage} />
       <Route path="/guide/topic/:topicSlug" component={GuideTopicPage} />
