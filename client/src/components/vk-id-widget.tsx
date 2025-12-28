@@ -12,7 +12,11 @@ interface VKIDConfig {
   scope: string;
 }
 
-export function VKIDWidget() {
+interface VKIDWidgetProps {
+  disabled?: boolean;
+}
+
+export function VKIDWidget({ disabled = false }: VKIDWidgetProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -122,7 +126,7 @@ export function VKIDWidget() {
   }
 
   return (
-    <div className="w-full">
+    <div className="w-full relative">
       {isLoading && (
         <div className="flex items-center justify-center py-2">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -134,6 +138,13 @@ export function VKIDWidget() {
         className={isLoading ? "hidden" : ""}
         data-testid="vk-id-widget"
       />
+      {disabled && !isLoading && (
+        <div 
+          className="absolute inset-0 bg-background/50 cursor-not-allowed"
+          title="Для входа через VK ID примите условия ниже"
+          data-testid="vk-id-widget-disabled-overlay"
+        />
+      )}
     </div>
   );
 }

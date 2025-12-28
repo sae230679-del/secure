@@ -52,6 +52,11 @@ export default function AuthPage() {
   }, [searchString, toast]);
 
   const [loginData, setLoginData] = useState({ email: "", password: "" });
+  const [loginConsents, setLoginConsents] = useState({
+    privacyConsent: false,
+    pdnConsent: false,
+    offerConsent: false,
+  });
   const [otpData, setOtpData] = useState({ userId: 0, code: "" });
   const [registerData, setRegisterData] = useState({
     name: "",
@@ -405,7 +410,7 @@ export default function AuthPage() {
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={isLoading}
+                  disabled={isLoading || !loginConsents.privacyConsent || !loginConsents.pdnConsent || !loginConsents.offerConsent}
                   data-testid="button-login"
                 >
                   {isLoading ? (
@@ -439,27 +444,83 @@ export default function AuthPage() {
                   </div>
                 </div>
 
-                <div className="space-y-3">
-                  <VKIDWidget />
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                  <div className="flex-1 min-w-0">
+                    <VKIDWidget disabled={!loginConsents.privacyConsent || !loginConsents.pdnConsent || !loginConsents.offerConsent} />
+                  </div>
                   <YandexIDButton 
-                    disabled={isLoading} 
+                    disabled={isLoading || !loginConsents.privacyConsent || !loginConsents.pdnConsent || !loginConsents.offerConsent} 
                     size="m"
                     variant="secondary"
-                    className="w-full"
+                    className="w-full sm:w-auto sm:flex-1"
                   />
                 </div>
 
-                {/* ФЗ-152: Уведомление о принятии условий при входе */}
-                <p className="text-xs text-muted-foreground text-center mt-4">
-                  Входя в систему, вы принимаете условия{" "}
-                  <Link href="/user-agreement" className="text-primary hover:underline">
-                    Пользовательского соглашения
-                  </Link>{" "}
-                  и{" "}
-                  <Link href="/privacy-policy" className="text-primary hover:underline">
-                    Политики конфиденциальности
-                  </Link>.
-                </p>
+                {/* ФЗ-152: Чекбоксы согласий при входе */}
+                <div className="space-y-2 pt-3 border-t">
+                  <div className="flex items-start gap-2">
+                    <Checkbox
+                      id="login-privacy-consent"
+                      checked={loginConsents.privacyConsent}
+                      onCheckedChange={(checked) => 
+                        setLoginConsents({ ...loginConsents, privacyConsent: checked === true })
+                      }
+                      disabled={isLoading}
+                      data-testid="checkbox-login-privacy-consent"
+                    />
+                    <label
+                      htmlFor="login-privacy-consent"
+                      className="text-xs sm:text-sm leading-tight cursor-pointer"
+                    >
+                      Я ознакомлен с{" "}
+                      <Link href="/privacy-policy" className="text-primary hover:underline">
+                        политикой конфиденциальности
+                      </Link>
+                    </label>
+                  </div>
+
+                  <div className="flex items-start gap-2">
+                    <Checkbox
+                      id="login-pdn-consent"
+                      checked={loginConsents.pdnConsent}
+                      onCheckedChange={(checked) => 
+                        setLoginConsents({ ...loginConsents, pdnConsent: checked === true })
+                      }
+                      disabled={isLoading}
+                      data-testid="checkbox-login-pdn-consent"
+                    />
+                    <label
+                      htmlFor="login-pdn-consent"
+                      className="text-xs sm:text-sm leading-tight cursor-pointer"
+                    >
+                      Даю{" "}
+                      <Link href="/personal-data-agreement" className="text-primary hover:underline">
+                        согласие на обработку персональных данных
+                      </Link>
+                    </label>
+                  </div>
+
+                  <div className="flex items-start gap-2">
+                    <Checkbox
+                      id="login-offer-consent"
+                      checked={loginConsents.offerConsent}
+                      onCheckedChange={(checked) => 
+                        setLoginConsents({ ...loginConsents, offerConsent: checked === true })
+                      }
+                      disabled={isLoading}
+                      data-testid="checkbox-login-offer-consent"
+                    />
+                    <label
+                      htmlFor="login-offer-consent"
+                      className="text-xs sm:text-sm leading-tight cursor-pointer"
+                    >
+                      Принимаю условия{" "}
+                      <Link href="/offer" className="text-primary hover:underline">
+                        договора оферты
+                      </Link>
+                    </label>
+                  </div>
+                </div>
               </form>
             ) : (
               <form onSubmit={handleRegisterSubmit} className="space-y-4">
