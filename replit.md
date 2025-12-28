@@ -14,7 +14,7 @@ No foreign services: The platform does not use or support foreign data protectio
 - **Routing**: Wouter
 - **State Management**: TanStack React Query for server state, React Context for auth and theme
 - **Styling**: Tailwind CSS with shadcn/ui (New York style), Material Design 3 inspired, comprehensive theming system with light/dark modes and 19 semantic color tokens.
-- **Key Features**: Express Audit Results UI, dedicated Full Audit page, and legal pages (Privacy Policy, User Agreement, Personal Data Agreement, Offer, Cookies Policy).
+- **Key Features**: Express Audit Results UI, dedicated Full Audit page with auto-detection and individual order form, order-report page with integrated auth flow, payment-result page with upsell, and legal pages (Privacy Policy, User Agreement, Personal Data Agreement, Offer, Cookies Policy).
 
 ### Backend
 - **Runtime**: Node.js with Express.js
