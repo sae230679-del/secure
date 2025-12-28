@@ -2594,6 +2594,8 @@ export async function registerRoutes(
             }
           );
           console.log(`[EXPRESS] runExpressAudit completed: scorePercent=${report.scorePercent}, checks.length=${report.checks?.length || 0}`);
+          console.log(`[EXPRESS] rknCheck:`, JSON.stringify(report.rknCheck, null, 2));
+          console.log(`[EXPRESS] briefResults highlights:`, JSON.stringify(report.briefResults?.highlights?.slice(0, 3), null, 2));
 
           for (let i = 4; i <= 6; i++) {
             await new Promise(resolve => setTimeout(resolve, 1500));
