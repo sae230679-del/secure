@@ -52,20 +52,18 @@ export function VKIDWidget() {
         });
 
         if (containerRef.current) {
-          const oneTap = new VKID.OneTap();
+          const oAuthList = new VKID.OAuthList();
           
-          oneTap.render({
+          oAuthList.render({
             container: containerRef.current,
-            showAlternativeLogin: true,
-            scheme: VKID.Scheme.LIGHT,
-            lang: VKID.Languages.RUS,
+            oauthList: [VKID.OAuthName.VK, VKID.OAuthName.OK, VKID.OAuthName.MAIL],
           });
 
-          oneTap.on(VKID.WidgetEvents.ERROR, (error: unknown) => {
+          oAuthList.on(VKID.WidgetEvents.ERROR, (error: unknown) => {
             console.error("[VK ID Widget] Error:", error);
           });
 
-          oneTap.on(VKID.OneTapInternalEvents.LOGIN_SUCCESS, async (payload: { code: string; device_id: string; state?: string }) => {
+          oAuthList.on(VKID.OAuthListInternalEvents.LOGIN_SUCCESS, async (payload: { code: string; device_id: string; state?: string }) => {
             try {
               const exchangeResponse = await fetch("/api/oauth/vk/exchange", {
                 method: "POST",
@@ -131,7 +129,7 @@ export function VKIDWidget() {
       )}
       <div 
         ref={containerRef} 
-        id="VkIdSdkOneTap"
+        id="VkIdSdkOAuthList"
         className={isLoading ? "hidden" : ""}
         data-testid="vk-id-widget"
       />
