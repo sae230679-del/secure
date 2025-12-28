@@ -1,11 +1,9 @@
 # SecureLex.ru
 
 ## Overview
-
-SecureLex.ru is a website compliance checking platform that automatically audits websites for adherence to Russian data protection laws (ФЗ-152, ФЗ-149) and other relevant regulations of the Russian Federation. Users can submit their website URL, select from various audit packages, make payments, and receive detailed compliance reports utilizing a traffic-light severity system. The platform supports three distinct user roles: regular users for self-audits, admins for managing paid audits, and superadmins for comprehensive system control, including theme customization and system settings.
+SecureLex.ru is a website compliance checking platform designed to audit websites for adherence to Russian data protection laws (ФЗ-152, ФЗ-149) and other relevant regulations of the Russian Federation. It enables users to submit URLs for audits, select audit packages, process payments, and receive detailed, traffic-light-coded compliance reports. The platform supports regular users for self-audits, admins for managing paid audits, and superadmins for comprehensive system control, including theme customization and system settings.
 
 ## User Preferences
-
 Preferred communication style: Simple, everyday language.
 No foreign services: The platform does not use or support foreign data protection regulations (GDPR, etc.) - only Russian laws (ФЗ-152, ФЗ-149).
 
@@ -15,75 +13,38 @@ No foreign services: The platform does not use or support foreign data protectio
 - **Framework**: React 18 with TypeScript and Vite
 - **Routing**: Wouter
 - **State Management**: TanStack React Query for server state, React Context for auth and theme
-- **Styling**: Tailwind CSS with shadcn/ui component library (New York style), Material Design 3 inspired
-- **Theming**: Comprehensive preset-based system with light/dark modes, 19 semantic color tokens, and SuperAdmin theme management.
-- **Express Audit Results UI**: `AuditResultsView` component (`client/src/components/audit/AuditResultsView.tsx`) displays BriefResults with score circle, stats summary (OK/Warn/Fail counts with icons), hosting info block, expandable highlights accordion, CTA for PDF download and full report purchase, and reset button.
-- **Full Audit Page**: Dedicated `/full-audit` route (`client/src/pages/full-audit.tsx`) for site type selection with expandable package grid, moved from landing page anchor for cleaner UX.
-- **Legal Pages**: All legal documents available at dedicated routes:
-  - `/privacy-policy` - Политика конфиденциальности
-  - `/user-agreement` - Пользовательское соглашение
-  - `/personal-data-agreement` - Согласие на обработку ПДн (ответственный: privacy@securelex.ru)
-  - `/offer` - Договор-оферта
-  - `/cookies-policy` - Политика cookies
-- **Footer**: 6-column layout (Logo, Сервис, Информация, Документы, Контакты, Реквизиты) with all legal document links.
+- **Styling**: Tailwind CSS with shadcn/ui (New York style), Material Design 3 inspired, comprehensive theming system with light/dark modes and 19 semantic color tokens.
+- **Key Features**: Express Audit Results UI, dedicated Full Audit page, and legal pages (Privacy Policy, User Agreement, Personal Data Agreement, Offer, Cookies Policy).
 
 ### Backend
 - **Runtime**: Node.js with Express.js
 - **API Pattern**: RESTful endpoints
-- **Authentication**: Session-based with PostgreSQL session store and bcryptjs for password hashing.
-- **Email Verification**: One-time verification at registration with 24-hour token expiry. Tokens hashed with HMAC-SHA256+pepper (SECRET_KEY), timing-safe comparison prevents timing attacks.
-- **Password Reset**: Public endpoint for regular users with 3/hour rate limiting, 1-hour token expiry. Admin/superadmin password reset requires SuperAdmin access with PIN confirmation.
-- **Compliance Features**:
-    - **PDN Consent Tracking**: Full lifecycle management including versioning, IP/user-agent logging, pre-payment consent, and withdrawal with a 30-day destruction schedule. Background jobs process destruction tasks, with SuperAdmin legal hold capability.
-    - **Cookie Consent**: 152-ФЗ compliant banner with granular preferences.
-    - **Legal Pages**: Versioned /offer and /privacy pages.
-- **Audit Engine**: Expanded to 60+ criteria for premium packages, covering ФЗ-152, ФЗ-149, cookies, technical aspects, legal, content, and security. Enhanced with structured evidence arrays and law basis references (AuditCheckResult interface).
-- **Hosting Detection**: 2-layer Russian hosting detection (`server/hosting-checker.ts`):
-  - **Layer 1 (Deterministic)**: DNS→IP→PTR lookup with dictionary matching (timeweb, beget, reg.ru, etc.)
-  - **Layer 2 (AI)**: WHOIS analysis via AI when Layer 1 is uncertain (saves API costs)
-  - Results stored in `hosting_info` jsonb column with status: russian/foreign/uncertain
-- **Brief Results**: Standardized JSON structure (`BriefResults` type) for express audit reports containing score, severity, 7-12 key highlights, hosting status, and upsell CTA. Stored in `brief_results` jsonb column.
-- **Penalty System**: Real КоАП РФ ст. 13.11 penalties in `server/penalties-map.ts` with 10+ check types, calculated totals by subject type (физлица, должностные лица, ИП, юрлица), and automatic deduplication by aggregation keys.
-- **PDF Report Generation**: Branded multi-page PDF reports with detailed criteria results, calculated penalty risk tables by subject type, law references, recommendations, and calls to action.
-- **SEO Management**: SuperAdmin controlled CRUD for SEO pages, dynamic public routes, and sitemap generation.
-- **Tools Service (Инструментарий)**: 11 paid tools (10₽ per use) with pay-per-use model:
-  - `/api/tools/catalog` - Returns all tools with pricing and payment status
-  - `/api/tools/history` - User's tool usage history
-  - `/api/tools/payment/create` - Create payment for tool access
-  - Paywall guard middleware (`createPaywallGuard`) checks: service enabled → tool enabled → auth → unused payment
-  - Payments marked with `usedAt` timestamp after consumption (single-use tokens)
-  - PII protection: sessionId never logged, emails/INN/passport masked via `redactObject()`
-  - Free tool: hosting-recommendations (Russian hosting directory)
-  - **RKN Registry Check**: Checks if organization is registered as personal data operator in Roskomnadzor registry (pd.rkn.gov.ru). Validates INN checksum, caches results for 24h. Endpoint: `/api/tools/rkn-check`. Also integrated into express check flow with auto-popup INN modal when data not found on site.
-  - **User Agreement Generator**: Modular generator for website user agreements with support for 10 site types (content, services, saas, ecommerce, marketplace, ugc, onlineSchool, servicesAggregator, classifieds, crmSaas). Output format: {html, text, blocks[], json, evidence[], limitations[]}. Generator module: `server/generators/user-agreement-generator.ts`
-- **Express Check RKN Integration**: When express audit cannot find INN on website, shows automatic popup asking user to enter INN. User can:
-  - Enter INN → runs RKN registry check → results added to report
-  - Skip → report marked "requires manual verification in RKN registry"
-  - Cancel → closes modal, can reopen via button
-- **Email Subscription Service**: Newsletter subscription system with Russian email provider support:
-  - **Providers**: SendPulse, Unisender, Dashamail API integrations (`server/email-subscription-service.ts`)
-  - **Double Opt-in**: Confirmation tokens with 24h expiry, `/confirm-subscription` page for user confirmation
-  - **Endpoints**: `/api/subscribe` (public), `/api/confirm-subscription`, `/api/unsubscribe`
-  - **Admin Config**: Newsletter tab in SuperAdmin email settings (`/superadmin/email-settings`) with provider selection, API key management, email templates (confirmation + welcome)
-  - **Database**: `email_subscriptions` table (pending/confirmed/unsubscribed status), `email_service_settings` table for provider config
+- **Authentication**: Session-based with PostgreSQL session store, bcryptjs for password hashing. Includes email verification and password reset functionalities.
+- **Compliance Features**: PDN Consent Tracking (with versioning, IP/user-agent logging, withdrawal with destruction schedule), 152-ФЗ compliant Cookie Consent, and versioned legal pages.
+- **Audit Engine**: Over 60 criteria for premium packages covering ФЗ-152, ФЗ-149, cookies, technical, legal, content, and security aspects.
+- **Hosting Detection**: Two-layer Russian hosting detection (DNS/PTR lookup and AI-powered WHOIS analysis).
+- **Brief Results**: Standardized JSON structure for express audit reports, including score, severity, key highlights, and hosting status.
+- **Penalty System**: Calculation of real КоАП РФ ст. 13.11 penalties with automated deduplication.
+- **PDF Report Generation**: Branded, multi-page PDF reports with detailed criteria results, penalty risk tables, law references, and recommendations.
+- **SEO Management**: SuperAdmin controlled CRUD for SEO pages and sitemap generation.
+- **Tools Service**: 11 paid, pay-per-use tools including RKN Registry Check and a modular User Agreement Generator.
+- **Email Subscription Service**: Newsletter system with Russian email provider integrations (SendPulse, Unisender, Dashamail) and double opt-in.
 
 ### Database
 - **Type**: PostgreSQL
-- **ORM**: Drizzle ORM with drizzle-zod for schema validation
-- **Schema**: Defined in `shared/schema.ts`
-- **Key Tables**: users, audit_packages, audits, audit_results, payments, reports, contracts, referrals, promo_codes, themes, audit_logs, pdn_consent_events, pdn_destruction_tasks, pdn_destruction_acts, seo_pages, express_audit_limits, tool_configs, tool_usage, service_configs, guide_articles, guide_events, guide_settings, promotions.
-- **Promotions System**: Time-limited promotional campaigns with banner/popup display on landing page. Managed via `/admin/promotions`. Features: priority sorting, countdown timer, configurable display options (banner, popup), date range validation.
-- **Guide Feature**: Educational articles about data protection laws (152-ФЗ, 149-ФЗ). SuperAdmin manages articles via `/superadmin/guide`. Public pages at `/guide` and `/guide/:slug`.
+- **ORM**: Drizzle ORM with drizzle-zod.
+- **Schema**: Comprehensive, including tables for users, audits, payments, reports, contracts, promotions, and system settings.
+- **Features**: Promotions system for time-limited campaigns and a Guide feature for educational articles on data protection laws.
 
 ### Role-Based Access Control
-- **user**: Create audits, view own data, update profile.
-- **admin**: View paid audits, manage packages, re-audit.
-- **superadmin**: Full system access, including user management, system settings, audit logs, and theme management.
+- **user**: Create audits, view personal data.
+- **admin**: Manage paid audits and packages.
+- **superadmin**: Full system control, user management, system settings, theme management.
 
 ### Design Decisions
-- **Monorepo**: Client, server, and shared types in one repository for type sharing and simplified deployment.
-- **Session-Based Authentication**: Chosen for simplified secure logout and better web application integration.
-- **Drizzle ORM**: Selected for type safety and PostgreSQL-specific features.
+- **Monorepo**: For shared types and simplified deployment.
+- **Session-Based Authentication**: For secure logout and web application integration.
+- **Drizzle ORM**: For type safety and PostgreSQL features.
 - **URL Normalization**: Backend standardizes all URL inputs.
 
 ## External Dependencies
@@ -92,114 +53,18 @@ No foreign services: The platform does not use or support foreign data protectio
 - **PostgreSQL**: Primary data store.
 
 ### Payment Processing
-- **Yookassa (formerly Yandex.Kassa)**: Primary payment gateway for the Russian market, supporting various payment methods (SBP, SberPay, T-Pay, Mir Pay, YooMoney, Mir card, SberBusiness).
-- **Robokassa**: Integrated payment provider for additional options.
-- **Installments**: Supported via YooKassa/Robokassa.
+- **Yookassa**: Primary payment gateway for the Russian market.
+- **Robokassa**: Additional payment provider.
 
 ### AI Providers
 - **GigaChat**: Default AI for audit analysis.
 - **OpenAI**: Alternative AI provider option.
 
 ### Email Services
-- **Nodemailer**: Configured for transactional emails (e.g., audit completion, payment confirmation, contract status changes). Intended providers: REG.RU, Yandex Mail, Mail.ru.
-- **SMTP Configuration**: All SMTP settings including password stored in database (`system_settings` table). Password never logged or returned to API responses (only `hasPassword: boolean` flag). SuperAdmin UI at `/superadmin/email-settings` for configuration, connection testing, and test email sending.
-- **Endpoints**: 
-  - `GET /api/admin/settings/email` - Get SMTP settings with status
-  - `PUT /api/admin/settings/email` - Update settings (password saved to DB)
-  - `POST /api/admin/settings/email/verify` - Test SMTP connection
-  - `POST /api/admin/settings/email/test` - Send test email
+- **Nodemailer**: For transactional emails with configurable SMTP via REG.RU, Yandex Mail, Mail.ru.
+- **SendPulse, Unisender, Dashamail**: For newsletter subscriptions.
 
 ### Frontend Libraries
 - **@radix-ui/***: Accessible UI primitives.
 - **@tanstack/react-query**: Server state management.
 - **lucide-react**: Icon library.
-
-### Development Tools
-- **Vite**: Frontend build and dev server.
-- **drizzle-kit**: Database migration tooling.
-- **tsx**: TypeScript execution for the server.
-- **vitest**: Test framework with supertest for API integration tests.
-
-## Testing
-
-### Running Tests
-```bash
-npm test              # Run all tests once
-npm run test:watch    # Run tests in watch mode
-```
-
-### Test Suites (8 tests, 4 files)
-- **admin-settings.test.ts**: Settings update/masking, secret preservation
-- **seo-pages.test.ts**: SEO CRUD lifecycle, public visibility control
-- **pdn-workflow.test.ts**: PDN withdrawal → 30-day destruction task
-- **pdn-job.test.ts**: SCHEDULED/LEGAL_HOLD/future scheduling behavior
-
-### Test Infrastructure
-- `tests/setup.ts`: App initialization for testing
-- `tests/dbReset.ts`: Database reset with CASCADE deletes
-- `tests/authHelper.ts`: Login helpers for superadmin/user roles
-
-## Deployment
-
-### VPS Deployment Guide
-See **[docs/VPS_DEPLOYMENT.md](docs/VPS_DEPLOYMENT.md)** for comprehensive VPS deployment instructions including:
-- Server setup (Node.js, PostgreSQL, PM2, Nginx)
-- SSL certificate configuration (Let's Encrypt, GlobalSign)
-- SMTP/Email troubleshooting (self-signed certificate fixes)
-- DNS configuration (reg.ru)
-- Common errors and solutions
-
-### Scripts
-```bash
-npm run build         # Build frontend + backend
-npm run db:migrate    # Apply database migrations (drizzle-kit push --force)
-npm run ci            # Full CI: build + test + migrate
-npm run start         # Start production server
-npm run github:sync   # Sync all files to GitHub repository
-npm run deploy        # Build + GitHub sync
-```
-
-### GitHub Synchronization
-Automatic synchronization to GitHub repository: https://github.com/sae230679-del/secure
-
-**Required Secrets:**
-- `GITHUB_TOKEN` - Personal Access Token with `repo` scope
-- `GITHUB_REPO` - Repository in format `owner/repo` or full URL
-
-**Script:** `scripts/github-sync.ts` uses GitHub API to upload all project files.
-- Processes files in batches (5 files every 2 seconds) to avoid rate limits
-- Automatic retry with exponential backoff on rate limit errors
-- Ignores: node_modules, .git, dist, .replit, .cache, .env files
-
-### Health Check
-`GET /api/health` returns:
-```json
-{"ok": true, "version": "1.0.0", "environment": "production", "timestamp": "..."}
-```
-
-### Production Notes
-- PDN destruction job runs every 6 hours (production only)
-- Cookie consent banner blocks analytics/marketing scripts until consent
-- `ALLOW_INSECURE_LOCALHOST_COOKIES` forbidden in production
-- `AUDIT_MOCK_MODE` forbidden in production
-- `SECRET_KEY` must remain stable to avoid invalidating outstanding email verification and password reset tokens
-- Registration is blocked (503) if SMTP is not configured - configure email settings in SuperAdmin panel first
-- Resend verification emails rate limited to 5 per hour per email address
-
-### Session Table Setup (Required for Production)
-After deploying to a new database, create the session table for `connect-pg-simple`:
-```sql
-CREATE TABLE IF NOT EXISTS "session" (
-  "sid" varchar NOT NULL,
-  "sess" json NOT NULL,
-  "expire" timestamp(6) NOT NULL,
-  CONSTRAINT "session_pkey" PRIMARY KEY ("sid")
-);
-CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");
-```
-
-### Auth Flow Summary
-- **Registration**: Requires SMTP → sends verification email → user lands on pending verification screen
-- **Email Verification**: Token valid 24h → auto-redirect to /auth?state=verified → toast shown
-- **Password Reset**: Public endpoint (3/hour limit) → token valid 1h → auto-redirect to /auth?state=password_reset
-- **Login**: Blocked if email not verified (code: EMAIL_NOT_VERIFIED) → resend option shown
