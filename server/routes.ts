@@ -715,6 +715,19 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/admin/packages/:type", requireAdmin, async (req, res) => {
+    try {
+      const { type } = req.params;
+      const pkg = await storage.getPackageByType(type);
+      if (!pkg) {
+        return res.status(404).json({ error: "Package not found" });
+      }
+      res.json(pkg);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch package" });
+    }
+  });
+
   app.patch("/api/users/profile", requireAuth, async (req, res) => {
     try {
       const { name, phone, companyName, inn } = req.body;

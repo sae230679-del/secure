@@ -1,9 +1,10 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -13,8 +14,8 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { AuditWithDetails } from "@shared/schema";
-import { useState } from "react";
+import type { AuditWithDetails, Package } from "@shared/schema";
+import { useState, useEffect } from "react";
 import {
   Zap,
   Globe,
@@ -26,16 +27,53 @@ import {
   RefreshCw,
   AlertCircle,
   Clock,
+  Settings,
+  Save,
+  Ruble,
 } from "lucide-react";
 import { Link } from "wouter";
 
 export default function AdminExpressAuditsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [reportPrice, setReportPrice] = useState<number>(900);
   const { toast } = useToast();
 
   const { data: audits, isLoading } = useQuery<AuditWithDetails[]>({
     queryKey: ["/api/admin/express-audits"],
+  });
+
+  const { data: expressPackage, isLoading: isLoadingPackage } = useQuery<Package>({
+    queryKey: ["/api/admin/packages/expressreport"],
+  });
+
+  useEffect(() => {
+    if (expressPackage?.price) {
+      setReportPrice(expressPackage.price);
+    }
+  }, [expressPackage]);
+
+  const updatePriceMutation = useMutation({
+    mutationFn: async (newPrice: number) => {
+      const response = await apiRequest("PATCH", `/api/admin/packages/${expressPackage?.id}`, {
+        price: newPrice,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/packages/expressreport"] });
+      toast({
+        title: "Цена обновлена",
+        description: `Стоимость полного отчёта: ${reportPrice} руб.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   const reauditMutation = useMutation({
@@ -115,12 +153,60 @@ export default function AdminExpressAuditsPage() {
       <div>
         <h1 className="text-3xl font-bold flex items-center gap-2">
           <Zap className="h-8 w-8 text-primary" />
-          Быстрая проверка
+          Экспресс-проверка
         </h1>
         <p className="text-muted-foreground mt-1">
           Экспресс-проверки сайтов (бесплатные с кратким результатом)
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Settings className="h-5 w-5" />
+            Настройки
+          </CardTitle>
+          <CardDescription>
+            Настройка стоимости полного отчёта экспресс-проверки
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-end gap-4 flex-wrap">
+            <div className="space-y-2">
+              <Label htmlFor="report-price">Стоимость полного отчёта</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="report-price"
+                  type="number"
+                  min={0}
+                  step={100}
+                  value={reportPrice}
+                  onChange={(e) => setReportPrice(Number(e.target.value))}
+                  className="w-32"
+                  disabled={isLoadingPackage}
+                  data-testid="input-express-report-price"
+                />
+                <span className="text-muted-foreground">руб.</span>
+              </div>
+            </div>
+            <Button
+              onClick={() => updatePriceMutation.mutate(reportPrice)}
+              disabled={updatePriceMutation.isPending || isLoadingPackage || reportPrice === expressPackage?.price}
+              data-testid="button-save-price"
+            >
+              {updatePriceMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4 mr-2" />
+              )}
+              Сохранить
+            </Button>
+          </div>
+          <p className="text-sm text-muted-foreground mt-3">
+            Эта цена будет отображаться пользователям при предложении полного отчёта после экспресс-проверки
+          </p>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

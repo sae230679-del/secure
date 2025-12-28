@@ -114,9 +114,9 @@ export default function AdminAuditsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Оплаченные аудиты</h1>
+        <h1 className="text-3xl font-bold">Полный аудит сайта</h1>
         <p className="text-muted-foreground mt-1">
-          Управление проверками с подтвержденной оплатой
+          Управление полными аудитами с подтвержденной оплатой
         </p>
       </div>
 
