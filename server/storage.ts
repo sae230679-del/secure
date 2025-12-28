@@ -2627,6 +2627,41 @@ export class DatabaseStorage implements IStorage {
       .where(eq(schema.technicalSpecs.id, id));
     return true;
   }
+
+  // =====================================================
+  // Individual Orders - Индивидуальные заказы
+  // =====================================================
+  async createIndividualOrder(data: schema.InsertIndividualOrder): Promise<schema.IndividualOrder> {
+    const [order] = await db
+      .insert(schema.individualOrders)
+      .values(data)
+      .returning();
+    return order;
+  }
+
+  async getIndividualOrders(): Promise<schema.IndividualOrder[]> {
+    return db
+      .select()
+      .from(schema.individualOrders)
+      .orderBy(desc(schema.individualOrders.createdAt));
+  }
+
+  async getIndividualOrderById(id: number): Promise<schema.IndividualOrder | undefined> {
+    const [order] = await db
+      .select()
+      .from(schema.individualOrders)
+      .where(eq(schema.individualOrders.id, id));
+    return order;
+  }
+
+  async updateIndividualOrder(id: number, data: Partial<schema.InsertIndividualOrder & { status: "new" | "contacted" | "in_progress" | "completed" | "cancelled" }>): Promise<schema.IndividualOrder | undefined> {
+    const [order] = await db
+      .update(schema.individualOrders)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(schema.individualOrders.id, id))
+      .returning();
+    return order;
+  }
 }
 
 export const storage = new DatabaseStorage();

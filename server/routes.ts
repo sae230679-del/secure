@@ -1983,29 +1983,80 @@ export async function registerRoutes(
     }
   });
 
-  // Public API: Individual request form submission
+  // Public API: Individual order form submission (saves to database)
+  app.post("/api/public/individual-order", async (req, res) => {
+    try {
+      const requestSchema = z.object({
+        name: z.string().optional(),
+        email: z.string().email("Неверный формат email"),
+        phone: z.string().optional(),
+        socialNetwork: z.enum(["telegram", "whatsapp", "vk", ""]).optional(),
+        socialHandle: z.string().optional(),
+        websiteUrl: z.string().min(1, "URL сайта обязателен"),
+        inn: z.string().optional().nullable(),
+        isIndividual: z.boolean().optional(),
+        description: z.string().optional(),
+      });
+      
+      const data = requestSchema.parse(req.body);
+      
+      if (!data.isIndividual && !data.inn?.trim()) {
+        return res.status(400).json({ 
+          error: "Укажите ИНН организации или отметьте, что вы физическое лицо" 
+        });
+      }
+      
+      const order = await storage.createIndividualOrder({
+        name: data.name || null,
+        email: data.email,
+        phone: data.phone || null,
+        socialNetwork: data.socialNetwork || null,
+        socialContact: data.socialHandle || null,
+        websiteUrl: data.websiteUrl,
+        inn: data.inn || null,
+        isIndividual: data.isIndividual || false,
+        message: data.description || null,
+        privacyConsent: true,
+        pdnConsent: true,
+        offerConsent: true,
+      });
+      
+      console.log("Individual order created:", {
+        id: order.id,
+        email: order.email,
+        websiteUrl: order.websiteUrl,
+        timestamp: new Date().toISOString(),
+      });
+      
+      res.json({ success: true, orderId: order.id, message: "Заявка успешно отправлена" });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors[0].message });
+      }
+      console.error("Individual order error:", error);
+      res.status(500).json({ error: "Ошибка при отправке заявки" });
+    }
+  });
+
+  // Legacy: Individual request form submission (deprecated, use /api/public/individual-order)
   app.post("/api/public/individual-request", async (req, res) => {
     try {
-      const schema = z.object({
+      const requestSchema = z.object({
         name: z.string().optional(),
         email: z.string().email("Неверный формат email"),
         url: z.string().optional(),
         description: z.string().min(10, "Описание должно содержать минимум 10 символов"),
       });
       
-      const data = schema.parse(req.body);
+      const data = requestSchema.parse(req.body);
       
-      // Store individual request as a special type of audit or support ticket
-      // For now, just log it and return success (can be enhanced later with notifications)
-      console.log("Individual request received:", {
+      console.log("Individual request received (legacy):", {
         name: data.name,
         email: data.email,
         url: data.url,
         descriptionLength: data.description.length,
         timestamp: new Date().toISOString(),
       });
-      
-      // TODO: Send email notification to admin, store in database
       
       res.json({ success: true, message: "Заявка успешно отправлена" });
     } catch (error) {
