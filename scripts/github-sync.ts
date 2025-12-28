@@ -1,6 +1,5 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as crypto from 'crypto';
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
 let GITHUB_REPO = process.env.GITHUB_REPO;
@@ -42,6 +41,7 @@ const IGNORE_PATTERNS = [
   'package-lock.json',
   '.replit.workflows',
   'attached_assets',
+  '.agent_state',
 ];
 
 function shouldIgnore(filePath: string): boolean {

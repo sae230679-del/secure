@@ -155,7 +155,21 @@ npm run build         # Build frontend + backend
 npm run db:migrate    # Apply database migrations (drizzle-kit push --force)
 npm run ci            # Full CI: build + test + migrate
 npm run start         # Start production server
+npm run github:sync   # Sync all files to GitHub repository
+npm run deploy        # Build + GitHub sync
 ```
+
+### GitHub Synchronization
+Automatic synchronization to GitHub repository: https://github.com/sae230679-del/secure
+
+**Required Secrets:**
+- `GITHUB_TOKEN` - Personal Access Token with `repo` scope
+- `GITHUB_REPO` - Repository in format `owner/repo` or full URL
+
+**Script:** `scripts/github-sync.ts` uses GitHub API to upload all project files.
+- Processes files in batches (5 files every 2 seconds) to avoid rate limits
+- Automatic retry with exponential backoff on rate limit errors
+- Ignores: node_modules, .git, dist, .replit, .cache, .env files
 
 ### Health Check
 `GET /api/health` returns:
