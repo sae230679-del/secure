@@ -293,6 +293,14 @@ export interface RknCheckResult {
     nameFound?: string;
     urls?: string[];
   };
+  // Результат реальной проверки реестра РКН
+  registryCheck?: {
+    isRegistered: boolean;
+    companyName?: string;
+    registrationNumber?: string;
+    registrationDate?: string;
+    error?: string;
+  };
 }
 
 export interface AuditReport {
@@ -1582,7 +1590,8 @@ function buildBriefResults(
   url: string,
   checks: AuditCheckResult[],
   scores: { scorePercent: number; severity: "critical" | "high" | "medium" | "low" | "excellent"; passedCount: number; warningCount: number; failedCount: number; criticalCount?: number },
-  hostingCheck: HostingCheckResult
+  hostingCheck: HostingCheckResult,
+  rknCheck?: RknCheckResult
 ): BriefResults {
   const domain = extractDomain(url);
   
@@ -1615,6 +1624,37 @@ function buildBriefResults(
         { act: "152-ФЗ", ref: "ст. 18 ч. 5 (Локализация ПДн)" },
       ],
     });
+  }
+  
+  // Add RKN registry check as CRITICAL error if not registered
+  if (rknCheck?.registryCheck && !rknCheck.registryCheck.isRegistered && !rknCheck.registryCheck.error) {
+    highlights.unshift({
+      id: "RKN-001",
+      title: "Не в реестре операторов РКН",
+      status: "fail",
+      severity: "critical",
+      summary: `Организация с ИНН ${rknCheck.query.inn || "не указан"} не найдена в реестре операторов персональных данных Роскомнадзора`,
+      howToFixShort: "Подать уведомление в Роскомнадзор о начале обработки персональных данных",
+      law: [
+        { act: "152-ФЗ", ref: "ст. 22 (Уведомление об обработке ПДн)" },
+      ],
+    });
+    scores.failedCount++;
+    scores.scorePercent = Math.max(0, scores.scorePercent - 20);
+    scores.severity = "critical";
+  } else if (rknCheck?.registryCheck?.isRegistered) {
+    highlights.push({
+      id: "RKN-001",
+      title: "Регистрация в реестре РКН",
+      status: "ok",
+      severity: "low",
+      summary: `Организация зарегистрирована в реестре операторов ПДн${rknCheck.registryCheck.registrationNumber ? ` (№${rknCheck.registryCheck.registrationNumber})` : ""}`,
+      howToFixShort: undefined,
+      law: [
+        { act: "152-ФЗ", ref: "ст. 22 (Уведомление об обработке ПДн)" },
+      ],
+    });
+    scores.passedCount++;
   }
   
   // Add regular checks
@@ -1740,8 +1780,40 @@ export async function runAudit(
   
   onProgress?.(2, level1Results);
 
-  const rknCheck = buildRknCheck(websiteData.html, url);
+  let rknCheck = buildRknCheck(websiteData.html, url);
   const evidenceBundle = buildEvidenceBundle(level1Results, url);
+
+  // If INN was found, perform real RKN registry check
+  if (rknCheck.query.inn) {
+    try {
+      const { checkRknRegistry } = await import("./rkn-parser");
+      const registryResult = await checkRknRegistry(rknCheck.query.inn);
+      
+      rknCheck = {
+        ...rknCheck,
+        status: registryResult.isRegistered ? "passed" : "failed",
+        details: registryResult.details,
+        registryCheck: {
+          isRegistered: registryResult.isRegistered,
+          companyName: registryResult.companyName,
+          registrationNumber: registryResult.registrationNumber,
+          registrationDate: registryResult.registrationDate,
+          error: registryResult.error,
+        },
+      };
+      
+      console.log(`[AUDIT] RKN registry check for INN ${rknCheck.query.inn}: ${registryResult.isRegistered ? "REGISTERED" : "NOT REGISTERED"}`);
+    } catch (error) {
+      console.error("[AUDIT] RKN registry check error:", error);
+      rknCheck = {
+        ...rknCheck,
+        registryCheck: {
+          isRegistered: false,
+          error: "Не удалось проверить реестр РКН",
+        },
+      };
+    }
+  }
 
   let additionalChecks: AuditCheckResult[] = [];
   let summary = "";
@@ -1786,7 +1858,7 @@ export async function runAudit(
 
   onProgress?.(6, allChecks);
 
-  const briefResults = buildBriefResults(url, allChecks, scores, hostingCheck);
+  const briefResults = buildBriefResults(url, allChecks, scores, hostingCheck, rknCheck);
 
   return {
     url,
