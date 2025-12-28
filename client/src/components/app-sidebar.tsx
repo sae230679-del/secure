@@ -54,8 +54,13 @@ import {
 } from "lucide-react";
 
 export function AppSidebar() {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const { user, logout } = useAuth();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/");
+  };
 
   const isAdmin = user?.role === "admin" || user?.role === "superadmin";
   const isSuperAdmin = user?.role === "superadmin";
@@ -245,8 +250,8 @@ export function AppSidebar() {
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              onClick={() => logout()}
-              className="text-destructive"
+              onClick={handleLogout}
+              className="text-destructive cursor-pointer"
               data-testid="button-logout"
             >
               <LogOut className="h-4 w-4 mr-2" />
