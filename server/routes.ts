@@ -4263,9 +4263,20 @@ export async function registerRoutes(
         secure,
         auth: { user, pass },
       };
+      
+      // For Yandex and other Russian providers
+      if (host.includes('yandex') || host.includes('mail.ru')) {
+        transportConfig.tls = {
+          rejectUnauthorized: false,
+          minVersion: 'TLSv1.2',
+        };
+      }
+      
       if (!secure && requireTls) {
         transportConfig.requireTLS = true;
       }
+      
+      console.log(`[SMTP Test] Sending to ${toEmail} via ${host}:${port}`);
       
       const transporter = nodemailer.default.createTransport(transportConfig);
       
@@ -4329,15 +4340,29 @@ export async function registerRoutes(
         port,
         secure,
         auth: { user, pass },
-        connectionTimeout: 10000,
+        connectionTimeout: 15000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
       };
+      
+      // For Yandex and other Russian providers, may need TLS options
+      if (host.includes('yandex') || host.includes('mail.ru')) {
+        transportConfig.tls = {
+          rejectUnauthorized: false,
+          minVersion: 'TLSv1.2',
+        };
+      }
+      
       if (!secure && requireTls) {
         transportConfig.requireTLS = true;
       }
       
+      console.log(`[SMTP Verify] Attempting connection to ${host}:${port} (secure=${secure})`);
+      
       const transporter = nodemailer.default.createTransport(transportConfig);
       await transporter.verify();
       
+      console.log(`[SMTP Verify] Connection successful to ${host}:${port}`);
       res.json({ success: true, message: "Соединение с SMTP сервером установлено успешно" });
     } catch (error: any) {
       console.error("[SMTP Verify] Error:", error?.message || error);

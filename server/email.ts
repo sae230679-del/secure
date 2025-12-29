@@ -177,7 +177,18 @@ async function getTransporter(): Promise<Transporter | null> {
       user: settings.user,
       pass: settings.pass,
     },
+    connectionTimeout: 15000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
   };
+  
+  // For Yandex and other Russian providers, may need TLS options
+  if (settings.host.includes('yandex') || settings.host.includes('mail.ru')) {
+    transportConfig.tls = {
+      rejectUnauthorized: false,
+      minVersion: 'TLSv1.2',
+    };
+  }
   
   // For port 587 with STARTTLS
   if (!settings.secure && settings.requireTls) {
