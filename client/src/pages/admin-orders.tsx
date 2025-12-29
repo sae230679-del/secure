@@ -656,9 +656,15 @@ export default function AdminOrdersPage() {
                         </TableCell>
                         <TableCell>
                           <div className="space-y-1 text-sm">
-                            {order.name && (
+                            {order.email && (
                               <div className="flex items-center gap-1">
-                                <User className="h-3 w-3 text-muted-foreground" />
+                                <Mail className="h-3 w-3 text-muted-foreground" />
+                                {order.email}
+                              </div>
+                            )}
+                            {order.name && (
+                              <div className="flex items-center gap-1 text-muted-foreground">
+                                <User className="h-3 w-3" />
                                 {order.name}
                               </div>
                             )}
