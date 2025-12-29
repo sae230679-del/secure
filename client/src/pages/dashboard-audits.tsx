@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import type { AuditWithDetails } from "@shared/schema";
 import {
   FileSearch,
@@ -32,8 +32,9 @@ export default function DashboardAuditsPage() {
     pdn: false,
     offer: false,
   });
+  const [, navigate] = useLocation();
 
-  const { data: audits, isLoading } = useQuery<AuditWithDetails[]>({
+  const { data: audits, isLoading, error } = useQuery<AuditWithDetails[]>({
     queryKey: ["/api/audits"],
   });
 
@@ -41,7 +42,7 @@ export default function DashboardAuditsPage() {
     e.preventDefault();
     if (!urlInput.trim()) return;
     if (!consents.privacy || !consents.pdn || !consents.offer) return;
-    window.location.href = `/order-report?type=full&url=${encodeURIComponent(urlInput)}`;
+    navigate(`/order-report?type=full&url=${encodeURIComponent(urlInput)}`);
   };
 
   const getStatusBadge = (status: string) => {
@@ -125,15 +126,18 @@ export default function DashboardAuditsPage() {
                   <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="url"
-                    type="url"
+                    type="text"
                     value={urlInput}
                     onChange={(e) => setUrlInput(e.target.value)}
-                    placeholder="https://example.com"
+                    placeholder="example.ru"
                     className="pl-10"
                     required
                     data-testid="input-audit-url"
                   />
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Можно вводить: example.com, www.example.com или https://example.com
+                </p>
               </div>
 
               <Separator />
@@ -221,34 +225,48 @@ export default function DashboardAuditsPage() {
                   </div>
                 ))}
               </div>
+            ) : error ? (
+              <div className="text-center py-8">
+                <div className="h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-4">
+                  <AlertCircle className="h-8 w-8 text-destructive" />
+                </div>
+                <p className="font-medium text-muted-foreground">Ошибка загрузки</p>
+                <p className="text-sm text-muted-foreground/70 mt-1">
+                  Не удалось загрузить историю аудитов
+                </p>
+              </div>
             ) : audits && audits.length > 0 ? (
-              <div className="space-y-3">
+              <div className="space-y-3 max-h-96 overflow-y-auto">
                 {audits.map((audit) => (
                   <Link
                     key={audit.id}
                     href={`/dashboard/audits/${audit.id}`}
-                    className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover-elevate cursor-pointer group"
+                    className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 rounded-lg bg-muted/30 hover-elevate cursor-pointer group"
                     data-testid={`link-audit-${audit.id}`}
                   >
-                    <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                      <Globe className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">
-                        {audit.websiteUrlNormalized.replace(/^https?:\/\//, "")}
-                      </p>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>{audit.package?.name || "Аудит"}</span>
-                        {audit.createdAt && (
-                          <>
-                            <span>-</span>
-                            <span>{new Date(audit.createdAt).toLocaleDateString("ru-RU")}</span>
-                          </>
-                        )}
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                        <Globe className="h-5 w-5 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">
+                          {audit.websiteUrlNormalized.replace(/^https?:\/\//, "")}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                          <span className="truncate max-w-24 sm:max-w-none">{audit.package?.name || "Аудит"}</span>
+                          {audit.createdAt && (
+                            <>
+                              <span className="hidden sm:inline">-</span>
+                              <span>{new Date(audit.createdAt).toLocaleDateString("ru-RU")}</span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    {getStatusBadge(audit.status)}
-                    <ExternalLink className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                    <div className="flex items-center gap-2 pl-13 sm:pl-0">
+                      {getStatusBadge(audit.status)}
+                      <ExternalLink className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 hidden sm:block" />
+                    </div>
                   </Link>
                 ))}
               </div>

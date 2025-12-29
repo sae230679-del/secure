@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { useToast } from "@/hooks/use-toast";
 import {
   Activity,
   Globe,
@@ -20,6 +21,7 @@ import {
   Search,
   Zap,
   ExternalLink,
+  AlertCircle,
 } from "lucide-react";
 
 interface ExpressCheck {
@@ -44,8 +46,10 @@ export default function DashboardExpressChecksPage() {
     pdn: false,
     offer: false,
   });
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
 
-  const { data: expressChecks, isLoading } = useQuery<ExpressCheck[]>({
+  const { data: expressChecks, isLoading, error } = useQuery<ExpressCheck[]>({
     queryKey: ["/api/my-express-checks"],
   });
 
@@ -62,9 +66,23 @@ export default function DashboardExpressChecksPage() {
         body: JSON.stringify({ websiteUrl: urlInput }),
       });
       const data = await response.json();
-      if (data.token) {
-        window.location.href = `/express-result/${data.token}`;
+      if (!response.ok) {
+        toast({
+          title: "Ошибка проверки",
+          description: data.error || "Не удалось запустить проверку",
+          variant: "destructive",
+        });
+        return;
       }
+      if (data.token) {
+        navigate(`/express-result/${data.token}`);
+      }
+    } catch (err) {
+      toast({
+        title: "Ошибка сети",
+        description: "Проверьте подключение к интернету",
+        variant: "destructive",
+      });
     } finally {
       setIsChecking(false);
     }
@@ -233,43 +251,57 @@ export default function DashboardExpressChecksPage() {
                   </div>
                 ))}
               </div>
+            ) : error ? (
+              <div className="text-center py-8">
+                <div className="h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-4">
+                  <AlertCircle className="h-8 w-8 text-destructive" />
+                </div>
+                <p className="font-medium text-muted-foreground">Ошибка загрузки</p>
+                <p className="text-sm text-muted-foreground/70 mt-1">
+                  Не удалось загрузить историю проверок
+                </p>
+              </div>
             ) : expressChecks && expressChecks.length > 0 ? (
-              <div className="space-y-3">
+              <div className="space-y-3 max-h-96 overflow-y-auto">
                 {expressChecks.map((check) => (
                   <Link
                     key={check.id}
                     href={`/express-result/${check.token}`}
-                    className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover-elevate cursor-pointer group"
+                    className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 rounded-lg bg-muted/30 hover-elevate cursor-pointer group"
                     data-testid={`link-express-check-${check.id}`}
                   >
-                    <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                      {getStatusIcon(check.status)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">
-                        {check.websiteUrl.replace(/^https?:\/\//, "")}
-                      </p>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>{new Date(check.createdAt).toLocaleDateString("ru-RU")}</span>
-                        {check.status === "completed" && check.scorePercent !== null && (
-                          <>
-                            <span className="text-green-600">OK: {check.passedCount}</span>
-                            <span className="text-yellow-600">Внимание: {check.warningCount}</span>
-                            <span className="text-red-600">Ошибки: {check.failedCount}</span>
-                          </>
-                        )}
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                        {getStatusIcon(check.status)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">
+                          {check.websiteUrl.replace(/^https?:\/\//, "")}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                          <span>{new Date(check.createdAt).toLocaleDateString("ru-RU")}</span>
+                          {check.status === "completed" && check.scorePercent !== null && (
+                            <span className="hidden sm:inline">
+                              <span className="text-green-600">{check.passedCount}</span>
+                              <span className="mx-1">/</span>
+                              <span className="text-yellow-600">{check.warningCount}</span>
+                              <span className="mx-1">/</span>
+                              <span className="text-red-600">{check.failedCount}</span>
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 pl-13 sm:pl-0">
                       {check.fullReportPurchased && (
                         <Badge variant="secondary" className="gap-1">
                           <FileText className="h-3 w-3" />
-                          Отчёт
+                          <span className="hidden sm:inline">Отчёт</span>
                         </Badge>
                       )}
                       {getSeverityBadge(check.severity, check.scorePercent)}
+                      <ExternalLink className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 hidden sm:block" />
                     </div>
-                    <ExternalLink className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                   </Link>
                 ))}
               </div>
