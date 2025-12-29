@@ -356,6 +356,25 @@ export default function OrderReportPage() {
                 </Button>
               )}
             </div>
+            
+            {isExpressOrder && (
+              <div className="mt-8 pt-6 border-t border-border">
+                <Link href="/full-audit">
+                  <Button 
+                    size="lg"
+                    className="w-full py-6 text-lg font-bold animate-pulse bg-gradient-to-r from-primary via-primary/90 to-primary shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 transition-all duration-300"
+                    data-testid="button-cta-full-audit"
+                  >
+                    <FileText className="mr-3 h-6 w-6" />
+                    Полный аудит с документами для ФЗ-152
+                    <ArrowRight className="ml-3 h-6 w-6" />
+                  </Button>
+                </Link>
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Получите полный пакет документов для соответствия законодательству
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -466,9 +485,6 @@ export default function OrderReportPage() {
                       {reportPrice.toLocaleString("ru-RU")} ₽
                     </span>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Оплата после получения отчёта или по реквизитам
-                  </p>
                 </>
               )}
             </CardContent>
@@ -726,29 +742,6 @@ export default function OrderReportPage() {
           </Card>
         </div>
 
-        <div className="mt-8 text-center">
-          <Card className="inline-block">
-            <CardContent className="pt-6 px-8">
-              <p className="text-sm text-muted-foreground">
-                {isExpressOrder ? (
-                  <>
-                    Хотите полный аудит с документами?{" "}
-                    <Link href="/full-audit" className="text-primary font-medium underline">
-                      Узнать подробнее
-                    </Link>
-                  </>
-                ) : (
-                  <>
-                    Хотите быструю проверку?{" "}
-                    <Link href="/" className="text-primary font-medium underline">
-                      Экспресс-проверка
-                    </Link>
-                  </>
-                )}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
       </div>
     </div>
   );
