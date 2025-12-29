@@ -140,7 +140,7 @@ export function AppSidebar() {
                     <SidebarMenuItem key={item.url}>
                       <SidebarMenuButton
                         asChild
-                        isActive={location === item.url}
+                        isActive={location === item.url || (item.url !== "/dashboard" && location.startsWith(item.url + "/"))}
                         data-testid={`nav-${item.url.replace(/\//g, "-")}`}
                       >
                         <Link href={item.url}>
@@ -172,7 +172,7 @@ export function AppSidebar() {
                       <SidebarMenuItem key={item.url}>
                         <SidebarMenuButton
                           asChild
-                          isActive={location === item.url}
+                          isActive={location === item.url || (item.url !== "/admin" && location.startsWith(item.url + "/"))}
                           data-testid={`nav-${item.url.replace(/\//g, "-")}`}
                         >
                           <Link href={item.url}>
@@ -205,7 +205,7 @@ export function AppSidebar() {
                       <SidebarMenuItem key={item.url}>
                         <SidebarMenuButton
                           asChild
-                          isActive={location === item.url}
+                          isActive={location === item.url || (item.url !== "/superadmin" && location.startsWith(item.url + "/"))}
                           data-testid={`nav-${item.url.replace(/\//g, "-")}`}
                         >
                           <Link href={item.url}>
