@@ -187,6 +187,12 @@ export interface IStorage {
   getFullAuditOrderById(id: number): Promise<schema.FullAuditOrder | undefined>;
   updateFullAuditOrderStatus(id: number, status: string): Promise<schema.FullAuditOrder | undefined>;
   deleteFullAuditOrder(id: number): Promise<boolean>;
+
+  // Promotion Orders - Заявки по акциям
+  createPromotionOrder(data: Omit<schema.InsertPromotionOrder, 'status'>): Promise<schema.PromotionOrder>;
+  getPromotionOrders(): Promise<schema.PromotionOrder[]>;
+  updatePromotionOrderStatus(id: number, status: string): Promise<schema.PromotionOrder | undefined>;
+  deletePromotionOrder(id: number): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2814,6 +2820,40 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(schema.fullAuditOrders)
       .where(eq(schema.fullAuditOrders.id, id));
+    return true;
+  }
+
+  // =====================================================
+  // Promotion Orders - Заявки по акциям
+  // =====================================================
+  async createPromotionOrder(data: Omit<schema.InsertPromotionOrder, 'status'>): Promise<schema.PromotionOrder> {
+    const [order] = await db
+      .insert(schema.promotionOrders)
+      .values(data)
+      .returning();
+    return order;
+  }
+
+  async getPromotionOrders(): Promise<schema.PromotionOrder[]> {
+    return db
+      .select()
+      .from(schema.promotionOrders)
+      .orderBy(desc(schema.promotionOrders.createdAt));
+  }
+
+  async updatePromotionOrderStatus(id: number, status: string): Promise<schema.PromotionOrder | undefined> {
+    const [order] = await db
+      .update(schema.promotionOrders)
+      .set({ status: status as any, updatedAt: new Date() })
+      .where(eq(schema.promotionOrders.id, id))
+      .returning();
+    return order;
+  }
+
+  async deletePromotionOrder(id: number): Promise<boolean> {
+    await db
+      .delete(schema.promotionOrders)
+      .where(eq(schema.promotionOrders.id, id));
     return true;
   }
 }

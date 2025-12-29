@@ -520,6 +520,37 @@ export const insertFullAuditOrderSchema = createInsertSchema(fullAuditOrders).om
 });
 export type InsertFullAuditOrder = z.infer<typeof insertFullAuditOrderSchema>;
 
+export const promotionOrderStatusEnum = pgEnum("promotion_order_status", ["pending", "processing", "completed", "cancelled"]);
+
+export const promotionOrders = pgTable("promotion_orders", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id),
+  promotionCode: varchar("promotion_code", { length: 100 }).notNull(),
+  promotionTitle: varchar("promotion_title", { length: 500 }).notNull(),
+  name: varchar("name", { length: 255 }),
+  phone: varchar("phone", { length: 30 }),
+  socialNetwork: varchar("social_network", { length: 50 }),
+  messengerContact: varchar("messenger_contact", { length: 255 }),
+  websiteUrl: varchar("website_url", { length: 500 }).notNull(),
+  inn: varchar("inn", { length: 15 }),
+  status: promotionOrderStatusEnum("status").default("pending").notNull(),
+  adminNotes: text("admin_notes"),
+  privacyConsent: boolean("privacy_consent").default(false).notNull(),
+  pdnConsent: boolean("pdn_consent").default(false).notNull(),
+  offerConsent: boolean("offer_consent").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type PromotionOrder = typeof promotionOrders.$inferSelect;
+export const insertPromotionOrderSchema = createInsertSchema(promotionOrders).omit({ 
+  id: true, 
+  createdAt: true, 
+  updatedAt: true,
+  status: true,
+});
+export type InsertPromotionOrder = z.infer<typeof insertPromotionOrderSchema>;
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
