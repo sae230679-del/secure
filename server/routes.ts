@@ -1951,7 +1951,7 @@ export async function registerRoutes(
     try {
       const siteName = await storage.getSystemSetting("site_name");
       const requisitesSetting = await storage.getSystemSetting("company_requisites");
-      const contactsSetting = await storage.getSystemSetting("contact_settings");
+      const contactsSetting = await storage.getSystemSetting("contacts");
       const yandexMetrikaSetting = await storage.getSystemSetting("yandex_metrika_code");
       const yandexWebmasterSetting = await storage.getSystemSetting("yandex_webmaster_verification");
       const widgetCodeSetting = await storage.getSystemSetting("widget_code");
