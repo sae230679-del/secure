@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLocation, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Select,
   SelectContent,
@@ -23,6 +24,7 @@ import {
   Shield,
   Globe,
   AlertCircle,
+  AlertTriangle,
   Mail,
   Phone,
   User,
@@ -30,6 +32,7 @@ import {
   MessageCircle,
   Clock,
   Send,
+  XCircle,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -80,6 +83,73 @@ export default function OrderReportPage() {
     pdn: false,
     offer: false,
   });
+  const [innCheckResult, setInnCheckResult] = useState<{
+    status: "idle" | "checking" | "found" | "not_found" | "error" | "needs_manual";
+    message?: string;
+    companyName?: string;
+  }>({ status: "idle" });
+
+  const checkInnInRegistry = useCallback(async (inn: string) => {
+    if (!inn || inn.length < 10) {
+      setInnCheckResult({ status: "idle" });
+      return;
+    }
+    
+    const cleanedInn = inn.replace(/\D/g, "");
+    if (cleanedInn.length !== 10 && cleanedInn.length !== 12) {
+      setInnCheckResult({ status: "idle" });
+      return;
+    }
+    
+    setInnCheckResult({ status: "checking" });
+    
+    try {
+      const response = await fetch("/api/public/check-inn-registry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inn: cleanedInn }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.found === true) {
+        setInnCheckResult({ 
+          status: "found", 
+          companyName: data.companyName,
+          message: `Найден в реестре: ${data.companyName || "Оператор зарегистрирован"}` 
+        });
+      } else if (data.found === false) {
+        setInnCheckResult({ 
+          status: "not_found", 
+          message: "Организация НЕ найдена в реестре операторов персональных данных Роскомнадзора. Это критическое нарушение ФЗ-152!" 
+        });
+      } else if (data.found === null) {
+        setInnCheckResult({ 
+          status: "needs_manual", 
+          message: "Требуется ручная проверка на сайте pd.rkn.gov.ru" 
+        });
+      } else {
+        setInnCheckResult({ status: "idle" });
+      }
+    } catch (error) {
+      setInnCheckResult({ 
+        status: "error", 
+        message: "Не удалось проверить ИНН в реестре" 
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (formData.inn && !formData.isPhysicalPerson) {
+        checkInnInRegistry(formData.inn);
+      } else {
+        setInnCheckResult({ status: "idle" });
+      }
+    }, 800);
+    
+    return () => clearTimeout(timeoutId);
+  }, [formData.inn, formData.isPhysicalPerson, checkInnInRegistry]);
   
   const { data: expressCheck, isLoading: checkLoading, error: checkError } = useQuery<ExpressCheckResult>({
     queryKey: ["/api/public/express-check", token],
@@ -527,7 +597,38 @@ export default function OrderReportPage() {
                           maxLength={12}
                           data-testid="input-inn"
                         />
+                        {innCheckResult.status === "checking" && (
+                          <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                        )}
+                        {innCheckResult.status === "found" && (
+                          <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500" />
+                        )}
+                        {innCheckResult.status === "not_found" && (
+                          <XCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-destructive" />
+                        )}
                       </div>
+                      
+                      {innCheckResult.status === "not_found" && (
+                        <Alert variant="destructive" className="mt-2">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertTitle>Критическое нарушение ФЗ-152!</AlertTitle>
+                          <AlertDescription className="text-sm">
+                            {innCheckResult.message}
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                      
+                      {innCheckResult.status === "found" && (
+                        <p className="text-xs text-emerald-600 mt-1">
+                          {innCheckResult.message}
+                        </p>
+                      )}
+                      
+                      {innCheckResult.status === "needs_manual" && (
+                        <p className="text-xs text-amber-600 mt-1">
+                          {innCheckResult.message}
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>

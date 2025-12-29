@@ -2029,6 +2029,48 @@ export async function registerRoutes(
     }
   });
 
+  // Public API: Check INN in RKN registry
+  app.post("/api/public/check-inn-registry", async (req, res) => {
+    try {
+      const { inn } = req.body;
+      
+      if (!inn) {
+        return res.status(400).json({ error: "ИНН обязателен", found: null });
+      }
+      
+      const cleanedInn = inn.replace(/\D/g, "").trim();
+      
+      if (cleanedInn.length !== 10 && cleanedInn.length !== 12) {
+        return res.status(400).json({ 
+          error: "ИНН должен содержать 10 или 12 цифр", 
+          found: null 
+        });
+      }
+      
+      // Check cache first
+      const cached = await storage.getRknCacheByInn(cleanedInn);
+      if (cached) {
+        return res.json({
+          found: cached.isRegistered,
+          companyName: cached.companyName,
+          registrationNumber: cached.registrationNumber,
+          cached: true,
+        });
+      }
+      
+      // Since RKN site is protected, return needs_manual for now
+      // Real implementation would use checkRKNRegistry function
+      res.json({
+        found: null,
+        message: "Требуется ручная проверка на pd.rkn.gov.ru",
+        checkUrl: `https://pd.rkn.gov.ru/operators-registry/operators-list/?inn=${cleanedInn}`,
+      });
+    } catch (error: any) {
+      console.error("[INN-CHECK] Error:", error);
+      res.status(500).json({ error: "Ошибка проверки ИНН", found: null });
+    }
+  });
+
   // Public API: Individual order form submission (saves to database)
   app.post("/api/public/individual-order", async (req, res) => {
     try {

@@ -131,10 +131,10 @@ export default function DashboardExpressChecksPage() {
                   <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="url"
-                    type="url"
+                    type="text"
                     value={urlInput}
                     onChange={(e) => setUrlInput(e.target.value)}
-                    placeholder="https://example.com"
+                    placeholder="securelex.ru"
                     className="pl-10"
                     required
                     data-testid="input-express-url"
