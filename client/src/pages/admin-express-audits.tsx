@@ -29,7 +29,6 @@ import {
   Clock,
   Settings,
   Save,
-  Ruble,
 } from "lucide-react";
 import { Link } from "wouter";
 

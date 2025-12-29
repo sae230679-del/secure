@@ -580,28 +580,39 @@ export function ExpressCheck() {
                 )}
 
                 <div className="border-t pt-4 space-y-4">
-                  <div className="p-4 rounded-lg border-2 border-primary/30 bg-primary/5 space-y-3">
-                    <div className="flex items-center justify-between gap-2">
+                  <div className="p-4 sm:p-5 rounded-lg border-2 border-primary/30 bg-primary/5 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <FileText className="w-5 h-5 text-primary" />
-                        <span className="font-semibold">Полный отчёт</span>
+                        <FileText className="w-5 h-5 text-primary shrink-0" />
+                        <span className="font-semibold text-base sm:text-lg">Подробный отчёт</span>
                       </div>
-                      <span className="text-2xl font-bold text-primary">{result.fullReportPrice || 900} ₽</span>
+                      <span className="text-2xl sm:text-3xl font-bold text-primary">{result.fullReportPrice || 900} ₽</span>
                     </div>
-                    <ul className="text-xs text-muted-foreground space-y-1.5">
-                      <li className="flex items-center gap-2">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
-                        Детальный разбор каждого нарушения
+
+                    <p className="text-sm text-muted-foreground">
+                      Получите детальный анализ каждого нарушения с рекомендациями по исправлению. 
+                      Отчёт готовится специалистом и отправляется на email в течение 24 часов.
+                    </p>
+
+                    <ul className="text-sm text-muted-foreground space-y-2">
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                        <span>Подробная карта нарушений по 152-ФЗ и 149-ФЗ</span>
                       </li>
-                      <li className="flex items-center gap-2">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
-                        Размер штрафов и ссылки на законы
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                        <span>Пошаговый план исправлений</span>
                       </li>
-                      <li className="flex items-center gap-2">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
-                        Пошаговые рекомендации по исправлению
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                        <span>Раздел по рискам и возможной ответственности</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                        <span>Приложения и ссылки на официальные источники</span>
                       </li>
                     </ul>
+
                     <Button 
                       className="w-full" 
                       size="lg" 
@@ -612,38 +623,19 @@ export function ExpressCheck() {
                       {isPurchasing ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Создание...
+                          Создание заказа...
                         </>
                       ) : (
                         <>
                           <CreditCard className="mr-2 h-4 w-4" />
-                          Купить за {result.fullReportPrice || 900} ₽
+                          Купить подробный отчёт за {result.fullReportPrice || 900} ₽
                         </>
                       )}
                     </Button>
-                  </div>
 
-                  <div className="p-3 rounded-lg bg-muted/50 space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium">Полный аудит + документы</span>
-                      <span className="text-sm text-muted-foreground">
-                        от {result.siteType?.baseAuditPrice?.toLocaleString('ru-RU') || "4 900"} ₽
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Глубокий анализ + готовые документы для вашего сайта
+                    <p className="text-xs text-center text-muted-foreground">
+                      Отчёт в течение 24 часов на email
                     </p>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      className="w-full" 
-                      asChild
-                    >
-                      <Link href="/full-audit">
-                        Подробнее
-                        <ArrowRight className="ml-2 h-3 w-3" />
-                      </Link>
-                    </Button>
                   </div>
 
                   <Button 

@@ -354,56 +354,66 @@ function CtaBlock({
 }) {
   return (
     <div className="space-y-4 border-t pt-4 mt-4">
-      <div className="text-center">
-        <p className="text-sm text-muted-foreground">
-          Это краткий отчёт. Полная карта рисков и план исправлений доступны в
-          полном отчёте.
-        </p>
-      </div>
-
-      <div className="grid gap-3">
-
-        <div className="p-4 rounded-lg border-2 border-primary/30 bg-primary/5 space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <FileText className="w-5 h-5 text-primary" />
-              <span className="font-semibold">Полный отчёт</span>
-            </div>
-            <span className="text-xl font-bold text-primary">
-              {cta.fullReportPriceRub} ₽
-            </span>
+      <div className="p-4 sm:p-5 rounded-lg border-2 border-primary/30 bg-primary/5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <FileText className="w-5 h-5 text-primary shrink-0" />
+            <span className="font-semibold text-base sm:text-lg">Подробный отчёт</span>
           </div>
-
-          <ul className="text-xs text-muted-foreground space-y-1.5">
-            {cta.fullReportIncludes.map((item, i) => (
-              <li key={i} className="flex items-start gap-2">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-
-          {onPurchaseFullReport && (
-            <Button
-              className="w-full"
-              onClick={onPurchaseFullReport}
-              disabled={isPurchasing}
-              data-testid="button-purchase-full-report"
-            >
-              {isPurchasing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Создание...
-                </>
-              ) : (
-                <>
-                  <CreditCard className="mr-2 h-4 w-4" />
-                  Купить за {cta.fullReportPriceRub} ₽
-                </>
-              )}
-            </Button>
-          )}
+          <span className="text-2xl sm:text-3xl font-bold text-primary">
+            {cta.fullReportPriceRub} ₽
+          </span>
         </div>
+
+        <p className="text-sm text-muted-foreground">
+          Получите детальный анализ каждого нарушения с рекомендациями по исправлению. 
+          Отчёт готовится специалистом и отправляется на email в течение 24 часов.
+        </p>
+
+        <ul className="text-sm text-muted-foreground space-y-2">
+          <li className="flex items-start gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+            <span>Подробная карта нарушений по 152-ФЗ и 149-ФЗ</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+            <span>Пошаговый план исправлений</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+            <span>Раздел по рискам и возможной ответственности</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+            <span>Приложения и ссылки на официальные источники</span>
+          </li>
+        </ul>
+
+        {onPurchaseFullReport && (
+          <Button
+            className="w-full"
+            size="lg"
+            onClick={onPurchaseFullReport}
+            disabled={isPurchasing}
+            data-testid="button-purchase-full-report"
+          >
+            {isPurchasing ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Создание заказа...
+              </>
+            ) : (
+              <>
+                <CreditCard className="mr-2 h-4 w-4" />
+                Купить подробный отчёт за {cta.fullReportPriceRub} ₽
+              </>
+            )}
+          </Button>
+        )}
+
+        <p className="text-xs text-center text-muted-foreground">
+          Отчёт в течение 24 часов на email
+        </p>
       </div>
     </div>
   );
