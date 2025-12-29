@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useLocation, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -23,19 +23,15 @@ import {
   Shield,
   Globe,
   AlertCircle,
-  LogIn,
-  UserPlus,
   Mail,
-  Lock,
-  Eye,
-  EyeOff,
   Phone,
   User,
   Building2,
   MessageCircle,
+  Clock,
+  Send,
 } from "lucide-react";
-import { useAuth } from "@/lib/auth-context";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 interface SiteTypeInfo {
@@ -62,23 +58,21 @@ interface ExpressCheckResult {
 
 export default function OrderReportPage() {
   const [, navigate] = useLocation();
-  const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   
   const urlParams = new URLSearchParams(window.location.search);
   const token = urlParams.get("token");
   const orderType = urlParams.get("type") || "express";
+  const urlFromParam = urlParams.get("url") || "";
   
-  const [isCreatingOrder, setIsCreatingOrder] = useState(false);
-  const [authMode, setAuthMode] = useState<"login" | "register">("register");
-  const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
   const [formData, setFormData] = useState({
-    email: "",
-    password: "",
     name: "",
     phone: "",
     socialNetwork: "",
-    websiteUrl: "",
+    email: "",
+    websiteUrl: urlFromParam,
     inn: "",
     isPhysicalPerson: false,
   });
@@ -99,85 +93,67 @@ export default function OrderReportPage() {
     enabled: !!token && orderType === "express",
   });
 
-  const loginMutation = useMutation({
-    mutationFn: async (data: { email: string; password: string }) => {
-      const response = await apiRequest("POST", "/api/auth/login", data);
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Ошибка входа");
-      }
-      return response.json();
-    },
-    onSuccess: async () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      toast({ title: "Вход выполнен", description: "Перенаправляем к оплате..." });
-      await handleCreateOrder();
-    },
-    onError: (error: Error) => {
-      toast({ title: "Ошибка входа", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const registerMutation = useMutation({
-    mutationFn: async (data: { 
-      email: string; 
-      password: string; 
-      name?: string; 
+  const submitOrderMutation = useMutation({
+    mutationFn: async (data: {
+      name?: string;
       phone?: string;
+      socialNetwork?: string;
+      email: string;
+      websiteUrl: string;
       inn?: string;
+      isPhysicalPerson: boolean;
+      expressCheckToken?: string;
+      orderType: string;
     }) => {
-      const response = await apiRequest("POST", "/api/auth/register", data);
+      const response = await apiRequest("POST", "/api/orders/express-report", data);
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Ошибка регистрации");
+        throw new Error(errorData.error || "Ошибка при отправке заявки");
       }
       return response.json();
     },
-    onSuccess: async () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      toast({ title: "Регистрация успешна", description: "Перенаправляем к оплате..." });
-      await handleCreateOrder();
+    onSuccess: () => {
+      setIsSubmitted(true);
+      toast({ 
+        title: "Заявка отправлена!", 
+        description: "Мы свяжемся с вами в ближайшее время" 
+      });
     },
     onError: (error: Error) => {
-      toast({ title: "Ошибка регистрации", description: error.message, variant: "destructive" });
+      toast({ 
+        title: "Ошибка", 
+        description: error.message, 
+        variant: "destructive" 
+      });
     },
   });
 
-  const handleCreateOrder = async () => {
-    setIsCreatingOrder(true);
-    try {
-      if (orderType === "express" && token) {
-        const response = await apiRequest("POST", "/api/express-report/purchase", { token });
-        const data = await response.json();
-        
-        if (!response.ok) {
-          throw new Error(data.error || "Ошибка при создании заказа");
-        }
-        
-        toast({ title: "Заказ создан", description: "Переходим к оплате..." });
-        navigate(`/checkout?auditId=${data.auditId}`);
-      } else {
-        toast({ 
-          title: "Заявка принята", 
-          description: "Мы свяжемся с вами в ближайшее время для уточнения деталей" 
-        });
-        navigate("/full-audit?submitted=true");
-      }
-    } catch (err: any) {
-      toast({
-        title: "Ошибка",
-        description: err.message || "Не удалось создать заказ",
-        variant: "destructive",
-      });
-    } finally {
-      setIsCreatingOrder(false);
-    }
-  };
-
-  const handleAuth = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.isPhysicalPerson && !formData.inn.trim() && authMode === "register") {
+    if (!formData.email.trim()) {
+      toast({
+        title: "Укажите E-mail",
+        description: "E-mail обязателен для связи",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const websiteUrl = orderType === "express" && expressCheck 
+      ? expressCheck.websiteUrl 
+      : formData.websiteUrl;
+
+    if (!websiteUrl.trim()) {
+      toast({
+        title: "Укажите URL сайта",
+        description: "URL сайта обязателен",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!formData.isPhysicalPerson && !formData.inn.trim()) {
       toast({
         title: "Укажите ИНН",
         description: "Укажите ИНН или отметьте что вы физическое лицо",
@@ -194,28 +170,19 @@ export default function OrderReportPage() {
       });
       return;
     }
-    
-    if (authMode === "login") {
-      await loginMutation.mutateAsync({
-        email: formData.email,
-        password: formData.password,
-      });
-    } else {
-      await registerMutation.mutateAsync({
-        email: formData.email,
-        password: formData.password,
-        name: formData.name || undefined,
-        phone: formData.phone || undefined,
-        inn: formData.isPhysicalPerson ? undefined : formData.inn || undefined,
-      });
-    }
-  };
 
-  useEffect(() => {
-    if (user && orderType === "express" && token && !isCreatingOrder && !loginMutation.isPending && !registerMutation.isPending) {
-      handleCreateOrder();
-    }
-  }, []);
+    await submitOrderMutation.mutateAsync({
+      name: formData.name || undefined,
+      phone: formData.phone || undefined,
+      socialNetwork: formData.socialNetwork || undefined,
+      email: formData.email,
+      websiteUrl,
+      inn: formData.isPhysicalPerson ? undefined : formData.inn || undefined,
+      isPhysicalPerson: formData.isPhysicalPerson,
+      expressCheckToken: token || undefined,
+      orderType,
+    });
+  };
 
   const isExpressOrder = orderType === "express";
 
@@ -238,7 +205,7 @@ export default function OrderReportPage() {
     );
   }
 
-  if ((isExpressOrder && checkLoading) || authLoading) {
+  if (isExpressOrder && checkLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -281,6 +248,37 @@ export default function OrderReportPage() {
     );
   }
 
+  if (isSubmitted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <Card className="w-full max-w-lg">
+          <CardContent className="pt-8 text-center">
+            <div className="h-16 w-16 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-6">
+              <CheckCircle2 className="h-8 w-8 text-green-600" />
+            </div>
+            <h2 className="text-2xl font-bold mb-2">Заявка отправлена!</h2>
+            <p className="text-muted-foreground mb-6">
+              {isExpressOrder 
+                ? "Полный отчёт будет отправлен на указанный E-mail в течение 24 часов."
+                : "Мы свяжемся с вами в ближайшее время для уточнения деталей заказа."
+              }
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Button variant="outline" onClick={() => navigate("/")} data-testid="button-go-home">
+                На главную
+              </Button>
+              {isExpressOrder && token && (
+                <Button onClick={() => navigate(`/express-result/${token}`)} data-testid="button-back-to-result">
+                  Вернуться к результатам
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   const reportPrice = expressCheck?.fullReportPrice || 900;
   const pageTitle = isExpressOrder ? "Заказ полного отчёта" : "Заказ аудита сайта";
 
@@ -291,7 +289,7 @@ export default function OrderReportPage() {
           <h1 className="text-2xl md:text-3xl font-bold mb-2">{pageTitle}</h1>
           <p className="text-muted-foreground">
             {isExpressOrder 
-              ? "Получите детальный анализ и рекомендации по исправлению"
+              ? "Заполните форму для получения детального анализа"
               : "Закажите полный аудит сайта на соответствие законодательству РФ"
             }
           </p>
@@ -370,8 +368,8 @@ export default function OrderReportPage() {
                     Пошаговые рекомендации по исправлению
                   </li>
                   <li className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                    Отчёт на email в течение 24 часов
+                    <Clock className="h-4 w-4 text-blue-500 shrink-0" />
+                    Отчёт на E-mail в течение 24 часов
                   </li>
                 </ul>
               </div>
@@ -380,11 +378,14 @@ export default function OrderReportPage() {
                 <>
                   <Separator />
                   <div className="flex items-center justify-between">
-                    <span className="text-lg font-medium">Итого к оплате:</span>
+                    <span className="text-lg font-medium">Стоимость:</span>
                     <span className="text-2xl font-bold text-primary" data-testid="text-report-price">
                       {reportPrice.toLocaleString("ru-RU")} ₽
                     </span>
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    Оплата после получения отчёта или по реквизитам
+                  </p>
                 </>
               )}
             </CardContent>
@@ -393,287 +394,197 @@ export default function OrderReportPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                {user ? (
-                  <>
-                    <Shield className="h-5 w-5" />
-                    Подтверждение заказа
-                  </>
-                ) : (
-                  <>
-                    {authMode === "login" ? <LogIn className="h-5 w-5" /> : <UserPlus className="h-5 w-5" />}
-                    {authMode === "login" ? "Вход в аккаунт" : "Оформление заказа"}
-                  </>
-                )}
+                <Send className="h-5 w-5" />
+                Форма заказа
               </CardTitle>
               <CardDescription>
-                {user 
-                  ? "Нажмите кнопку для перехода к оплате" 
-                  : authMode === "login" 
-                    ? "Войдите в существующий аккаунт"
-                    : "Заполните форму для оформления заказа"}
+                Заполните контактные данные для оформления заказа
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {user ? (
-                <div className="space-y-4">
-                  <div className="p-4 rounded-lg bg-muted/50 space-y-2">
-                    <p className="text-sm text-muted-foreground">Вы вошли как:</p>
-                    <p className="font-medium">{user.email}</p>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Имя</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="name"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      placeholder="Иван Иванов"
+                      className="pl-10"
+                      data-testid="input-name"
+                    />
                   </div>
-                  <Button
-                    className="w-full"
-                    size="lg"
-                    onClick={handleCreateOrder}
-                    disabled={isCreatingOrder}
-                    data-testid="button-proceed-payment"
-                  >
-                    {isCreatingOrder ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Создание заказа...
-                      </>
-                    ) : (
-                      <>
-                        Перейти к оплате
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </>
-                    )}
-                  </Button>
                 </div>
-              ) : (
-                <form onSubmit={handleAuth} className="space-y-4">
-                  {authMode === "register" && (
-                    <>
-                      <div className="space-y-2">
-                        <Label htmlFor="name">Имя</Label>
-                        <div className="relative">
-                          <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input
-                            id="name"
-                            value={formData.name}
-                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                            placeholder="Иван Иванов"
-                            className="pl-10"
-                            data-testid="input-name"
-                          />
-                        </div>
-                      </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="phone">Телефон</Label>
-                        <div className="relative">
-                          <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input
-                            id="phone"
-                            type="tel"
-                            value={formData.phone}
-                            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                            placeholder="+7 (999) 123-45-67"
-                            className="pl-10"
-                            data-testid="input-phone"
-                          />
-                        </div>
-                      </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Телефон</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="phone"
+                      type="tel"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      placeholder="+7 (999) 123-45-67"
+                      className="pl-10"
+                      data-testid="input-phone"
+                    />
+                  </div>
+                </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="socialNetwork">Соцсеть для связи</Label>
-                        <Select
-                          value={formData.socialNetwork}
-                          onValueChange={(value) => setFormData({ ...formData, socialNetwork: value })}
-                        >
-                          <SelectTrigger data-testid="select-social-network">
-                            <div className="flex items-center gap-2">
-                              <MessageCircle className="h-4 w-4 text-muted-foreground" />
-                              <SelectValue placeholder="Выберите мессенджер" />
-                            </div>
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="telegram">Телеграм</SelectItem>
-                            <SelectItem value="whatsapp">Вацап</SelectItem>
-                            <SelectItem value="max">Макс</SelectItem>
-                          </SelectContent>
-                        </Select>
+                <div className="space-y-2">
+                  <Label htmlFor="socialNetwork">Соцсеть для связи</Label>
+                  <Select
+                    value={formData.socialNetwork}
+                    onValueChange={(value) => setFormData({ ...formData, socialNetwork: value })}
+                  >
+                    <SelectTrigger data-testid="select-social-network">
+                      <div className="flex items-center gap-2">
+                        <MessageCircle className="h-4 w-4 text-muted-foreground" />
+                        <SelectValue placeholder="Выберите мессенджер" />
                       </div>
-                    </>
-                  )}
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="telegram">Телеграм</SelectItem>
+                      <SelectItem value="whatsapp">Вацап</SelectItem>
+                      <SelectItem value="max">Макс</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
+                <div className="space-y-2">
+                  <Label htmlFor="email">
+                    E-mail <span className="text-destructive">*</span>
+                  </Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="email"
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      placeholder="email@example.com"
+                      className="pl-10"
+                      required
+                      data-testid="input-email"
+                    />
+                  </div>
+                </div>
+
+                {!isExpressOrder && (
                   <div className="space-y-2">
-                    <Label htmlFor="email">
-                      Email <span className="text-destructive">*</span>
+                    <Label htmlFor="websiteUrl">
+                      URL сайта <span className="text-destructive">*</span>
                     </Label>
                     <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
-                        id="email"
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        placeholder="email@example.com"
+                        id="websiteUrl"
+                        type="url"
+                        value={formData.websiteUrl}
+                        onChange={(e) => setFormData({ ...formData, websiteUrl: e.target.value })}
+                        placeholder="https://example.ru"
                         className="pl-10"
                         required
-                        data-testid="input-email"
+                        data-testid="input-website-url"
                       />
                     </div>
                   </div>
+                )}
 
-                  <div className="space-y-2">
-                    <Label htmlFor="password">
-                      Пароль <span className="text-destructive">*</span>
+                <div className="space-y-3">
+                  <div className="flex items-start gap-2">
+                    <Checkbox
+                      id="isPhysicalPerson"
+                      checked={formData.isPhysicalPerson}
+                      onCheckedChange={(checked) => setFormData({ 
+                        ...formData, 
+                        isPhysicalPerson: !!checked,
+                        inn: checked ? "" : formData.inn 
+                      })}
+                      data-testid="checkbox-physical-person"
+                    />
+                    <Label htmlFor="isPhysicalPerson" className="text-sm leading-tight cursor-pointer">
+                      У меня нет ИНН, я физическое лицо
                     </Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="password"
-                        type={showPassword ? "text" : "password"}
-                        value={formData.password}
-                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                        placeholder="Минимум 6 символов"
-                        className="pl-10 pr-10"
-                        required
-                        minLength={6}
-                        data-testid="input-password"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-0 top-0 h-full px-3"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
-                    </div>
                   </div>
 
-                  {authMode === "register" && (
-                    <>
-                      {!isExpressOrder && (
-                        <div className="space-y-2">
-                          <Label htmlFor="websiteUrl">
-                            URL сайта <span className="text-destructive">*</span>
-                          </Label>
-                          <div className="relative">
-                            <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                              id="websiteUrl"
-                              type="url"
-                              value={formData.websiteUrl}
-                              onChange={(e) => setFormData({ ...formData, websiteUrl: e.target.value })}
-                              placeholder="https://example.ru"
-                              className="pl-10"
-                              required
-                              data-testid="input-website-url"
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="space-y-3">
-                        <div className="flex items-start gap-2">
-                          <Checkbox
-                            id="isPhysicalPerson"
-                            checked={formData.isPhysicalPerson}
-                            onCheckedChange={(checked) => setFormData({ 
-                              ...formData, 
-                              isPhysicalPerson: !!checked,
-                              inn: checked ? "" : formData.inn 
-                            })}
-                            data-testid="checkbox-physical-person"
-                          />
-                          <Label htmlFor="isPhysicalPerson" className="text-sm leading-tight cursor-pointer">
-                            У меня нет ИНН, я физическое лицо
-                          </Label>
-                        </div>
-
-                        {!formData.isPhysicalPerson && (
-                          <div className="space-y-2">
-                            <Label htmlFor="inn">
-                              ИНН компании/ИП/самозанятого <span className="text-destructive">*</span>
-                            </Label>
-                            <div className="relative">
-                              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                              <Input
-                                id="inn"
-                                value={formData.inn}
-                                onChange={(e) => setFormData({ ...formData, inn: e.target.value })}
-                                placeholder="1234567890"
-                                className="pl-10"
-                                maxLength={12}
-                                data-testid="input-inn"
-                              />
-                            </div>
-                          </div>
-                        )}
+                  {!formData.isPhysicalPerson && (
+                    <div className="space-y-2">
+                      <Label htmlFor="inn">
+                        ИНН компании/ИП/самозанятого <span className="text-destructive">*</span>
+                      </Label>
+                      <div className="relative">
+                        <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="inn"
+                          value={formData.inn}
+                          onChange={(e) => setFormData({ ...formData, inn: e.target.value })}
+                          placeholder="1234567890"
+                          className="pl-10"
+                          maxLength={12}
+                          data-testid="input-inn"
+                        />
                       </div>
+                    </div>
+                  )}
+                </div>
+
+                <Separator />
+
+                <div className="space-y-3">
+                  <div className="flex items-start gap-2">
+                    <Checkbox
+                      id="pdn"
+                      checked={consents.pdn}
+                      onCheckedChange={(checked) => setConsents({ ...consents, pdn: !!checked })}
+                      data-testid="checkbox-pdn"
+                    />
+                    <Label htmlFor="pdn" className="text-sm leading-tight cursor-pointer">
+                      Даю согласие на{" "}
+                      <Link href="/privacy-policy" className="text-primary underline">
+                        обработку персональных данных
+                      </Link>
+                    </Label>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Checkbox
+                      id="offer"
+                      checked={consents.offer}
+                      onCheckedChange={(checked) => setConsents({ ...consents, offer: !!checked })}
+                      data-testid="checkbox-offer"
+                    />
+                    <Label htmlFor="offer" className="text-sm leading-tight cursor-pointer">
+                      Принимаю условия{" "}
+                      <Link href="/offer" className="text-primary underline">
+                        публичной оферты
+                      </Link>
+                    </Label>
+                  </div>
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full"
+                  size="lg"
+                  disabled={submitOrderMutation.isPending}
+                  data-testid="button-submit-order"
+                >
+                  {submitOrderMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Отправка...
+                    </>
+                  ) : (
+                    <>
+                      Отправить заявку
+                      <ArrowRight className="ml-2 h-4 w-4" />
                     </>
                   )}
-
-                  <Separator />
-
-                  <div className="space-y-3">
-                    <div className="flex items-start gap-2">
-                      <Checkbox
-                        id="pdn"
-                        checked={consents.pdn}
-                        onCheckedChange={(checked) => setConsents({ ...consents, pdn: !!checked })}
-                        data-testid="checkbox-pdn"
-                      />
-                      <Label htmlFor="pdn" className="text-sm leading-tight cursor-pointer">
-                        Даю согласие на{" "}
-                        <Link href="/privacy-policy" className="text-primary underline">
-                          обработку персональных данных
-                        </Link>
-                      </Label>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <Checkbox
-                        id="offer"
-                        checked={consents.offer}
-                        onCheckedChange={(checked) => setConsents({ ...consents, offer: !!checked })}
-                        data-testid="checkbox-offer"
-                      />
-                      <Label htmlFor="offer" className="text-sm leading-tight cursor-pointer">
-                        Принимаю условия{" "}
-                        <Link href="/offer" className="text-primary underline">
-                          публичной оферты
-                        </Link>
-                      </Label>
-                    </div>
-                  </div>
-
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    size="lg"
-                    disabled={loginMutation.isPending || registerMutation.isPending}
-                    data-testid="button-auth-submit"
-                  >
-                    {loginMutation.isPending || registerMutation.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        {authMode === "login" ? "Вход..." : "Оформление..."}
-                      </>
-                    ) : (
-                      <>
-                        {authMode === "login" ? "Войти и оплатить" : "Оформить и оплатить"}
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </>
-                    )}
-                  </Button>
-
-                  <div className="text-center pt-2">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="text-primary underline-offset-4 hover:underline"
-                      onClick={() => setAuthMode(authMode === "login" ? "register" : "login")}
-                      data-testid="button-toggle-auth-mode"
-                    >
-                      {authMode === "login" ? "Нет аккаунта? Зарегистрироваться" : "Уже есть аккаунт? Войти"}
-                    </Button>
-                  </div>
-                </form>
-              )}
+                </Button>
+              </form>
             </CardContent>
           </Card>
         </div>

@@ -3166,6 +3166,69 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/orders/express-report", async (req, res) => {
+    try {
+      const { 
+        name, 
+        phone, 
+        socialNetwork, 
+        email, 
+        websiteUrl, 
+        inn, 
+        isPhysicalPerson, 
+        expressCheckToken, 
+        orderType 
+      } = req.body;
+
+      if (!email || !email.trim()) {
+        return res.status(400).json({ error: "E-mail обязателен" });
+      }
+
+      if (!websiteUrl || !websiteUrl.trim()) {
+        return res.status(400).json({ error: "URL сайта обязателен" });
+      }
+
+      if (!isPhysicalPerson && (!inn || !inn.trim())) {
+        return res.status(400).json({ error: "Укажите ИНН или отметьте что вы физическое лицо" });
+      }
+
+      let expressAudit = null;
+      if (expressCheckToken) {
+        expressAudit = await storage.getPublicAuditByToken(expressCheckToken);
+      }
+
+      const orderData = {
+        name: name || null,
+        phone: phone || null,
+        socialNetwork: socialNetwork || null,
+        email,
+        websiteUrl,
+        inn: isPhysicalPerson ? null : (inn || null),
+        isPhysicalPerson: !!isPhysicalPerson,
+        expressCheckToken: expressCheckToken || null,
+        expressCheckId: expressAudit?.id || null,
+        orderType: orderType || "express",
+        status: "pending",
+        createdAt: new Date(),
+      };
+
+      console.log(`[EXPRESS-REPORT-ORDER] New order request:`, {
+        email,
+        websiteUrl,
+        orderType,
+        hasExpressToken: !!expressCheckToken,
+      });
+
+      res.json({ 
+        success: true, 
+        message: "Заявка успешно отправлена" 
+      });
+    } catch (error: any) {
+      console.error("[EXPRESS-REPORT-ORDER] Error:", error);
+      res.status(500).json({ error: error.message || "Ошибка при отправке заявки" });
+    }
+  });
+
   app.post("/api/express-report/purchase", requireAuth, async (req, res) => {
     try {
       const { token } = req.body;
