@@ -179,11 +179,11 @@ export default function AuditDetailPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Lock className="h-5 w-5 text-amber-500" />
-              Требуется оплата
+              <Clock className="h-5 w-5 text-amber-500" />
+              Заявка в обработке
             </CardTitle>
             <CardDescription>
-              Для доступа к полному отчету необходимо оплатить услугу
+              Ваша заявка на отчёт принята и находится в обработке
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -212,16 +212,14 @@ export default function AuditDetailPage() {
                   <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
                   Пошаговые рекомендации по исправлению
                 </li>
+                <li className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-blue-500 shrink-0" />
+                  Отчёт на E-mail в течение 24 часов
+                </li>
               </ul>
-              <Button 
-                className="w-full" 
-                size="lg"
-                onClick={() => navigate(`/checkout/${auditId}`)}
-                data-testid="button-pay-for-report"
-              >
-                <CreditCard className="h-4 w-4 mr-2" />
-                Оплатить и получить отчёт
-              </Button>
+              <p className="text-sm text-center text-muted-foreground">
+                Отчёт будет отправлен на ваш email после обработки
+              </p>
             </div>
           </CardContent>
         </Card>

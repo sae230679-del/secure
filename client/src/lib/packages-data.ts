@@ -4,7 +4,7 @@ export const SERVICE_1_CRITERIA_COUNT = totalCount(SERVICE_1_CRITERIA);
 export const SERVICE_2_CRITERIA_COUNT = totalCount(SERVICE_2_CRITERIA);
 
 export const EXPRESS_PACKAGE = {
-  name: "Полный отчёт экспресс-проверки",
+  name: "Экспресс‑отчёт",
   type: "expressreport",
   price: 900,
   criteriaCount: SERVICE_1_CRITERIA_COUNT,
