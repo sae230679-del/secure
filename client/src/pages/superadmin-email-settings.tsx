@@ -131,10 +131,20 @@ export default function SuperAdminEmailSettingsPage() {
 
   const verifyMutation = useMutation({
     mutationFn: async () => {
+      // First save settings, then verify
+      const payload: any = { ...formData };
+      if (password.trim()) {
+        payload.pass = password;
+      }
+      await apiRequest("PUT", "/api/admin/settings/email", payload);
+      
+      // Then verify connection
       const response = await apiRequest("POST", "/api/admin/settings/email/verify", {});
       return response.json();
     },
     onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/settings/email"] });
+      setPassword("");
       setVerifyResult({ success: true, message: "Соединение с SMTP сервером установлено успешно" });
       toast({
         title: "Соединение установлено",
