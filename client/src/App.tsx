@@ -62,6 +62,7 @@ import ToolsPage from "@/pages/tools";
 import FullAuditPage from "@/pages/full-audit";
 import OrderReportPage from "@/pages/order-report";
 import IndividualOrderPage from "@/pages/individual-order";
+import ExpressResultPage from "@/pages/express-result";
 import GuidePage from "@/pages/guide";
 import GuideArticlePage from "@/pages/guide-article";
 import GuideSectionPage from "@/pages/guide-section";
@@ -246,6 +247,7 @@ function Router() {
       <Route path="/full-audit" component={FullAuditPage} />
       <Route path="/order-report" component={OrderReportPage} />
       <Route path="/individual-order" component={IndividualOrderPage} />
+      <Route path="/express-result/:token" component={ExpressResultPage} />
       <Route path="/guide" component={GuidePage} />
       <Route path="/guide/section/:sectionSlug" component={GuideSectionPage} />
       <Route path="/guide/topic/:topicSlug" component={GuideTopicPage} />
