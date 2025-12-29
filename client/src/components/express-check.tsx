@@ -92,32 +92,22 @@ function SemaphoreProgress({
   rknAttempt?: number;
   rknMaxAttempts?: number;
 }) {
-  const [cycleColor, setCycleColor] = useState<"green" | "yellow" | "red">("green");
   const [pulseIntensity, setPulseIntensity] = useState(1);
   const totalCriteria = AUDIT_CRITERIA.length;
   const progress = Math.min(100, ((criterionIndex + 1) / totalCriteria) * 100);
   
-  const activeColor = isComplete && finalScore !== undefined
+  const activeColor: "green" | "yellow" | "red" = isComplete && finalScore !== undefined
     ? getScoreColor(finalScore)
-    : cycleColor;
+    : "green";
 
   useEffect(() => {
     if (isComplete) return;
     
-    const colors: Array<"green" | "yellow" | "red"> = ["green", "yellow", "red"];
-    let colorIndex = 0;
-    
-    const cycleInterval = setInterval(() => {
-      colorIndex = (colorIndex + 1) % colors.length;
-      setCycleColor(colors[colorIndex]);
-    }, 600);
-
     const pulseInterval = setInterval(() => {
-      setPulseIntensity(0.5 + Math.random() * 0.5);
-    }, 200);
+      setPulseIntensity(prev => prev === 1 ? 0.7 : 1);
+    }, 500);
 
     return () => {
-      clearInterval(cycleInterval);
       clearInterval(pulseInterval);
     };
   }, [isComplete]);
