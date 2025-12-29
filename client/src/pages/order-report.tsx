@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { AuditProgressBar } from "@/components/progress-bar";
 
 interface SiteTypeInfo {
   type: string;
@@ -305,13 +306,22 @@ export default function OrderReportPage() {
   if (isExpressOrder && expressCheck?.status !== "completed") {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-6 text-center">
-            <Loader2 className="h-12 w-12 mx-auto text-primary mb-4 animate-spin" />
-            <h2 className="text-xl font-semibold mb-2">Проверка выполняется</h2>
-            <p className="text-muted-foreground mb-4">
-              Дождитесь завершения экспресс-проверки
-            </p>
+        <Card className="w-full max-w-2xl">
+          <CardHeader className="text-center pb-2">
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <Globe className="h-5 w-5 text-primary" />
+              <span className="font-medium text-lg break-all">{expressCheck?.websiteUrl}</span>
+            </div>
+            <Badge variant="secondary" className="mx-auto">
+              <Clock className="h-3 w-3 mr-1 animate-spin" />
+              Проверяем...
+            </Badge>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <AuditProgressBar 
+              isProcessing={true} 
+              onComplete={() => window.location.reload()}
+            />
           </CardContent>
         </Card>
       </div>

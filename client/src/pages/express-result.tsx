@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 import { AuditResultsView } from "@/components/audit/AuditResultsView";
+import { AuditProgressBar } from "@/components/progress-bar";
 import type { BriefResults, HostingInfo } from "@shared/schema";
 
 interface ExpressCheckResult {
@@ -166,15 +167,11 @@ export default function ExpressResultPage() {
 
           {isProcessing ? (
             <Card>
-              <CardContent className="py-12 text-center">
-                <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
-                <h2 className="text-xl font-semibold mb-2">Проверка выполняется</h2>
-                <p className="text-muted-foreground">
-                  Анализируем сайт на соответствие требованиям законодательства...
-                </p>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Обычно это занимает 30-60 секунд
-                </p>
+              <CardContent className="py-8">
+                <AuditProgressBar 
+                  isProcessing={true} 
+                  onComplete={() => refetch()}
+                />
               </CardContent>
             </Card>
           ) : result.briefResults ? (
