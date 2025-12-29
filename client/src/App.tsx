@@ -68,6 +68,8 @@ import GuidePage from "@/pages/guide";
 import GuideArticlePage from "@/pages/guide-article";
 import GuideSectionPage from "@/pages/guide-section";
 import GuideTopicPage from "@/pages/guide-topic";
+import PromotionsPage from "@/pages/promotions";
+import PromotionPriceLockPage from "@/pages/promotion-price-lock";
 import { CookieConsent } from "@/components/cookie-consent";
 import { Loader2, LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -253,6 +255,9 @@ function Router() {
       <Route path="/guide/section/:sectionSlug" component={GuideSectionPage} />
       <Route path="/guide/topic/:topicSlug" component={GuideTopicPage} />
       <Route path="/guide/:slug" component={GuideArticlePage} />
+      
+      <Route path="/promotions" component={PromotionsPage} />
+      <Route path="/promotion/price-lock" component={PromotionPriceLockPage} />
       <Route path="/seo/:slug" component={SeoPageView} />
       
       <Route path="/dashboard">

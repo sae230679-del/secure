@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { ExpressReportOrder, FullAuditOrder } from "@shared/schema";
+import type { ExpressReportOrder, FullAuditOrder, PromotionOrder } from "@shared/schema";
 import { useState } from "react";
 import {
   FileText,
@@ -40,12 +40,14 @@ import {
   Building2,
   MessageCircle,
   ExternalLink,
+  Gift,
+  Tag,
 } from "lucide-react";
 
 export default function AdminOrdersPage() {
   const { toast } = useToast();
   const [deleteOrderId, setDeleteOrderId] = useState<number | null>(null);
-  const [deleteOrderType, setDeleteOrderType] = useState<"express" | "full" | null>(null);
+  const [deleteOrderType, setDeleteOrderType] = useState<"express" | "full" | "promotion" | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const { data: expressOrders, isLoading: loadingExpress } = useQuery<ExpressReportOrder[]>({
@@ -54,6 +56,10 @@ export default function AdminOrdersPage() {
 
   const { data: fullAuditOrders, isLoading: loadingFullAudit } = useQuery<FullAuditOrder[]>({
     queryKey: ["/api/admin/orders/full-audits"],
+  });
+
+  const { data: promotionOrders, isLoading: loadingPromotion } = useQuery<PromotionOrder[]>({
+    queryKey: ["/api/admin/orders/promotions"],
   });
 
   const updateExpressStatusMutation = useMutation({
@@ -146,7 +152,52 @@ export default function AdminOrdersPage() {
     },
   });
 
-  const handleDeleteClick = (id: number, type: "express" | "full") => {
+  const updatePromotionStatusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: number; status: string }) => {
+      const response = await apiRequest("PATCH", `/api/admin/orders/promotions/${id}/status`, { status });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/orders/promotions"] });
+      toast({
+        title: "Статус обновлён",
+        description: "Статус заявки успешно изменён.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deletePromotionOrderMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await apiRequest("DELETE", `/api/admin/orders/promotions/${id}`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/orders/promotions"] });
+      toast({
+        title: "Заявка удалена",
+        description: "Заявка успешно удалена из системы.",
+      });
+      setConfirmDelete(false);
+      setDeleteOrderId(null);
+      setDeleteOrderType(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleDeleteClick = (id: number, type: "express" | "full" | "promotion") => {
     setDeleteOrderId(id);
     setDeleteOrderType(type);
     setConfirmDelete(true);
@@ -156,8 +207,10 @@ export default function AdminOrdersPage() {
     if (deleteOrderId && deleteOrderType) {
       if (deleteOrderType === "express") {
         deleteExpressOrderMutation.mutate(deleteOrderId);
-      } else {
+      } else if (deleteOrderType === "full") {
         deleteFullAuditOrderMutation.mutate(deleteOrderId);
+      } else if (deleteOrderType === "promotion") {
+        deletePromotionOrderMutation.mutate(deleteOrderId);
       }
     }
   };
@@ -263,6 +316,13 @@ export default function AdminOrdersPage() {
             Полный аудит
             {fullAuditOrders && fullAuditOrders.length > 0 && (
               <Badge variant="secondary" className="ml-1">{fullAuditOrders.length}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="promotions" className="gap-2" data-testid="tab-promotion-orders">
+            <Gift className="h-4 w-4" />
+            По акциям
+            {promotionOrders && promotionOrders.length > 0 && (
+              <Badge variant="secondary" className="ml-1">{promotionOrders.length}</Badge>
             )}
           </TabsTrigger>
         </TabsList>
@@ -517,6 +577,143 @@ export default function AdminOrdersPage() {
                               variant="ghost"
                               onClick={() => handleDeleteClick(order.id, "full")}
                               data-testid={`button-delete-full-order-${order.id}`}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="promotions">
+          <Card>
+            <CardHeader>
+              <CardTitle>Заявки по акциям</CardTitle>
+              <CardDescription>
+                Заявки от участников промо-акций
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingPromotion ? (
+                <div className="space-y-4">
+                  {[1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-16 w-full" />
+                  ))}
+                </div>
+              ) : !promotionOrders || promotionOrders.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Gift className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>Заявок по акциям пока нет</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ID</TableHead>
+                      <TableHead>Дата</TableHead>
+                      <TableHead>Акция</TableHead>
+                      <TableHead>Сайт</TableHead>
+                      <TableHead>Контакты</TableHead>
+                      <TableHead>Статус</TableHead>
+                      <TableHead>Действия</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {promotionOrders.map((order) => (
+                      <TableRow key={order.id} data-testid={`row-promotion-order-${order.id}`}>
+                        <TableCell className="font-mono text-sm">#{order.id}</TableCell>
+                        <TableCell className="text-sm">{formatDate(order.createdAt)}</TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <Badge variant="outline" className="gap-1">
+                              <Tag className="h-3 w-3" />
+                              {order.promotionCode}
+                            </Badge>
+                            <div className="text-xs text-muted-foreground max-w-[200px] truncate">
+                              {order.promotionTitle}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Globe className="h-4 w-4 text-muted-foreground" />
+                            <a 
+                              href={order.websiteUrl.startsWith('http') ? order.websiteUrl : `https://${order.websiteUrl}`} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-primary hover:underline flex items-center gap-1"
+                            >
+                              {order.websiteUrl}
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1 text-sm">
+                            {order.name && (
+                              <div className="flex items-center gap-1">
+                                <User className="h-3 w-3 text-muted-foreground" />
+                                {order.name}
+                              </div>
+                            )}
+                            {order.phone && (
+                              <div className="flex items-center gap-1 text-muted-foreground">
+                                <Phone className="h-3 w-3" />
+                                {order.phone}
+                              </div>
+                            )}
+                            {order.socialNetwork && (
+                              <div className="flex items-center gap-1 text-muted-foreground">
+                                <MessageCircle className="h-3 w-3" />
+                                {order.socialNetwork}: {order.messengerContact}
+                              </div>
+                            )}
+                            {order.inn && (
+                              <div className="flex items-center gap-1 text-muted-foreground">
+                                <Building2 className="h-3 w-3" />
+                                ИНН: {order.inn}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>{getExpressStatusBadge(order.status)}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {order.status === "pending" && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => updatePromotionStatusMutation.mutate({ id: order.id, status: "processing" })}
+                                disabled={updatePromotionStatusMutation.isPending}
+                                data-testid={`button-start-promo-order-${order.id}`}
+                              >
+                                <Play className="h-3 w-3 mr-1" />
+                                В работу
+                              </Button>
+                            )}
+                            {order.status === "processing" && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => updatePromotionStatusMutation.mutate({ id: order.id, status: "completed" })}
+                                disabled={updatePromotionStatusMutation.isPending}
+                                data-testid={`button-complete-promo-order-${order.id}`}
+                              >
+                                <CheckCircle2 className="h-3 w-3 mr-1" />
+                                Готово
+                              </Button>
+                            )}
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => handleDeleteClick(order.id, "promotion")}
+                              data-testid={`button-delete-promo-order-${order.id}`}
                             >
                               <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>
