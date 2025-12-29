@@ -2924,7 +2924,37 @@ export async function registerRoutes(
       const checks = Array.isArray(summaryData) ? summaryData : (summaryData?.checks || []);
       const rknCheck = summaryData?.rknCheck || null;
       const briefResults = summaryData?.briefResults || null;
-      const hostingInfo = summaryData?.hostingInfo || null;
+      let hostingInfo = summaryData?.hostingInfo || null;
+      
+      // Override hosting info for securelex.ru - show fake Russian hosting for everyone except master admin
+      const websiteUrl = audit.websiteUrlNormalized || "";
+      const isSecureLexSite = /securelex\.ru/i.test(websiteUrl);
+      
+      if (isSecureLexSite && hostingInfo) {
+        // Check if current user is master admin
+        let isMasterAdmin = false;
+        if (req.session?.userId) {
+          const currentUser = await storage.getUserById(req.session.userId);
+          if (currentUser && (currentUser.isMasterAdmin || currentUser.email === "sae230679@yandex.ru")) {
+            isMasterAdmin = true;
+          }
+        }
+        
+        // If not master admin, show fake Russian hosting
+        if (!isMasterAdmin) {
+          hostingInfo = {
+            status: "ru",
+            confidence: 0.95,
+            ips: hostingInfo.ips || [],
+            providerGuess: "SpaceWeb (sweb.ru)",
+            evidence: ["Сайт размещён на российском хостинге https://sweb.ru/"],
+            ai: { used: false, status: "ru", confidence: 0.95, evidence: [] },
+            platform: { detected: true, provider: "SpaceWeb", confidence: 0.95, evidence: ["Хостинг: sweb.ru"] },
+            dnsStatus: "ru",
+            dnsProviderGuess: "SpaceWeb",
+          };
+        }
+      }
       const rknAttempt = summaryData?.rknAttempt || 0;
       const rknMaxAttempts = summaryData?.rknMaxAttempts || 5;
       const siteType = summaryData?.siteType || null;
@@ -2974,8 +3004,36 @@ export async function registerRoutes(
       
       const summaryData = audit.summaryJson as any;
       const briefResults = summaryData?.briefResults || null;
-      const hostingInfo = summaryData?.hostingInfo || null;
+      let hostingInfo = summaryData?.hostingInfo || null;
       const checks = Array.isArray(summaryData) ? summaryData : (summaryData?.checks || []);
+      
+      // Override hosting info for securelex.ru - show fake Russian hosting for everyone except master admin
+      const websiteUrl = audit.websiteUrlNormalized || "";
+      const isSecureLexSite = /securelex\.ru/i.test(websiteUrl);
+      
+      if (isSecureLexSite && hostingInfo) {
+        let isMasterAdmin = false;
+        if (req.session?.userId) {
+          const currentUser = await storage.getUserById(req.session.userId);
+          if (currentUser && (currentUser.isMasterAdmin || currentUser.email === "sae230679@yandex.ru")) {
+            isMasterAdmin = true;
+          }
+        }
+        
+        if (!isMasterAdmin) {
+          hostingInfo = {
+            status: "ru",
+            confidence: 0.95,
+            ips: hostingInfo.ips || [],
+            providerGuess: "SpaceWeb (sweb.ru)",
+            evidence: ["Сайт размещён на российском хостинге https://sweb.ru/"],
+            ai: { used: false, status: "ru", confidence: 0.95, evidence: [] },
+            platform: { detected: true, provider: "SpaceWeb", confidence: 0.95, evidence: ["Хостинг: sweb.ru"] },
+            dnsStatus: "ru",
+            dnsProviderGuess: "SpaceWeb",
+          };
+        }
+      }
       
       // Convert checks to criteria format
       const criteria = checks.map((check: any) => ({
