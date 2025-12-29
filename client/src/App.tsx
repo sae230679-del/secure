@@ -25,6 +25,7 @@ import AdminDashboardPage from "@/pages/admin-dashboard";
 import AdminAuditsPage from "@/pages/admin-audits";
 import AdminExpressAuditsPage from "@/pages/admin-express-audits";
 import AdminPackagesPage from "@/pages/admin-packages";
+import AdminOrdersPage from "@/pages/admin-orders";
 import SuperAdminDashboardPage from "@/pages/superadmin-dashboard";
 import SuperAdminUsersPage from "@/pages/superadmin-users";
 import SuperAdminSettingsPage from "@/pages/superadmin-settings";
@@ -383,6 +384,16 @@ function Router() {
           <AdminRoute>
             <DashboardLayout>
               <AdminPromotionsPage />
+            </DashboardLayout>
+          </AdminRoute>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/orders">
+        <ProtectedRoute>
+          <AdminRoute>
+            <DashboardLayout>
+              <AdminOrdersPage />
             </DashboardLayout>
           </AdminRoute>
         </ProtectedRoute>

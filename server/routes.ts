@@ -1435,6 +1435,146 @@ export async function registerRoutes(
     }
   });
 
+  // =====================================================
+  // Admin Orders Routes - Заявки (доступно админам и суперадминам)
+  // =====================================================
+  
+  // Get all express report orders
+  app.get("/api/admin/orders/express-reports", requireAdmin, async (req, res) => {
+    try {
+      const orders = await storage.getExpressReportOrders();
+      res.json(orders);
+    } catch (error) {
+      console.error("[ADMIN] Error fetching express report orders:", error);
+      res.status(500).json({ error: "Ошибка загрузки заявок" });
+    }
+  });
+
+  // Get all full audit orders
+  app.get("/api/admin/orders/full-audits", requireAdmin, async (req, res) => {
+    try {
+      const orders = await storage.getFullAuditOrders();
+      res.json(orders);
+    } catch (error) {
+      console.error("[ADMIN] Error fetching full audit orders:", error);
+      res.status(500).json({ error: "Ошибка загрузки заявок" });
+    }
+  });
+
+  // Update express report order status
+  app.patch("/api/admin/orders/express-reports/:id/status", requireAdmin, async (req, res) => {
+    try {
+      const orderId = parseInt(req.params.id);
+      const { status } = req.body;
+      
+      if (!["pending", "paid", "processing", "completed", "cancelled", "refunded"].includes(status)) {
+        return res.status(400).json({ error: "Неверный статус" });
+      }
+      
+      const order = await storage.updateExpressReportOrderStatus(orderId, status);
+      if (!order) {
+        return res.status(404).json({ error: "Заявка не найдена" });
+      }
+      
+      await storage.createAuditLog({
+        userId: req.session.userId,
+        action: "update_express_order_status",
+        resourceType: "express_report_order",
+        resourceId: orderId,
+        details: JSON.stringify({ status }),
+      });
+      
+      res.json(order);
+    } catch (error) {
+      console.error("[ADMIN] Error updating express report order status:", error);
+      res.status(500).json({ error: "Ошибка обновления статуса" });
+    }
+  });
+
+  // Update full audit order status
+  app.patch("/api/admin/orders/full-audits/:id/status", requireAdmin, async (req, res) => {
+    try {
+      const orderId = parseInt(req.params.id);
+      const { status } = req.body;
+      
+      if (!["pending", "in_progress", "completed", "cancelled"].includes(status)) {
+        return res.status(400).json({ error: "Неверный статус" });
+      }
+      
+      const order = await storage.updateFullAuditOrderStatus(orderId, status);
+      if (!order) {
+        return res.status(404).json({ error: "Заявка не найдена" });
+      }
+      
+      await storage.createAuditLog({
+        userId: req.session.userId,
+        action: "update_full_audit_order_status",
+        resourceType: "full_audit_order",
+        resourceId: orderId,
+        details: JSON.stringify({ status }),
+      });
+      
+      res.json(order);
+    } catch (error) {
+      console.error("[ADMIN] Error updating full audit order status:", error);
+      res.status(500).json({ error: "Ошибка обновления статуса" });
+    }
+  });
+
+  // Delete express report order
+  app.delete("/api/admin/orders/express-reports/:id", requireAdmin, async (req, res) => {
+    try {
+      const orderId = parseInt(req.params.id);
+      
+      const order = await storage.getExpressReportOrderById(orderId);
+      if (!order) {
+        return res.status(404).json({ error: "Заявка не найдена" });
+      }
+      
+      await storage.deleteExpressReportOrder(orderId);
+      
+      await storage.createAuditLog({
+        userId: req.session.userId,
+        action: "delete_express_order",
+        resourceType: "express_report_order",
+        resourceId: orderId,
+        details: JSON.stringify({ email: order.email, websiteUrl: order.websiteUrl }),
+      });
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[ADMIN] Error deleting express report order:", error);
+      res.status(500).json({ error: "Ошибка удаления заявки" });
+    }
+  });
+
+  // Delete full audit order
+  app.delete("/api/admin/orders/full-audits/:id", requireAdmin, async (req, res) => {
+    try {
+      const orderId = parseInt(req.params.id);
+      
+      const order = await storage.getFullAuditOrderById(orderId);
+      if (!order) {
+        return res.status(404).json({ error: "Заявка не найдена" });
+      }
+      
+      await storage.deleteFullAuditOrder(orderId);
+      
+      await storage.createAuditLog({
+        userId: req.session.userId,
+        action: "delete_full_audit_order",
+        resourceType: "full_audit_order",
+        resourceId: orderId,
+        details: JSON.stringify({ email: order.email, websiteUrl: order.websiteUrl }),
+      });
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[ADMIN] Error deleting full audit order:", error);
+      res.status(500).json({ error: "Ошибка удаления заявки" });
+    }
+  });
+
   // SuperAdmin Routes
   app.get("/api/superadmin/users", requireSuperAdmin, async (req, res) => {
     try {
@@ -3298,23 +3438,29 @@ export async function registerRoutes(
         expressAudit = await storage.getPublicAuditByToken(expressCheckToken);
       }
 
-      const orderData = {
+      // Get report price from package
+      const expressReportPackage = await storage.getPackageByType("expressreport");
+      const reportPrice = expressReportPackage?.price || 900;
+
+      // Save order to database
+      const order = await storage.createExpressReportOrder({
         name: name || null,
         phone: phone || null,
         socialNetwork: socialNetwork || null,
+        socialContact: messengerContact || null,
         messengerContact: messengerContact || null,
         email,
         websiteUrl,
         inn: isPhysicalPerson ? null : (inn || null),
-        isPhysicalPerson: !!isPhysicalPerson,
-        expressCheckToken: expressCheckToken || null,
-        expressCheckId: expressAudit?.id || null,
-        orderType: orderType || "express",
-        status: "pending",
-        createdAt: new Date(),
-      };
+        isIndividual: !!isPhysicalPerson,
+        price: reportPrice,
+        briefResultsSnapshot: expressAudit?.briefResultsJson || null,
+        privacyConsent: true,
+        pdnConsent: true,
+        offerConsent: true,
+      });
 
-      console.log(`[EXPRESS-REPORT-ORDER] New order request:`, {
+      console.log(`[EXPRESS-REPORT-ORDER] Order saved to DB, id=${order.id}:`, {
         email,
         websiteUrl,
         orderType,
@@ -3323,9 +3469,35 @@ export async function registerRoutes(
         hasExpressToken: !!expressCheckToken,
       });
 
+      // Send email notification to admin
+      try {
+        const { sendEmail } = await import("./email");
+        await sendEmail({
+          to: "support@securelex.ru",
+          subject: `Новая заявка на полный отчёт #${order.id}`,
+          html: `
+            <h2>Новая заявка на полный отчёт</h2>
+            <p><strong>ID заявки:</strong> ${order.id}</p>
+            <p><strong>Сайт:</strong> ${websiteUrl}</p>
+            <p><strong>E-mail:</strong> ${email}</p>
+            <p><strong>Имя:</strong> ${name || 'Не указано'}</p>
+            <p><strong>Телефон:</strong> ${phone || 'Не указан'}</p>
+            <p><strong>Мессенджер:</strong> ${socialNetwork || 'Не указан'}</p>
+            <p><strong>Контакт в мессенджере:</strong> ${messengerContact || 'Не указан'}</p>
+            <p><strong>ИНН:</strong> ${isPhysicalPerson ? 'Физ. лицо' : (inn || 'Не указан')}</p>
+            <p><strong>Стоимость:</strong> ${reportPrice} ₽</p>
+            <p><strong>Дата:</strong> ${new Date().toLocaleString('ru-RU')}</p>
+          `,
+        });
+        console.log(`[EXPRESS-REPORT-ORDER] Email notification sent for order #${order.id}`);
+      } catch (emailError) {
+        console.error(`[EXPRESS-REPORT-ORDER] Failed to send email notification:`, emailError);
+      }
+
       res.json({ 
         success: true, 
-        message: "Заявка успешно отправлена" 
+        message: "Заявка успешно отправлена",
+        orderId: order.id
       });
     } catch (error: any) {
       console.error("[EXPRESS-REPORT-ORDER] Error:", error);

@@ -77,6 +77,7 @@ export function AppSidebar() {
 
   const adminMenuItems = [
     { title: "Панель управления", url: "/admin", icon: BarChart3 },
+    { title: "Заявки", url: "/admin/orders", icon: ClipboardList },
     { title: "Экспресс-проверка", url: "/admin/express-audits", icon: Activity },
     { title: "Полный аудит", url: "/admin/audits", icon: FileSearch },
     { title: "Управление пакетами", url: "/admin/packages", icon: Package },
