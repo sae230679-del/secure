@@ -9,7 +9,7 @@ packages = ["jq", "unzip", "chromium"]
 [deployment]
 deploymentTarget = "autoscale"
 build = ["npm", "run", "build"]
-run = ["node", "./dist/index.cjs"]
+run = ["node", "dist/index.cjs"]
 
 [[ports]]
 localPort = 5000
