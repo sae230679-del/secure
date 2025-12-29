@@ -2644,7 +2644,7 @@ export async function registerRoutes(
   });
 
   const expressCheckSchema = z.object({
-    websiteUrl: z.string().min(1, "URL сайта обязателен").url().or(z.string().min(3)),
+    websiteUrl: z.string().min(1, "URL сайта обязателен").min(3, "Введите корректный адрес сайта"),
   });
 
   const expressCheckCriteria: CriteriaResult[] = [
