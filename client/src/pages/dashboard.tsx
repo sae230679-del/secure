@@ -3,7 +3,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AuditForm } from "@/components/audit-form";
 import { useAuth } from "@/lib/auth-context";
 import { formatPrice } from "@/lib/packages-data";
 import { Link } from "wouter";
@@ -20,6 +19,7 @@ import {
   Globe,
   Shield,
   ExternalLink,
+  Zap,
 } from "lucide-react";
 
 export default function DashboardPage() {
@@ -148,76 +148,120 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
-        <AuditForm />
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5 text-primary" />
+              Экспресс-проверка
+            </CardTitle>
+            <CardDescription>
+              Бесплатная быстрая проверка сайта на соответствие законодательству
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Получите мгновенный анализ вашего сайта. После проверки можно заказать полный отчёт за 900 ₽.
+            </p>
+            <Button asChild className="w-full" data-testid="button-go-express">
+              <Link href="/dashboard/express-checks">
+                Перейти к проверкам
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-2">
-            <div>
-              <CardTitle>Последние проверки</CardTitle>
-              <CardDescription>Ваши недавние аудиты</CardDescription>
-            </div>
-            {audits && audits.length > 0 && (
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/dashboard/audits">
-                  Все проверки
-                  <ArrowRight className="ml-1 h-4 w-4" />
-                </Link>
-              </Button>
-            )}
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-primary" />
+              Полный аудит
+            </CardTitle>
+            <CardDescription>
+              Комплексная проверка с пакетом документов
+            </CardDescription>
           </CardHeader>
-          <CardContent>
-            {auditsLoading ? (
-              <div className="space-y-3">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="flex items-center gap-4 p-3 rounded-lg bg-muted/30">
-                    <Skeleton className="h-10 w-10 rounded-lg" />
-                    <div className="space-y-2 flex-1">
-                      <Skeleton className="h-4 w-32" />
-                      <Skeleton className="h-3 w-24" />
-                    </div>
-                    <Skeleton className="h-6 w-20" />
-                  </div>
-                ))}
-              </div>
-            ) : recentAudits.length > 0 ? (
-              <div className="space-y-3">
-                {recentAudits.map((audit) => (
-                  <Link
-                    key={audit.id}
-                    href={`/dashboard/audits/${audit.id}`}
-                    className="flex items-center gap-4 p-3 rounded-lg bg-muted/30 hover-elevate cursor-pointer group"
-                    data-testid={`link-audit-${audit.id}`}
-                  >
-                    <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                      <Globe className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">
-                        {audit.websiteUrlNormalized.replace(/^https?:\/\//, "")}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {audit.package?.name || "Аудит"}
-                      </p>
-                    </div>
-                    {getStatusBadge(audit.status)}
-                    <ExternalLink className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <div className="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-4">
-                  <FileSearch className="h-8 w-8 text-muted-foreground/50" />
-                </div>
-                <p className="font-medium text-muted-foreground">У вас пока нет проверок</p>
-                <p className="text-sm text-muted-foreground/70 mt-1">
-                  Создайте первый аудит, используя форму слева
-                </p>
-              </div>
-            )}
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Детальный анализ на соответствие ФЗ-152 и ФЗ-149. Включает документы и рекомендации.
+            </p>
+            <Button asChild variant="outline" className="w-full" data-testid="button-go-audits">
+              <Link href="/dashboard/audits">
+                Перейти к аудитам
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
+          <div>
+            <CardTitle>Последние аудиты</CardTitle>
+            <CardDescription>Ваши недавние заказы</CardDescription>
+          </div>
+          {audits && audits.length > 0 && (
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/dashboard/audits">
+                Все проверки
+                <ArrowRight className="ml-1 h-4 w-4" />
+              </Link>
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent>
+          {auditsLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="flex items-center gap-4 p-3 rounded-lg bg-muted/30">
+                  <Skeleton className="h-10 w-10 rounded-lg" />
+                  <div className="space-y-2 flex-1">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                  <Skeleton className="h-6 w-20" />
+                </div>
+              ))}
+            </div>
+          ) : recentAudits.length > 0 ? (
+            <div className="space-y-3">
+              {recentAudits.map((audit) => (
+                <Link
+                  key={audit.id}
+                  href={`/dashboard/audits/${audit.id}`}
+                  className="flex items-center gap-4 p-3 rounded-lg bg-muted/30 hover-elevate cursor-pointer group"
+                  data-testid={`link-audit-${audit.id}`}
+                >
+                  <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <Globe className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">
+                      {audit.websiteUrlNormalized.replace(/^https?:\/\//, "")}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {audit.package?.name || "Аудит"}
+                    </p>
+                  </div>
+                  {getStatusBadge(audit.status)}
+                  <ExternalLink className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <div className="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-4">
+                <FileSearch className="h-8 w-8 text-muted-foreground/50" />
+              </div>
+              <p className="font-medium text-muted-foreground">У вас пока нет аудитов</p>
+              <p className="text-sm text-muted-foreground/70 mt-1">
+                Перейдите в раздел "Экспресс-проверки" или "Полные аудиты"
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

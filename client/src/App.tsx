@@ -15,6 +15,8 @@ import NotFound from "@/pages/not-found";
 import LandingPage from "@/pages/landing";
 import AuthPage from "@/pages/auth";
 import DashboardPage from "@/pages/dashboard";
+import DashboardExpressChecksPage from "@/pages/dashboard-express-checks";
+import DashboardAuditsPage from "@/pages/dashboard-audits";
 import AuditsPage from "@/pages/audits";
 import AuditDetailPage from "@/pages/audit-detail";
 import ProfilePage from "@/pages/profile";
@@ -258,10 +260,18 @@ function Router() {
         </ProtectedRoute>
       </Route>
       
+      <Route path="/dashboard/express-checks">
+        <ProtectedRoute>
+          <DashboardLayout>
+            <DashboardExpressChecksPage />
+          </DashboardLayout>
+        </ProtectedRoute>
+      </Route>
+      
       <Route path="/dashboard/audits">
         <ProtectedRoute>
           <DashboardLayout>
-            <AuditsPage />
+            <DashboardAuditsPage />
           </DashboardLayout>
         </ProtectedRoute>
       </Route>

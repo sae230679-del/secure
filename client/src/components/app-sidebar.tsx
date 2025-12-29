@@ -67,7 +67,8 @@ export function AppSidebar() {
 
   const userMenuItems = [
     { title: "Главная", url: "/dashboard", icon: Home },
-    { title: "Мои проверки", url: "/dashboard/audits", icon: FileSearch },
+    { title: "Экспресс-проверки", url: "/dashboard/express-checks", icon: Activity },
+    { title: "Полные аудиты", url: "/dashboard/audits", icon: FileSearch },
     { title: "Мой профиль", url: "/dashboard/profile", icon: User },
     { title: "История платежей", url: "/dashboard/payments", icon: CreditCard },
     { title: "Реферальная программа", url: "/dashboard/referral", icon: Gift },
