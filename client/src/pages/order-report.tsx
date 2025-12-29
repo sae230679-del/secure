@@ -75,6 +75,7 @@ export default function OrderReportPage() {
     name: "",
     phone: "",
     socialNetwork: "",
+    messengerContact: "",
     email: "",
     websiteUrl: urlFromParam,
     inn: "",
@@ -169,6 +170,7 @@ export default function OrderReportPage() {
       name?: string;
       phone?: string;
       socialNetwork?: string;
+      messengerContact?: string;
       email: string;
       websiteUrl: string;
       inn?: string;
@@ -246,6 +248,7 @@ export default function OrderReportPage() {
       name: formData.name || undefined,
       phone: formData.phone || undefined,
       socialNetwork: formData.socialNetwork || undefined,
+      messengerContact: formData.messengerContact || undefined,
       email: formData.email,
       websiteUrl,
       inn: formData.isPhysicalPerson ? undefined : formData.inn || undefined,
@@ -533,6 +536,29 @@ export default function OrderReportPage() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {formData.socialNetwork && (
+                  <div className="space-y-2">
+                    <Label htmlFor="messengerContact">
+                      Контакт в {formData.socialNetwork === "telegram" ? "Телеграме" : formData.socialNetwork === "whatsapp" ? "Вацапе" : "Максе"}
+                    </Label>
+                    <div className="relative">
+                      <MessageCircle className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="messengerContact"
+                        type="text"
+                        value={formData.messengerContact}
+                        onChange={(e) => setFormData({ ...formData, messengerContact: e.target.value })}
+                        placeholder={formData.socialNetwork === "telegram" ? "@username или +7..." : formData.socialNetwork === "whatsapp" ? "+7 (999) 123-45-67" : "Ваш контакт"}
+                        className="pl-10"
+                        data-testid="input-messenger-contact"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Укажите ваш юзернейм, номер телефона или ссылку на профиль
+                    </p>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label htmlFor="email">

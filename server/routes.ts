@@ -3271,7 +3271,8 @@ export async function registerRoutes(
       const { 
         name, 
         phone, 
-        socialNetwork, 
+        socialNetwork,
+        messengerContact, 
         email, 
         websiteUrl, 
         inn, 
@@ -3301,6 +3302,7 @@ export async function registerRoutes(
         name: name || null,
         phone: phone || null,
         socialNetwork: socialNetwork || null,
+        messengerContact: messengerContact || null,
         email,
         websiteUrl,
         inn: isPhysicalPerson ? null : (inn || null),
@@ -3316,6 +3318,8 @@ export async function registerRoutes(
         email,
         websiteUrl,
         orderType,
+        socialNetwork: socialNetwork || null,
+        messengerContact: messengerContact || null,
         hasExpressToken: !!expressCheckToken,
       });
 
