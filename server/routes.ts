@@ -1575,6 +1575,118 @@ export async function registerRoutes(
     }
   });
 
+  // =====================================================
+  // Promotion Orders - Заявки по акциям
+  // =====================================================
+  
+  // Create promotion order (public)
+  app.post("/api/promotion-orders", async (req, res) => {
+    try {
+      const data = req.body;
+      
+      if (!data.websiteUrl) {
+        return res.status(400).json({ error: "URL сайта обязателен" });
+      }
+      
+      const order = await storage.createPromotionOrder({
+        userId: req.session?.userId || null,
+        promotionCode: data.promotionCode || "",
+        promotionTitle: data.promotionTitle || "",
+        name: data.name || null,
+        phone: data.phone || null,
+        socialNetwork: data.socialNetwork || null,
+        messengerContact: data.messengerContact || null,
+        websiteUrl: data.websiteUrl,
+        inn: data.inn || null,
+        privacyConsent: data.privacyConsent || false,
+        pdnConsent: data.pdnConsent || false,
+        offerConsent: data.offerConsent || false,
+      });
+      
+      // Send email notification
+      try {
+        const { sendNewOrderNotification } = await import("./email");
+        await sendNewOrderNotification({
+          orderType: "promotion",
+          orderId: order.id,
+          websiteUrl: order.websiteUrl,
+          contactInfo: order.name || order.phone || order.messengerContact || "Не указано",
+          promotionTitle: order.promotionTitle,
+        });
+      } catch (emailError) {
+        console.error("[EMAIL] Failed to send promotion order notification:", emailError);
+      }
+      
+      res.json(order);
+    } catch (error) {
+      console.error("[API] Error creating promotion order:", error);
+      res.status(500).json({ error: "Ошибка создания заявки" });
+    }
+  });
+
+  // Get all promotion orders (admin)
+  app.get("/api/admin/orders/promotions", requireAdmin, async (req, res) => {
+    try {
+      const orders = await storage.getPromotionOrders();
+      res.json(orders);
+    } catch (error) {
+      console.error("[ADMIN] Error fetching promotion orders:", error);
+      res.status(500).json({ error: "Ошибка загрузки заявок по акциям" });
+    }
+  });
+
+  // Update promotion order status (admin)
+  app.patch("/api/admin/orders/promotions/:id/status", requireAdmin, async (req, res) => {
+    try {
+      const orderId = parseInt(req.params.id);
+      const { status } = req.body as { status: string };
+      
+      if (!["pending", "processing", "completed", "cancelled"].includes(status)) {
+        return res.status(400).json({ error: "Некорректный статус" });
+      }
+      
+      const order = await storage.updatePromotionOrderStatus(orderId, status);
+      if (!order) {
+        return res.status(404).json({ error: "Заявка не найдена" });
+      }
+      
+      await storage.createAuditLog({
+        userId: req.session.userId,
+        action: "update_promotion_order_status",
+        resourceType: "promotion_order",
+        resourceId: orderId,
+        details: JSON.stringify({ newStatus: status }),
+      });
+      
+      res.json(order);
+    } catch (error) {
+      console.error("[ADMIN] Error updating promotion order status:", error);
+      res.status(500).json({ error: "Ошибка обновления статуса" });
+    }
+  });
+
+  // Delete promotion order (admin)
+  app.delete("/api/admin/orders/promotions/:id", requireAdmin, async (req, res) => {
+    try {
+      const orderId = parseInt(req.params.id);
+      
+      await storage.deletePromotionOrder(orderId);
+      
+      await storage.createAuditLog({
+        userId: req.session.userId,
+        action: "delete_promotion_order",
+        resourceType: "promotion_order",
+        resourceId: orderId,
+        details: JSON.stringify({}),
+      });
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[ADMIN] Error deleting promotion order:", error);
+      res.status(500).json({ error: "Ошибка удаления заявки" });
+    }
+  });
+
   // SuperAdmin Routes
   app.get("/api/superadmin/users", requireSuperAdmin, async (req, res) => {
     try {
