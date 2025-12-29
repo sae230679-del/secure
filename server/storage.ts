@@ -173,6 +173,20 @@ export interface IStorage {
   getTechnicalSpecByKey(key: string): Promise<schema.TechnicalSpec | undefined>;
   upsertTechnicalSpec(data: schema.InsertTechnicalSpec): Promise<schema.TechnicalSpec>;
   deleteTechnicalSpec(id: number): Promise<boolean>;
+
+  // Express Report Orders - Заявки на полный отчёт (900₽)
+  createExpressReportOrder(data: Omit<schema.InsertExpressReportOrder, 'status'>): Promise<schema.ExpressReportOrder>;
+  getExpressReportOrders(): Promise<schema.ExpressReportOrder[]>;
+  getExpressReportOrderById(id: number): Promise<schema.ExpressReportOrder | undefined>;
+  updateExpressReportOrderStatus(id: number, status: string): Promise<schema.ExpressReportOrder | undefined>;
+  deleteExpressReportOrder(id: number): Promise<boolean>;
+
+  // Full Audit Orders - Заявки на полный аудит
+  createFullAuditOrder(data: Omit<schema.InsertFullAuditOrder, 'status'>): Promise<schema.FullAuditOrder>;
+  getFullAuditOrders(): Promise<schema.FullAuditOrder[]>;
+  getFullAuditOrderById(id: number): Promise<schema.FullAuditOrder | undefined>;
+  updateFullAuditOrderStatus(id: number, status: string): Promise<schema.FullAuditOrder | undefined>;
+  deleteFullAuditOrder(id: number): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2717,6 +2731,90 @@ export class DatabaseStorage implements IStorage {
       .where(eq(schema.individualOrders.id, id))
       .returning();
     return order;
+  }
+
+  // =====================================================
+  // Express Report Orders - Заявки на полный отчёт (900₽)
+  // =====================================================
+  async createExpressReportOrder(data: Omit<schema.InsertExpressReportOrder, 'status'>): Promise<schema.ExpressReportOrder> {
+    const [order] = await db
+      .insert(schema.expressReportOrders)
+      .values(data)
+      .returning();
+    return order;
+  }
+
+  async getExpressReportOrders(): Promise<schema.ExpressReportOrder[]> {
+    return db
+      .select()
+      .from(schema.expressReportOrders)
+      .orderBy(desc(schema.expressReportOrders.createdAt));
+  }
+
+  async getExpressReportOrderById(id: number): Promise<schema.ExpressReportOrder | undefined> {
+    const [order] = await db
+      .select()
+      .from(schema.expressReportOrders)
+      .where(eq(schema.expressReportOrders.id, id));
+    return order;
+  }
+
+  async updateExpressReportOrderStatus(id: number, status: string): Promise<schema.ExpressReportOrder | undefined> {
+    const [order] = await db
+      .update(schema.expressReportOrders)
+      .set({ status: status as any })
+      .where(eq(schema.expressReportOrders.id, id))
+      .returning();
+    return order;
+  }
+
+  async deleteExpressReportOrder(id: number): Promise<boolean> {
+    await db
+      .delete(schema.expressReportOrders)
+      .where(eq(schema.expressReportOrders.id, id));
+    return true;
+  }
+
+  // =====================================================
+  // Full Audit Orders - Заявки на полный аудит
+  // =====================================================
+  async createFullAuditOrder(data: Omit<schema.InsertFullAuditOrder, 'status'>): Promise<schema.FullAuditOrder> {
+    const [order] = await db
+      .insert(schema.fullAuditOrders)
+      .values(data)
+      .returning();
+    return order;
+  }
+
+  async getFullAuditOrders(): Promise<schema.FullAuditOrder[]> {
+    return db
+      .select()
+      .from(schema.fullAuditOrders)
+      .orderBy(desc(schema.fullAuditOrders.createdAt));
+  }
+
+  async getFullAuditOrderById(id: number): Promise<schema.FullAuditOrder | undefined> {
+    const [order] = await db
+      .select()
+      .from(schema.fullAuditOrders)
+      .where(eq(schema.fullAuditOrders.id, id));
+    return order;
+  }
+
+  async updateFullAuditOrderStatus(id: number, status: string): Promise<schema.FullAuditOrder | undefined> {
+    const [order] = await db
+      .update(schema.fullAuditOrders)
+      .set({ status: status as any, updatedAt: new Date() })
+      .where(eq(schema.fullAuditOrders.id, id))
+      .returning();
+    return order;
+  }
+
+  async deleteFullAuditOrder(id: number): Promise<boolean> {
+    await db
+      .delete(schema.fullAuditOrders)
+      .where(eq(schema.fullAuditOrders.id, id));
+    return true;
   }
 }
 

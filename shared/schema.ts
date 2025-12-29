@@ -421,6 +421,7 @@ export const expressReportOrders = pgTable("express_report_orders", {
   phone: varchar("phone", { length: 30 }),
   socialNetwork: varchar("social_network", { length: 50 }),
   socialContact: varchar("social_contact", { length: 255 }),
+  messengerContact: varchar("messenger_contact", { length: 255 }),
   email: varchar("email", { length: 255 }).notNull(),
   websiteUrl: varchar("website_url", { length: 500 }).notNull(),
   inn: varchar("inn", { length: 15 }),
@@ -483,6 +484,41 @@ export const insertIndividualOrderSchema = createInsertSchema(individualOrders).
   status: true,
 });
 export type InsertIndividualOrder = z.infer<typeof insertIndividualOrderSchema>;
+
+// =====================================================
+// Заявки на полный аудит сайта
+// =====================================================
+export const fullAuditOrderStatusEnum = pgEnum("full_audit_order_status", ["pending", "in_progress", "completed", "cancelled"]);
+
+export const fullAuditOrders = pgTable("full_audit_orders", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id),
+  name: varchar("name", { length: 255 }),
+  phone: varchar("phone", { length: 30 }),
+  socialNetwork: varchar("social_network", { length: 50 }),
+  messengerContact: varchar("messenger_contact", { length: 255 }),
+  email: varchar("email", { length: 255 }).notNull(),
+  websiteUrl: varchar("website_url", { length: 500 }).notNull(),
+  inn: varchar("inn", { length: 15 }),
+  isIndividual: boolean("is_individual").default(false),
+  packageType: varchar("package_type", { length: 100 }),
+  status: fullAuditOrderStatusEnum("status").default("pending").notNull(),
+  adminNotes: text("admin_notes"),
+  privacyConsent: boolean("privacy_consent").default(false).notNull(),
+  pdnConsent: boolean("pdn_consent").default(false).notNull(),
+  offerConsent: boolean("offer_consent").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type FullAuditOrder = typeof fullAuditOrders.$inferSelect;
+export const insertFullAuditOrderSchema = createInsertSchema(fullAuditOrders).omit({ 
+  id: true, 
+  createdAt: true, 
+  updatedAt: true,
+  status: true,
+});
+export type InsertFullAuditOrder = z.infer<typeof insertFullAuditOrderSchema>;
 
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
