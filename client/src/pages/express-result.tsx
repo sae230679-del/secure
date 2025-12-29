@@ -388,32 +388,6 @@ export default function ExpressResultPage() {
                   )}
                 </CardContent>
               </Card>
-              
-              {!result.fullReportPurchased && (
-                <Card className="border-primary/20 bg-primary/5">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <FileText className="h-5 w-5 text-primary" />
-                      Заказать полный отчёт
-                    </CardTitle>
-                    <CardDescription>
-                      Получите детальный анализ каждого нарушения с рекомендациями по исправлению
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                      <div>
-                        <p className="text-2xl font-bold">{result.fullReportPrice} ₽</p>
-                        <p className="text-sm text-muted-foreground">Отчёт в течение 24 часов на email</p>
-                      </div>
-                      <Button onClick={() => navigate(`/order-report?token=${token}`)} data-testid="button-order-report">
-                        Заказать отчёт
-                        <ArrowRight className="h-4 w-4 ml-2" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
             </>
           ) : (
             <Card>
